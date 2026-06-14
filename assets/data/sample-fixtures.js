@@ -22,6 +22,9 @@ function buildSampleFixtures() {
       awayBadge: "",
       kickoff: at(-1, 0), // already started -> live
       venue: "Emirates Stadium",
+      homeScore: "2",
+      awayScore: "1",
+      status: "67",
     },
     {
       id: "s2",
@@ -92,6 +95,9 @@ function buildSampleFixtures() {
       awayBadge: "",
       kickoff: at(0, 0), // about to / just kicked off
       venue: "Signal Iduna Park",
+      homeScore: "0",
+      awayScore: "0",
+      status: "1H",
     },
   ];
 }

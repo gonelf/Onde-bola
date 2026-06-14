@@ -225,6 +225,15 @@ body {
   color: var(--text-dim);
 }
 .team-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.team .score {
+  margin-left: auto;
+  padding-left: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+.match.is-live { border-color: rgba(255, 77, 79, 0.45); }
+.match.is-live .team .score { color: var(--live); }
 
 .channels {
   display: flex;

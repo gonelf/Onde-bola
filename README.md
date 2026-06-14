@@ -14,7 +14,9 @@ country — inspired by [ondebola.com](https://ondebola.com/).
   Spain 🇪🇸 and Brazil 🇧🇷; listings update instantly. Your choice is
   remembered, and the app guesses a sensible default from your timezone.
 - **Date navigation** — jump to previous/next day or back to today.
-- **Live status** — matches in progress show a pulsing `LIVE` badge.
+- **Live scores & status** — in-play matches show the current score, the
+  minute (e.g. `67'`) or `HT`, and a pulsing live badge; finished games show
+  `FT`. Today's view auto-refreshes from the feed every 60s.
 - **Search** — filter by team or competition.
 - **Responsive & offline-friendly** — if the live feed can't be reached, a
   sample schedule is shown so the app is always usable.

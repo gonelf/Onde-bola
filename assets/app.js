@@ -99,6 +99,40 @@
     return { state: "finished" };
   }
 
+  // Resolve a match's state/label, preferring the live API status string
+  // (e.g. "1H", "HT", "FT", "Match Finished", or a minute like "67") and
+  // falling back to a time-based estimate when the feed gives nothing.
+  function statusOf(fx) {
+    var kickoff = new Date(fx.kickoff);
+    var raw = (fx.status || "").trim();
+    var s = raw.toUpperCase();
+
+    if (/(FT|AET|PEN|FINISHED|ENDED|MATCH FINISHED|FULL TIME)/.test(s)) {
+      return { state: "finished", label: "FT" };
+    }
+    if (/^(HT|HALF[\s-]?TIME)$/.test(s)) {
+      return { state: "live", label: "HT" };
+    }
+    var min = s.match(/(\d{1,3})\s*'?\+?\d*\s*$/);
+    if (/(1H|2H|ET|LIVE|IN PLAY|PLAYING)/.test(s) || (min && s !== "")) {
+      return { state: "live", label: min ? min[1] + "'" : "LIVE" };
+    }
+    if (/^(NS|NOT STARTED|SCHEDULED|TBD|PREVIEW)$/.test(s) || raw === "") {
+      // Nothing definitive from the feed — estimate from the clock.
+      var est = matchStatus(kickoff);
+      if (est.state === "live") return { state: "live", label: "LIVE" };
+      if (est.state === "finished") return { state: "finished", label: "FT" };
+      return { state: "upcoming", label: "" };
+    }
+    // Unknown non-empty status: treat as live with the raw label.
+    return { state: "live", label: raw };
+  }
+
+  function hasScore(fx) {
+    return fx.homeScore !== null && fx.homeScore !== undefined &&
+      fx.awayScore !== null && fx.awayScore !== undefined;
+  }
+
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -119,6 +153,8 @@
     }
     if (!kickoff || isNaN(kickoff.getTime())) return null;
 
+    var hs = ev.intHomeScore;
+    var as = ev.intAwayScore;
     return {
       id: ev.idEvent || (ev.strHomeTeam + ev.strAwayTeam + ev.strTimestamp),
       competition: ev.strLeague || "Football",
@@ -128,16 +164,18 @@
       awayBadge: ev.strAwayTeamBadge || "",
       kickoff: kickoff.toISOString(),
       venue: ev.strVenue || "",
+      homeScore: (hs === 0 || hs) ? String(hs) : null,
+      awayScore: (as === 0 || as) ? String(as) : null,
+      status: ev.strStatus || ev.strProgress || "",
     };
   }
 
-  function loadFixtures() {
-    renderSkeletons();
-    state.usingSample = false;
+  function loadFixtures(silent) {
+    if (!silent) renderSkeletons();
 
     var url = API_BASE + "/eventsday.php?d=" + ymd(state.date) + "&s=Soccer";
 
-    fetch(url, { headers: { Accept: "application/json" } })
+    return fetch(url, { headers: { Accept: "application/json" } })
       .then(function (r) {
         if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
@@ -149,15 +187,21 @@
           .filter(Boolean);
 
         if (!fixtures.length) {
+          if (silent) return; // keep current view on an empty silent refresh
           // No real data for this day — fall back so the page isn't empty.
           useSample("No live fixtures returned for this date — showing a sample schedule.");
           return;
         }
+        state.usingSample = false;
         state.fixtures = fixtures;
-        showStatus("badge", "LIVE", fixtures.length + " games loaded for this date.");
+        var live = fixtures.filter(function (f) { return statusOf(f).state === "live"; }).length;
+        var msg = fixtures.length + " games" + (live ? " · " + live + " live now" : "") +
+          " · updated " + formatClock(new Date());
+        showStatus("badge", live ? "LIVE" : "OK", msg);
         render();
       })
       .catch(function (err) {
+        if (silent) return; // a failed background refresh shouldn't wipe the page
         useSample("Couldn't reach the live data feed (" + err.message +
           "). Showing a sample schedule so you can explore the app.");
       });
@@ -198,16 +242,26 @@
     return (name || "?").trim().slice(0, 2).toUpperCase();
   }
 
-  function timeCellHtml(kickoff) {
-    var st = matchStatus(kickoff);
-    var clock = formatClock(kickoff);
+  function timeCellHtml(fx) {
+    var st = statusOf(fx);
+    var clock = formatClock(new Date(fx.kickoff));
     if (st.state === "live") {
-      return '<div class="clock">' + escapeHtml(clock) + "</div><span class=\"live\">LIVE</span>";
+      return '<div class="clock">' + escapeHtml(clock) + "</div>" +
+        '<span class="live">' + escapeHtml(st.label || "LIVE") + "</span>";
     }
     if (st.state === "finished") {
-      return '<div class="clock">' + escapeHtml(clock) + "</div><span class=\"ft\">ENDED</span>";
+      return '<div class="clock">' + escapeHtml(clock) + "</div>" +
+        '<span class="ft">' + escapeHtml(st.label || "FT") + "</span>";
     }
     return '<div class="clock">' + escapeHtml(clock) + "</div>";
+  }
+
+  function scoreHtml(fx, side) {
+    if (!hasScore(fx)) return "";
+    var st = statusOf(fx);
+    if (st.state === "upcoming") return "";
+    var val = side === "home" ? fx.homeScore : fx.awayScore;
+    return '<span class="score">' + escapeHtml(val) + "</span>";
   }
 
   function channelsHtml(competition) {
@@ -221,14 +275,17 @@
   }
 
   function matchHtml(fx) {
-    var kickoff = new Date(fx.kickoff);
-    return '<article class="match">' +
-      '<div class="match-time">' + timeCellHtml(kickoff) + "</div>" +
+    var st = statusOf(fx);
+    var cls = "match" + (st.state === "live" ? " is-live" : "");
+    return '<article class="' + cls + '">' +
+      '<div class="match-time">' + timeCellHtml(fx) + "</div>" +
       '<div class="teams">' +
         '<div class="team">' + badgeHtml(fx.homeBadge, fx.home) +
-          '<span class="team-name">' + escapeHtml(fx.home) + "</span></div>" +
+          '<span class="team-name">' + escapeHtml(fx.home) + "</span>" +
+          scoreHtml(fx, "home") + "</div>" +
         '<div class="team">' + badgeHtml(fx.awayBadge, fx.away) +
-          '<span class="team-name">' + escapeHtml(fx.away) + "</span></div>" +
+          '<span class="team-name">' + escapeHtml(fx.away) + "</span>" +
+          scoreHtml(fx, "away") + "</div>" +
       "</div>" +
       '<div class="channels">' + channelsHtml(fx.competition) + "</div>" +
     "</article>";
@@ -343,9 +400,15 @@
     renderDateLabel();
     bindEvents();
     loadFixtures();
-    // Keep LIVE badges fresh.
+    // When viewing today, silently refresh live scores/status every 60s.
+    // On other days just re-render to keep time-based badges accurate.
     setInterval(function () {
-      if (!state.search) render();
+      if (state.usingSample) return;
+      if (isSameDay(state.date, new Date())) {
+        loadFixtures(true);
+      } else if (!state.search) {
+        render();
+      }
     }, 60000);
   }
 

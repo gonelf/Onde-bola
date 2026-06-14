@@ -12,11 +12,9 @@
   "use strict";
 
   var API_BASE = "https://www.thesportsdb.com/api/v1/json/3";
-  var STORAGE_COUNTRY = "ondebola.country";
 
   var state = {
     date: new Date(),
-    country: localStorage.getItem(STORAGE_COUNTRY) || guessCountry(),
     search: "",
     fixtures: [],
     usingSample: false,
@@ -25,7 +23,6 @@
   var el = {
     games: document.getElementById("games"),
     status: document.getElementById("status"),
-    country: document.getElementById("country-select"),
     currentDate: document.getElementById("current-date"),
     search: document.getElementById("search"),
     prev: document.getElementById("prev-day"),
@@ -34,18 +31,6 @@
   };
 
   // ---- Helpers ------------------------------------------------------------
-
-  function guessCountry() {
-    try {
-      var tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
-      if (tz.indexOf("Lisbon") > -1 || tz.indexOf("Azores") > -1) return "PT";
-      if (tz.indexOf("Madrid") > -1) return "ES";
-      if (tz.indexOf("London") > -1) return "GB";
-      if (tz.indexOf("Sao_Paulo") > -1 || tz.indexOf("Brazil") > -1) return "BR";
-      if (tz.indexOf("America/") === 0) return "US";
-    } catch (e) {}
-    return "PT";
-  }
 
   function ymd(date) {
     var y = date.getFullYear();
@@ -68,9 +53,9 @@
       .trim();
   }
 
-  // Resolve channels for a competition in the active country.
-  function channelsFor(competition) {
-    var country = window.BROADCASTERS[state.country];
+  // Resolve channels for a competition in a given country.
+  function channelsFor(countryCode, competition) {
+    var country = window.BROADCASTERS[countryCode];
     if (!country) return [];
     var key = normaliseCompetition(competition);
     var rights = country.rights;
@@ -265,13 +250,22 @@
   }
 
   function channelsHtml(competition) {
-    var chans = channelsFor(competition);
-    if (!chans || !chans.length) {
-      return '<span class="channel none">No local listing</span>';
+    // Show every country's listing for this game, each prefixed with its flag.
+    var groups = Object.keys(window.BROADCASTERS).map(function (code) {
+      var country = window.BROADCASTERS[code];
+      var chans = channelsFor(code, competition);
+      if (!chans || !chans.length) return "";
+      var chips = chans.map(function (c) {
+        return '<span class="channel">' + escapeHtml(c) + "</span>";
+      }).join("");
+      return '<span class="country-group" title="' + escapeHtml(country.name) + '">' +
+        '<span class="flag">' + country.flag + "</span>" + chips + "</span>";
+    }).filter(Boolean);
+
+    if (!groups.length) {
+      return '<span class="channel none">No listing</span>';
     }
-    return chans.map(function (c) {
-      return '<span class="channel">' + escapeHtml(c) + "</span>";
-    }).join("");
+    return groups.join("");
   }
 
   function matchHtml(fx) {
@@ -347,19 +341,6 @@
     el.currentDate.textContent = label;
   }
 
-  // ---- Country picker -----------------------------------------------------
-
-  function buildCountryOptions() {
-    var html = "";
-    Object.keys(window.BROADCASTERS).forEach(function (code) {
-      var c = window.BROADCASTERS[code];
-      var selected = code === state.country ? " selected" : "";
-      html += '<option value="' + code + '"' + selected + ">" +
-        c.flag + "  " + escapeHtml(c.name) + "</option>";
-    });
-    el.country.innerHTML = html;
-  }
-
   // ---- Events -------------------------------------------------------------
 
   function shiftDay(delta) {
@@ -378,11 +359,6 @@
       renderDateLabel();
       loadFixtures();
     });
-    el.country.addEventListener("change", function () {
-      state.country = el.country.value;
-      localStorage.setItem(STORAGE_COUNTRY, state.country);
-      render(); // channels change, fixtures stay
-    });
     var t;
     el.search.addEventListener("input", function () {
       clearTimeout(t);
@@ -396,7 +372,6 @@
   // ---- Init ---------------------------------------------------------------
 
   function init() {
-    buildCountryOptions();
     renderDateLabel();
     bindEvents();
     loadFixtures();

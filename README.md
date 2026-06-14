@@ -8,11 +8,10 @@ country — inspired by [ondebola.com](https://ondebola.com/).
 
 - **Today's games worldwide** — fixtures are fetched live from the free
   [TheSportsDB](https://www.thesportsdb.com) API, grouped by competition.
-- **Where to watch** — every match is matched against a curated broadcaster
-  rights table, so you see the channels/streaming services that carry it.
-- **Country selector** — switch between Portugal 🇵🇹, UK 🇬🇧, USA 🇺🇸,
-  Spain 🇪🇸 and Brazil 🇧🇷; listings update instantly. Your choice is
-  remembered, and the app guesses a sensible default from your timezone.
+- **Where to watch, everywhere** — every match lists the channels/streaming
+  services that carry it in each covered country (🇵🇹 Portugal, 🇬🇧 UK,
+  🇺🇸 USA, 🇪🇸 Spain, 🇧🇷 Brazil), with each country's flag in front of
+  its channels — all in one combined list.
 - **Date navigation** — jump to previous/next day or back to today.
 - **Live scores & status** — in-play matches show the current score, the
   minute (e.g. `67'`) or `HT`, and a pulsing live badge; finished games show

@@ -62,6 +62,7 @@ assets/app.js                    Fetching, matching, rendering
 assets/data/broadcasters.js      Free-to-air channel classifier (green vs amber)
 api/tv.js                        Cached serverless proxy for TV listings
 api/sofatv.js                    Unofficial SofaScore TV proxy (on-demand fallback)
+api/smtv.js                      SportMonks TV proxy (optional, paid; needs SPORTMONKS_KEY)
 ```
 
 ## Where the TV data comes from
@@ -90,9 +91,21 @@ for every visible match, so they appear on the cards without a click.
    ⚠️ SofaScore is **unofficial and against its ToS**; it may be blocked at any
    time and degrades gracefully to nothing. Disable it with
    `SOFASCORE_DISABLED=1`.
+4. **SportMonks** (official, paid) via `api/smtv.js` — *optional*, off unless a
+   key is set. SportMonks returns a whole day's fixtures with their TV stations
+   in **one call** (`GET /v3/football/fixtures/date/{date}?include=participants;
+   tvStations.tvStation;tvStations.country`), so the client fetches it once per
+   day and merges broadcasters into every match — no per-match call. Requires a
+   SportMonks plan whose subscription includes the `tvStations` entity. Enable
+   by setting `SPORTMONKS_KEY`; with no key the endpoint returns an empty map
+   and nothing changes.
 
 There is no curated/guessed fallback — if no source has a listing, the match
 shows *“No TV listing yet”*.
+
+> Note: **API-Football** (api-sports.io) was evaluated but has **no
+> broadcaster/TV data** (fixtures, scores, odds, stats only), so it can't add
+> channel listings. SportMonks is the API that exposes `tvStations`.
 
 ## Caching (Vercel KV)
 
@@ -106,7 +119,9 @@ deployed — but to enable caching on Vercel:
    `KV_REST_API_TOKEN` automatically.
 2. *(Optional)* set `THESPORTSDB_KEY` if you have a premium key — otherwise it
    defaults to the free `123` key.
-3. Redeploy. Responses include an `X-Cache: HIT|MISS` header so you can verify
+3. *(Optional)* set `SPORTMONKS_KEY` to enable the SportMonks broadcaster source
+   (`api/smtv.js`). Leave unset to keep it disabled.
+4. Redeploy. Responses include an `X-Cache: HIT|MISS` header so you can verify
    caching is working.
 
 Cache TTL adapts to the date: ~10 min for today (so live listings stay fresh),

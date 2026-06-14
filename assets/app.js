@@ -258,6 +258,27 @@
       .catch(function () { return []; });
   }
 
+  // Day-bulk SportMonks broadcaster source (official paid API). One request
+  // returns every match's TV stations for the day; disabled server-side (empty)
+  // unless a SPORTMONKS_KEY is configured, so it's harmless when not set up.
+  function fetchSportMonksDay(day) {
+    return fetch("/api/smtv?date=" + day, { headers: { Accept: "application/json" } })
+      .then(function (r) { if (!r.ok) throw new Error("smtv " + r.status); return r.json(); })
+      .then(function (d) { return (d && d.matches) || []; })
+      .catch(function () { return []; });
+  }
+
+  function normName(s) {
+    return (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+  }
+
+  function teamMatch(a, b) {
+    a = normName(a); b = normName(b);
+    if (!a || !b) return false;
+    return a === b || a.indexOf(b) >= 0 || b.indexOf(a) >= 0;
+  }
+
   // Merge two listing arrays, de-duplicating by country + channel.
   function mergeTv(a, b) {
     var out = (a || []).slice();
@@ -357,10 +378,11 @@
     var feedReachable = true;
     requests[0] = requests[0].catch(function () { feedReachable = false; return []; });
 
-    return Promise.all([Promise.all(requests), fetchTv(day)])
+    return Promise.all([Promise.all(requests), fetchTv(day), fetchSportMonksDay(day)])
       .then(function (res) {
         var lists = res[0];
         var tv = res[1];
+        var smDay = res[2] || [];
         // Merge all sources and de-duplicate by event id.
         var seen = {};
         var fixtures = [];
@@ -372,6 +394,19 @@
           });
         });
         attachTv(fixtures, tv);
+
+        // Merge the SportMonks day map (empty unless the paid source is
+        // enabled). This gives every match its broadcasters up front, with no
+        // per-match call.
+        if (smDay.length) {
+          fixtures.forEach(function (fx) {
+            var h = normName(fx.home), a = normName(fx.away), hit = null;
+            for (var i = 0; i < smDay.length; i++) {
+              if (teamMatch(h, smDay[i].h) && teamMatch(a, smDay[i].a)) { hit = smDay[i]; break; }
+            }
+            if (hit && hit.rows && hit.rows.length) fx.tv = mergeTv(fx.tv, hit.rows);
+          });
+        }
 
         // Reapply listings already fetched this session so a silent refresh
         // keeps them and doesn't re-hit the sources.

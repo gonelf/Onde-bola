@@ -129,21 +129,36 @@ module.exports = async (req, res) => {
     return;
   }
 
+  // ?debug=1 returns diagnostics (matched event, raw country list, how much
+  // resolved) and bypasses the cache. Lets us see what SofaScore actually
+  // returns in production without guessing. Safe + additive.
+  const debug = (req.query.debug === "1" || req.query.debug === "true");
+  const dbg = { matchedEventId: null, countries: {}, totalPairs: 0, resolved: 0, unresolvedSample: [] };
+
   const resultKey = `sofa:res:${date}:${norm(home)}|${norm(away)}`;
-  const cached = await kv(["GET", resultKey]);
-  if (cached) {
-    res.setHeader("X-Cache", "HIT");
-    res.status(200).json(JSON.parse(cached));
-    return;
+  if (!debug) {
+    const cached = await kv(["GET", resultKey]);
+    if (cached) {
+      res.setHeader("X-Cache", "HIT");
+      res.status(200).json(JSON.parse(cached));
+      return;
+    }
   }
 
   let tvevent = [];
   try {
     const index = await getDayIndex(date);
     const hit = index.find((row) => teamMatch(home, row[0]) && teamMatch(away, row[1]));
+    if (debug) dbg.dayIndexSize = index.length;
     if (hit) {
+      if (debug) dbg.matchedEventId = hit[2];
       const cc = await getJson(`${BASE}/tv/event/${hit[2]}/country-channels`);
       const countryChannels = (cc && cc.countryChannels) || {};
+      if (debug) {
+        Object.keys(countryChannels).forEach((c) => {
+          dbg.countries[c] = (countryChannels[c] || []).length;
+        });
+      }
 
       // Collect (countryCode, channelId|name) pairs, bounded for safety.
       // Process preferred markets (Portugal first) ahead of the rest so a busy
@@ -176,9 +191,14 @@ module.exports = async (req, res) => {
       await Promise.all(ids.map(async (id) => { names[id] = await resolveChannelName(id); }));
 
       const seen = {};
+      dbg.totalPairs = pairs.length;
       for (const [code, item] of pairs) {
         const name = (item && typeof item === "object" && item.name) ? item.name : names[item];
-        if (!name) continue;
+        if (!name) {
+          if (debug && dbg.unresolvedSample.length < 20) dbg.unresolvedSample.push({ code, item });
+          continue;
+        }
+        if (debug) dbg.resolved++;
         const country = CODE_TO_COUNTRY[code] || code;
         const k = name + "|" + country;
         if (seen[k]) continue;
@@ -188,6 +208,13 @@ module.exports = async (req, res) => {
     }
   } catch (e) {
     tvevent = [];
+    if (debug) dbg.error = String(e && e.message || e);
+  }
+
+  if (debug) {
+    res.setHeader("X-Cache", "BYPASS");
+    res.status(200).json({ tvevent, _debug: dbg });
+    return;
   }
 
   // Cache the result (even empty, briefly) to avoid hammering on misses.

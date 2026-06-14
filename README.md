@@ -18,6 +18,14 @@ country — inspired by [ondebola.com](https://ondebola.com/).
 - **Live scores & status** — in-play matches show the current score, the
   minute (e.g. `67'`) or `HT`, and a pulsing live badge; finished games show
   `FT`. Today's view auto-refreshes from the feed every 60s.
+- **Broad coverage** — alongside the worldwide feed, the app also queries a
+  set of leagues that commonly run mid-year (MLS, Brazil, Nordic, Asian
+  leagues, …) and merges their games, so coverage stays wide even when a big
+  tournament like the World Cup pauses the major domestic leagues.
+- **League filter** — open **Leagues** to show/hide individual competitions.
+  A **Reset filters** button clears the selection, and a **Remember this next
+  time** checkbox persists your choices to `localStorage` across visits (leave
+  it unchecked to keep the filter for the current session only).
 - **Search** — filter by team or competition.
 - **Responsive & offline-friendly** — if the live feed can't be reached, a
   sample schedule is shown so the app is always usable.

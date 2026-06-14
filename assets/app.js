@@ -13,11 +13,36 @@
 
   var API_BASE = "https://www.thesportsdb.com/api/v1/json/123";
 
+  // The worldwide "all soccer" feed for a day can be dominated by a single big
+  // tournament (e.g. the World Cup, when most domestic leagues pause). To keep
+  // coverage broad we also query a set of leagues that commonly run mid-year,
+  // by name, and merge in any games they have that day. Unknown names simply
+  // return nothing, so the list is safe to extend.
+  var ACTIVE_LEAGUES = [
+    "American Major League Soccer",
+    "Brazilian Serie A",
+    "Mexican Primera League",
+    "Argentine Primera Division",
+    "Swedish Allsvenskan",
+    "Norwegian Eliteserien",
+    "Finnish Veikkausliiga",
+    "Japanese J League",
+    "South Korean K League 1",
+    "Chinese Super League",
+    "Australian A-League",
+    "Indian Super League",
+  ];
+
+  var STORAGE_HIDDEN = "ondebola.hiddenLeagues";
+  var STORAGE_REMEMBER = "ondebola.rememberFilters";
+
   var state = {
     date: new Date(),
     search: "",
     fixtures: [],
     usingSample: false,
+    hidden: {},       // competition name -> true when hidden from the list
+    remember: false,  // persist the filter selection across visits
   };
 
   var el = {
@@ -28,6 +53,12 @@
     prev: document.getElementById("prev-day"),
     next: document.getElementById("next-day"),
     today: document.getElementById("today-btn"),
+    leagueToggle: document.getElementById("league-toggle"),
+    leagueToggleLabel: document.getElementById("league-toggle-label"),
+    filterPanel: document.getElementById("filter-panel"),
+    leagueList: document.getElementById("league-list"),
+    resetFilters: document.getElementById("reset-filters"),
+    rememberFilters: document.getElementById("remember-filters"),
   };
 
   // ---- Helpers ------------------------------------------------------------
@@ -156,40 +187,67 @@
     };
   }
 
-  function loadFixtures(silent) {
-    if (!silent) renderSkeletons();
-
-    var url = API_BASE + "/eventsday.php?d=" + ymd(state.date) + "&s=Soccer";
-
+  // Fetch one endpoint and return its normalised fixtures (never rejects).
+  function fetchEvents(url) {
     return fetch(url, { headers: { Accept: "application/json" } })
       .then(function (r) {
         if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       })
       .then(function (data) {
-        var events = (data && data.events) || [];
-        var fixtures = events
-          .map(normaliseApiEvent)
-          .filter(Boolean);
+        return ((data && data.events) || []).map(normaliseApiEvent).filter(Boolean);
+      })
+      .catch(function () { return []; });
+  }
+
+  function loadFixtures(silent) {
+    if (!silent) renderSkeletons();
+
+    var day = ymd(state.date);
+    var requests = [
+      // The worldwide soccer feed for the day (catches the World Cup etc).
+      fetchEvents(API_BASE + "/eventsday.php?d=" + day + "&s=Soccer"),
+    ].concat(ACTIVE_LEAGUES.map(function (league) {
+      // Plus each commonly-active league explicitly, by name.
+      return fetchEvents(API_BASE + "/eventsday.php?d=" + day +
+        "&l=" + encodeURIComponent(league));
+    }));
+
+    // Track whether the primary worldwide call actually succeeded so we only
+    // fall back to the sample when the feed is genuinely unreachable.
+    var feedReachable = true;
+    requests[0] = requests[0].catch(function () { feedReachable = false; return []; });
+
+    return Promise.all(requests)
+      .then(function (lists) {
+        // Merge all sources and de-duplicate by event id.
+        var seen = {};
+        var fixtures = [];
+        lists.forEach(function (list) {
+          list.forEach(function (fx) {
+            if (seen[fx.id]) return;
+            seen[fx.id] = true;
+            fixtures.push(fx);
+          });
+        });
 
         if (!fixtures.length) {
           if (silent) return; // keep current view on an empty silent refresh
-          // No real data for this day — fall back so the page isn't empty.
-          useSample("No live fixtures returned for this date — showing a sample schedule.");
+          useSample(feedReachable
+            ? "No fixtures found for this date — showing a sample schedule."
+            : "Couldn't reach the live data feed. Showing a sample schedule so you can explore the app.");
           return;
         }
         state.usingSample = false;
         state.fixtures = fixtures;
+        var comps = {};
+        fixtures.forEach(function (f) { comps[f.competition] = true; });
         var live = fixtures.filter(function (f) { return statusOf(f).state === "live"; }).length;
-        var msg = fixtures.length + " games" + (live ? " · " + live + " live now" : "") +
-          " · updated " + formatClock(new Date());
+        var msg = fixtures.length + " games · " + Object.keys(comps).length + " competitions" +
+          (live ? " · " + live + " live now" : "") + " · updated " + formatClock(new Date());
         showStatus("badge", live ? "LIVE" : "OK", msg);
         render();
-      })
-      .catch(function (err) {
-        if (silent) return; // a failed background refresh shouldn't wipe the page
-        useSample("Couldn't reach the live data feed (" + err.message +
-          "). Showing a sample schedule so you can explore the app.");
+        updateLeaguePanel();
       });
   }
 
@@ -198,6 +256,7 @@
     state.fixtures = window.buildSampleFixtures();
     showStatus("error", "SAMPLE", message);
     render();
+    updateLeaguePanel();
   }
 
   // ---- Rendering ----------------------------------------------------------
@@ -305,12 +364,21 @@
     });
   }
 
+  function isHidden(competition) {
+    return !!state.hidden[competition || "Football"];
+  }
+
   function render() {
-    var fixtures = applyFilter(state.fixtures.slice());
+    // Drop leagues the user has filtered out, then apply the search.
+    var shown = state.fixtures.filter(function (fx) { return !isHidden(fx.competition); });
+    var hiddenSome = shown.length !== state.fixtures.length;
+    var fixtures = applyFilter(shown);
 
     if (!fixtures.length) {
-      el.games.innerHTML = '<div class="empty"><div class="big">⚽</div>' +
-        "<p>No games match your search for this date.</p></div>";
+      var msg = state.fixtures.length && hiddenSome && !state.search
+        ? "All leagues are filtered out — open <strong>Leagues</strong> and re-enable some, or hit Reset filters."
+        : "No games match your search for this date.";
+      el.games.innerHTML = '<div class="empty"><div class="big">⚽</div><p>' + msg + "</p></div>";
       return;
     }
 
@@ -357,6 +425,83 @@
     el.currentDate.textContent = label;
   }
 
+  // ---- League filter ------------------------------------------------------
+
+  function loadFilters() {
+    state.remember = localStorage.getItem(STORAGE_REMEMBER) === "1";
+    state.hidden = {};
+    if (state.remember) {
+      try {
+        var saved = JSON.parse(localStorage.getItem(STORAGE_HIDDEN) || "[]");
+        if (Array.isArray(saved)) {
+          saved.forEach(function (name) { state.hidden[name] = true; });
+        }
+      } catch (e) {}
+    }
+    el.rememberFilters.checked = state.remember;
+  }
+
+  // Persist the remember flag always; persist the hidden set only while the
+  // user has opted in to remembering it.
+  function saveFilters() {
+    localStorage.setItem(STORAGE_REMEMBER, state.remember ? "1" : "0");
+    if (state.remember) {
+      localStorage.setItem(STORAGE_HIDDEN, JSON.stringify(Object.keys(state.hidden)));
+    } else {
+      localStorage.removeItem(STORAGE_HIDDEN);
+    }
+  }
+
+  function hiddenCount() {
+    return Object.keys(state.hidden).filter(function (k) { return state.hidden[k]; }).length;
+  }
+
+  // Rebuild the checkbox list from the competitions currently in the data,
+  // and refresh the toggle button's "N hidden" badge.
+  function updateLeaguePanel() {
+    var counts = {};
+    state.fixtures.forEach(function (fx) {
+      var c = fx.competition || "Football";
+      counts[c] = (counts[c] || 0) + 1;
+    });
+    var comps = Object.keys(counts).sort(function (a, b) { return a.localeCompare(b); });
+
+    el.leagueList.innerHTML = comps.map(function (c) {
+      var checked = isHidden(c) ? "" : " checked";
+      return '<label class="league-row">' +
+        '<input type="checkbox" value="' + escapeHtml(c) + '"' + checked + " />" +
+        '<span class="name">' + escapeHtml(c) + "</span>" +
+        '<span class="n">' + counts[c] + "</span></label>";
+    }).join("") || '<p class="n" style="padding:6px 4px">No leagues to filter.</p>';
+
+    var n = hiddenCount();
+    el.leagueToggleLabel.innerHTML = "Leagues" +
+      (n ? ' <span class="count-badge">' + n + " hidden</span>" : "");
+  }
+
+  function setLeagueHidden(name, hidden) {
+    if (hidden) state.hidden[name] = true;
+    else delete state.hidden[name];
+    saveFilters();
+    render();
+    // Keep the toggle badge in sync without rebuilding the open list.
+    var n = hiddenCount();
+    el.leagueToggleLabel.innerHTML = "Leagues" +
+      (n ? ' <span class="count-badge">' + n + " hidden</span>" : "");
+  }
+
+  function resetFilters() {
+    state.hidden = {};
+    saveFilters();
+    updateLeaguePanel();
+    render();
+  }
+
+  function openPanel(open) {
+    el.filterPanel.hidden = !open;
+    el.leagueToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
   // ---- Events -------------------------------------------------------------
 
   function shiftDay(delta) {
@@ -383,11 +528,35 @@
         render();
       }, 120);
     });
+
+    // League filter dropdown.
+    el.leagueToggle.addEventListener("click", function (e) {
+      e.stopPropagation();
+      openPanel(el.filterPanel.hidden);
+    });
+    el.filterPanel.addEventListener("click", function (e) { e.stopPropagation(); });
+    el.leagueList.addEventListener("change", function (e) {
+      var box = e.target;
+      if (box && box.type === "checkbox") {
+        setLeagueHidden(box.value, !box.checked);
+      }
+    });
+    el.resetFilters.addEventListener("click", resetFilters);
+    el.rememberFilters.addEventListener("change", function () {
+      state.remember = el.rememberFilters.checked;
+      saveFilters();
+    });
+    // Close the dropdown when clicking elsewhere or pressing Escape.
+    document.addEventListener("click", function () { openPanel(false); });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") openPanel(false);
+    });
   }
 
   // ---- Init ---------------------------------------------------------------
 
   function init() {
+    loadFilters();
     renderDateLabel();
     bindEvents();
     loadFixtures();

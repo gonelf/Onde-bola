@@ -27,8 +27,26 @@
         <button id="next-day" class="date-btn" aria-label="Next day">›</button>
         <span id="current-date" class="current-date"></span>
       </div>
-      <div class="search-wrap">
-        <input id="search" type="search" placeholder="Search team or competition…" aria-label="Search games" />
+      <div class="toolbar-right">
+        <div class="league-filter">
+          <button id="league-toggle" class="filter-btn" aria-expanded="false" aria-controls="filter-panel">
+            <span id="league-toggle-label">Leagues</span> ▾
+          </button>
+          <div id="filter-panel" class="filter-panel" hidden>
+            <div class="filter-panel-head">
+              <strong>Show leagues</strong>
+              <button id="reset-filters" type="button" class="reset-btn">Reset filters</button>
+            </div>
+            <div id="league-list" class="league-list"></div>
+            <label class="remember-row">
+              <input type="checkbox" id="remember-filters" />
+              <span>Remember this next time</span>
+            </label>
+          </div>
+        </div>
+        <div class="search-wrap">
+          <input id="search" type="search" placeholder="Search team or competition…" aria-label="Search games" />
+        </div>
       </div>
     </section>
 

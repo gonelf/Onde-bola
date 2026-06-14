@@ -82,6 +82,7 @@
     <div class="toolbar">
       <button class="secondary" id="loadFixtures">Load fixtures</button>
       <button class="run-all" id="runAll">Run all tests ▶</button>
+      <button class="secondary" id="copyReport">Copy report ⧉</button>
       <span class="pill" id="hint">tip: pick a match, then Run all</span>
     </div>
   </div>
@@ -143,6 +144,8 @@
         } }
     ];
 
+    var results = {}; // id -> { label, url, status, line }
+
     function params() {
       return { date: $("date").value || todayUTC(), home: $("home").value.trim(), away: $("away").value.trim() };
     }
@@ -195,6 +198,7 @@
         setDot(t.id, "warn");
         $("meta-" + t.id).textContent = "needs " + missing.join(", ");
         $("sum-" + t.id).innerHTML = '<span class="k">skipped — fill ' + missing.join(", ") + '</span>';
+        results[t.id] = { label: t.label, url: "", status: "SKIPPED (need " + missing.join(", ") + ")", line: "" };
         return Promise.resolve();
       }
       var url = t.url(p);
@@ -206,16 +210,39 @@
         return r.text().then(function (txt) {
           var j = null; try { j = JSON.parse(txt); } catch (e) {}
           setDot(t.id, r.ok ? "ok" : "bad");
-          $("meta-" + t.id).textContent = "HTTP " + r.status + (cache ? " · " + cache : "") + " · " + ms + "ms";
-          $("sum-" + t.id).innerHTML = '<span class="k">' + url + '</span><br>' +
-            (j ? t.summary(j) : "non-JSON response");
+          var status = "HTTP " + r.status + (cache ? " · " + cache : "") + " · " + ms + "ms";
+          var line = j ? t.summary(j) : "non-JSON response";
+          $("meta-" + t.id).textContent = status;
+          $("sum-" + t.id).innerHTML = '<span class="k">' + url + '</span><br>' + line;
           $("pre-" + t.id).textContent = j ? JSON.stringify(j, null, 2) : txt.slice(0, 4000);
+          results[t.id] = { label: t.label, url: url, status: status, line: line };
         });
       }).catch(function (e) {
         setDot(t.id, "bad");
         $("meta-" + t.id).textContent = "fetch error";
         $("sum-" + t.id).textContent = String(e);
+        results[t.id] = { label: t.label, url: url, status: "FETCH ERROR", line: String(e) };
       });
+    }
+
+    function buildReport() {
+      var p = params();
+      var lines = [
+        "Onde Bola — connections report",
+        "Date: " + p.date + (p.home ? "  ·  " + p.home + " vs " + p.away : ""),
+        "Generated: " + new Date().toISOString(),
+        ""
+      ];
+      TESTS.forEach(function (t) {
+        var r = results[t.id];
+        lines.push("[" + t.label + "]");
+        if (!r) { lines.push("  not run"); lines.push(""); return; }
+        if (r.url) lines.push("  " + r.url);
+        lines.push("  " + r.status);
+        if (r.line) lines.push("  " + r.line);
+        lines.push("");
+      });
+      return lines.join("\n");
     }
 
     function runAll() { TESTS.reduce(function (chain, t) {
@@ -250,6 +277,7 @@
     });
     $("loadFixtures").addEventListener("click", loadFixtures);
     $("runAll").addEventListener("click", runAll);
+    $("copyReport").addEventListener("click", function () { copyText(buildReport(), $("copyReport")); });
 
     render();
     runTest(TESTS[0]); // health on open

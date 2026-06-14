@@ -30,12 +30,19 @@ function buildSampleFixtures() {
       homeScore: o.homeScore != null ? String(o.homeScore) : null,
       awayScore: o.awayScore != null ? String(o.awayScore) : null,
       status: o.status || "",
+      tv: o.tv || [],
     };
   };
 
   return [
     g({ id: "s1", competition: "English Premier League", home: "Arsenal", away: "Liverpool",
-        kickoff: at(-1, 0), venue: "Emirates Stadium", homeScore: 2, awayScore: 1, status: "67" }),
+        kickoff: at(-1, 0), venue: "Emirates Stadium", homeScore: 2, awayScore: 1, status: "67",
+        tv: [
+          { channel: "Sky Sports Premier League", country: "United Kingdom" },
+          { channel: "NBC", country: "United States" },
+          { channel: "Peacock", country: "United States" },
+          { channel: "DAZN 1", country: "Portugal" },
+        ] }),
     g({ id: "s2", competition: "English League Championship", home: "Leeds United", away: "Leicester City",
         kickoff: at(1, 0), venue: "Elland Road" }),
     g({ id: "s3", competition: "Spanish La Liga", home: "Real Madrid", away: "Barcelona",

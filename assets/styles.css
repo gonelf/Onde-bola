@@ -404,6 +404,21 @@ body {
   border: 1px solid var(--line);
   font-style: italic;
 }
+/* Source tag: real listings vs curated guide */
+.src-tag {
+  align-self: center;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.src-tag.real { background: rgba(56, 189, 248, 0.16); color: #38bdf8; }
+.src-tag.guide { background: var(--bg-elev); color: var(--text-dim); border: 1px solid var(--line); }
+.src-note { font-size: 0.82rem; font-weight: 600; margin: 0 0 10px; }
+.src-note.real { color: #38bdf8; }
+.src-note.guide { color: var(--text-dim); }
 
 /* Loading skeletons */
 .skeleton {

@@ -10,11 +10,12 @@ country — inspired by [ondebola.com](https://ondebola.com/).
   the globe is fetched live from the free [TheSportsDB](https://www.thesportsdb.com)
   API and grouped by competition, each headed with the **championship's logo**
   (falling back to a monogram when the feed has no artwork).
-- **Where to watch, everywhere** — every match lists the channels/streaming
-  services that carry it in each covered country (🇵🇹 Portugal, 🇬🇧 UK,
-  🇺🇸 USA, 🇪🇸 Spain, 🇧🇷 Brazil), with each country's flag in front of
-  its channels — all in one combined list. **Free-to-air** channels are shown
-  in green and **paid cable / subscription** channels in amber with a 🔒.
+- **Where to watch** — real per-match broadcast channels (with country) come
+  from TheSportsDB's free TV feed (`eventstv.php`) and are tagged **📡 Listings**.
+  Coverage is crowd-sourced, so matches without a real listing fall back to a
+  curated **Guide** of the primary rights holder per country (🇵🇹 Portugal,
+  🇬🇧 UK, 🇺🇸 USA, 🇪🇸 Spain, 🇧🇷 Brazil). **Free-to-air** channels are
+  shown in green and **paid cable / subscription** channels in amber with a 🔒.
 - **Click for details** — click (or keyboard-activate) any match to open a
   detail view with the score/status, full date, time and venue, and the
   complete free-vs-paid where-to-watch breakdown per country.

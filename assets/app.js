@@ -203,6 +203,44 @@
       .catch(function () { return []; });
   }
 
+  // Real broadcast listings for the day (TheSportsDB TV feed, free key).
+  // Returns lookups by event id and by "home vs away" name. Coverage is
+  // crowd-sourced, so only some matches will have entries.
+  function nameKey(home, away) {
+    return (home + " vs " + away).toLowerCase().replace(/\s+/g, " ").trim();
+  }
+
+  function fetchTv(day) {
+    var url = API_BASE + "/eventstv.php?d=" + day + "&s=Soccer";
+    return fetch(url, { headers: { Accept: "application/json" } })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (data) {
+        var rows = (data && (data.tvevent || data.events)) || [];
+        var byId = {}, byName = {};
+        rows.forEach(function (row) {
+          var channel = row.strChannel;
+          if (!channel) return;
+          var entry = { channel: channel, country: row.strCountry || "International" };
+          var id = row.idEvent && String(row.idEvent);
+          if (id) (byId[id] = byId[id] || []).push(entry);
+          var nm = (row.strEvent || "").toLowerCase().replace(/\s+/g, " ").trim();
+          if (nm) (byName[nm] = byName[nm] || []).push(entry);
+        });
+        return { byId: byId, byName: byName };
+      })
+      .catch(function () { return { byId: {}, byName: {} }; });
+  }
+
+  // Attach real listings to fixtures, matching by event id then by name.
+  function attachTv(fixtures, tv) {
+    fixtures.forEach(function (fx) {
+      var t = tv.byId[String(fx.id)] ||
+        tv.byName[nameKey(fx.home, fx.away)] ||
+        tv.byName[nameKey(fx.away, fx.home)];
+      fx.tv = t || [];
+    });
+  }
+
   function loadFixtures(silent) {
     if (!silent) renderSkeletons();
 
@@ -221,8 +259,10 @@
     var feedReachable = true;
     requests[0] = requests[0].catch(function () { feedReachable = false; return []; });
 
-    return Promise.all(requests)
-      .then(function (lists) {
+    return Promise.all([Promise.all(requests), fetchTv(day)])
+      .then(function (res) {
+        var lists = res[0];
+        var tv = res[1];
         // Merge all sources and de-duplicate by event id.
         var seen = {};
         var fixtures = [];
@@ -233,6 +273,7 @@
             fixtures.push(fx);
           });
         });
+        attachTv(fixtures, tv);
 
         if (!fixtures.length) {
           if (silent) return; // keep current view on an empty silent refresh
@@ -246,8 +287,11 @@
         var comps = {};
         fixtures.forEach(function (f) { comps[f.competition] = true; });
         var live = fixtures.filter(function (f) { return statusOf(f).state === "live"; }).length;
+        var withTv = fixtures.filter(function (f) { return f.tv && f.tv.length; }).length;
         var msg = fixtures.length + " games · " + Object.keys(comps).length + " competitions" +
-          (live ? " · " + live + " live now" : "") + " · updated " + formatClock(new Date());
+          (live ? " · " + live + " live now" : "") +
+          (withTv ? " · 📡 " + withTv + " with real TV listings" : "") +
+          " · updated " + formatClock(new Date());
         showStatus("badge", live ? "LIVE" : "OK", msg);
         render();
         updateLeaguePanel();
@@ -323,6 +367,26 @@
     return '<span class="score">' + escapeHtml(val) + "</span>";
   }
 
+  // Country name -> flag emoji, for real listings which come keyed by the
+  // broadcaster's country (any unknown country falls back to a generic icon).
+  var COUNTRY_FLAGS = {
+    "Portugal": "🇵🇹", "United Kingdom": "🇬🇧", "England": "🇬🇧", "Ireland": "🇮🇪",
+    "United States": "🇺🇸", "USA": "🇺🇸", "Spain": "🇪🇸", "Brazil": "🇧🇷",
+    "France": "🇫🇷", "Germany": "🇩🇪", "Italy": "🇮🇹", "Netherlands": "🇳🇱",
+    "Belgium": "🇧🇪", "Portugal ": "🇵🇹", "Argentina": "🇦🇷", "Mexico": "🇲🇽",
+    "Canada": "🇨🇦", "Australia": "🇦🇺", "Saudi Arabia": "🇸🇦", "Turkey": "🇹🇷",
+    "Greece": "🇬🇷", "Switzerland": "🇨🇭", "Austria": "🇦🇹", "Poland": "🇵🇱",
+    "Sweden": "🇸🇪", "Norway": "🇳🇴", "Denmark": "🇩🇰", "Finland": "🇫🇮",
+    "Japan": "🇯🇵", "South Korea": "🇰🇷", "China": "🇨🇳", "India": "🇮🇳",
+    "Russia": "🇷🇺", "Croatia": "🇭🇷", "Serbia": "🇷🇸", "Scotland": "🏴󠁧󠁢󠁳󠁣󠁴󠁿",
+    "Romania": "🇷🇴", "Ukraine": "🇺🇦", "Czech Republic": "🇨🇿", "Hungary": "🇭🇺",
+    "International": "🌍", "Worldwide": "🌍",
+  };
+
+  function countryFlag(name) {
+    return COUNTRY_FLAGS[(name || "").trim()] || "📺";
+  }
+
   // A single channel chip, tagged free-to-air or paid cable / subscription.
   function channelChip(name) {
     var paid = window.isPaidChannel(name);
@@ -332,8 +396,26 @@
       escapeHtml(name) + "</span>";
   }
 
-  function channelsHtml(competition) {
-    // Show every country's listing for this game, each prefixed with its flag.
+  // Real per-match listings (from TheSportsDB's TV feed), grouped by country.
+  function realChannelsHtml(tv) {
+    var byCountry = {};
+    var order = [];
+    tv.forEach(function (t) {
+      var c = t.country || "International";
+      if (!byCountry[c]) { byCountry[c] = []; order.push(c); }
+      if (byCountry[c].indexOf(t.channel) === -1) byCountry[c].push(t.channel);
+    });
+    var groups = order.map(function (c) {
+      var chips = byCountry[c].map(channelChip).join("");
+      return '<span class="country-group" title="' + escapeHtml(c) + '">' +
+        '<span class="flag">' + countryFlag(c) + "</span>" + chips + "</span>";
+    });
+    return '<span class="src-tag real" title="Real broadcast listings">📡 Listings</span>' +
+      groups.join("");
+  }
+
+  // Curated rights guide grouped by our supported countries.
+  function curatedChannelsHtml(competition) {
     var groups = Object.keys(window.BROADCASTERS).map(function (code) {
       var country = window.BROADCASTERS[code];
       var chans = channelsFor(code, competition);
@@ -346,7 +428,14 @@
     if (!groups.length) {
       return '<span class="channel none">No listing</span>';
     }
-    return groups.join("");
+    return '<span class="src-tag guide" title="Indicative rights guide">Guide</span>' +
+      groups.join("");
+  }
+
+  // Prefer real per-match listings; fall back to the curated rights guide.
+  function channelsHtml(fx) {
+    if (fx && fx.tv && fx.tv.length) return realChannelsHtml(fx.tv);
+    return curatedChannelsHtml(fx ? fx.competition : "");
   }
 
   function matchHtml(fx) {
@@ -363,7 +452,7 @@
           '<span class="team-name">' + escapeHtml(fx.away) + "</span>" +
           scoreHtml(fx, "away") + "</div>" +
       "</div>" +
-      '<div class="channels">' + channelsHtml(fx.competition) + "</div>" +
+      '<div class="channels">' + channelsHtml(fx) + "</div>" +
       '<span class="details-hint">Click for details ›</span>' +
     "</article>";
   }
@@ -516,20 +605,36 @@
 
   // ---- Match details modal ------------------------------------------------
 
-  // Full where-to-watch breakdown for the modal: one row per country, with
-  // each channel clearly labelled free-to-air or paid cable / subscription.
-  function detailChannelsHtml(competition) {
+  // One row per country, with channels labelled free-to-air or paid. Uses the
+  // real broadcast listings when available, otherwise the curated rights guide.
+  function detailChannelRow(flag, label, chips) {
+    return '<div class="detail-channel-row">' +
+      '<span class="detail-country"><span class="flag">' + flag + "</span>" +
+        escapeHtml(label) + "</span>" +
+      '<span class="detail-chips">' + chips + "</span></div>";
+  }
+
+  function detailChannelsHtml(fx) {
+    if (fx.tv && fx.tv.length) {
+      var byCountry = {}, order = [];
+      fx.tv.forEach(function (t) {
+        var c = t.country || "International";
+        if (!byCountry[c]) { byCountry[c] = []; order.push(c); }
+        if (byCountry[c].indexOf(t.channel) === -1) byCountry[c].push(t.channel);
+      });
+      return '<p class="src-note real">📡 Real broadcast listings (TheSportsDB)</p>' +
+        order.map(function (c) {
+          return detailChannelRow(countryFlag(c), c, byCountry[c].map(channelChip).join(""));
+        }).join("");
+    }
     var rows = Object.keys(window.BROADCASTERS).map(function (code) {
       var country = window.BROADCASTERS[code];
-      var chans = channelsFor(code, competition);
+      var chans = channelsFor(code, fx.competition);
       if (!chans || !chans.length) return "";
-      var chips = chans.map(channelChip).join("");
-      return '<div class="detail-channel-row">' +
-        '<span class="detail-country"><span class="flag">' + country.flag + "</span>" +
-          escapeHtml(country.name) + "</span>" +
-        '<span class="detail-chips">' + chips + "</span></div>";
+      return detailChannelRow(country.flag, country.name, chans.map(channelChip).join(""));
     }).filter(Boolean).join("");
-    return rows || '<p class="muted">No listings available.</p>';
+    return '<p class="src-note guide">Indicative rights guide — no live listing for this match yet</p>' +
+      (rows || '<p class="muted">No listings available.</p>');
   }
 
   function openDetails(id) {
@@ -570,7 +675,7 @@
         '<span class="channel free">Free-to-air</span>' +
         '<span class="channel paid"><span class="lock">🔒</span>Paid cable / subscription</span>' +
       "</div>" +
-      detailChannelsHtml(fx.competition);
+      detailChannelsHtml(fx);
 
     el.detailOverlay.hidden = false;
     document.body.style.overflow = "hidden";

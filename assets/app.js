@@ -226,6 +226,9 @@
   // Second free source: TheSportsDB's per-event TV lookup, fetched on demand
   // (when a match is opened) to fill gaps the day feed missed. Cached per id.
   var tvCache = {};
+  // Merged per-event listings, kept for the session so silent 60s refreshes
+  // (which rebuild fixture objects) don't re-fetch everything. Keyed by event id.
+  var loadedTv = {};
 
   function fetchEventTv(id) {
     if (tvCache[id]) return Promise.resolve(tvCache[id]);
@@ -255,22 +258,89 @@
       .catch(function () { return []; });
   }
 
-  // Resolve real listings for one fixture: TheSportsDB per-event lookup first,
-  // then the SofaScore proxy as a fallback. Resolves to the listings array.
-  function ensureEventTv(fx) {
-    if (fx.tv && fx.tv.length) return Promise.resolve(fx.tv);
-    var primary = /^\d+$/.test(String(fx.id)) ? fetchEventTv(fx.id) : Promise.resolve([]);
-    return primary.then(function (list) {
-      if (list && list.length) { fx.tv = list; return fx.tv; }
-      return fetchSofaTv(fx).then(function (list2) {
-        if (list2 && list2.length) fx.tv = list2;
-        return fx.tv || [];
-      });
+  // Merge two listing arrays, de-duplicating by country + channel.
+  function mergeTv(a, b) {
+    var out = (a || []).slice();
+    var seen = {};
+    out.forEach(function (t) { seen[(t.country || "") + "|" + t.channel] = true; });
+    (b || []).forEach(function (t) {
+      var k = (t.country || "") + "|" + t.channel;
+      if (!seen[k]) { seen[k] = true; out.push(t); }
     });
+    return out;
+  }
+
+  // Resolve real listings for one fixture by combining EVERY source: the day
+  // feed (already on fx.tv), TheSportsDB's per-event lookup, and the SofaScore
+  // proxy. Merging (rather than first-wins) is what surfaces Portuguese
+  // channels that only one source happens to carry. Cached via fx._tvLoaded.
+  function ensureEventTv(fx) {
+    if (fx._tvLoaded) return Promise.resolve(fx.tv || []);
+    var dayList = (fx.tv || []).slice();
+    // Only spend a TheSportsDB per-event call when the day feed gave nothing;
+    // always consult SofaScore, since that's what surfaces Portuguese channels.
+    var primary = (!dayList.length && /^\d+$/.test(String(fx.id)))
+      ? fetchEventTv(fx.id) : Promise.resolve([]);
+    return Promise.all([primary, fetchSofaTv(fx)]).then(function (res) {
+      fx.tv = mergeTv(mergeTv(dayList, res[0]), res[1]);
+      fx._tvLoaded = true;
+      loadedTv[fx.id] = fx.tv;
+      return fx.tv || [];
+    });
+  }
+
+  // Eagerly load listings for every visible fixture (bounded concurrency) so
+  // channels appear without the user having to open each match. Stale runs are
+  // abandoned when the date changes via the load token.
+  function prefetchListings(token) {
+    var queue = state.fixtures.filter(function (f) {
+      return !f._tvLoaded && !isHidden(f.competition);
+    });
+    var i = 0, active = 0, CONCURRENCY = 4;
+    function pump() {
+      if (token !== state.loadToken) return; // a newer load superseded us
+      while (active < CONCURRENCY && i < queue.length) {
+        var fx = queue[i++];
+        active++;
+        ensureEventTv(fx)["catch"](function () {})["then"](function () {
+          active--;
+          if (token === state.loadToken) updateCardListings(fx);
+          pump();
+        });
+      }
+      if (active === 0 && i >= queue.length && token === state.loadToken) updateTvCount();
+    }
+    pump();
+  }
+
+  // Patch a single card's channel row (and the open modal) in place, avoiding a
+  // full re-render that would disturb scroll position.
+  function updateCardListings(fx) {
+    try {
+      var card = el.games.querySelector('article[data-id=' + JSON.stringify(String(fx.id)) + ']');
+      if (card) {
+        var box = card.querySelector(".channels");
+        if (box) box.innerHTML = channelsHtml(fx);
+      }
+    } catch (e) { /* selector edge cases — ignore */ }
+    if (!el.detailOverlay.hidden && state.detailId === String(fx.id)) {
+      el.detailBody.innerHTML = buildDetailBody(fx, false);
+    }
+  }
+
+  // Refresh the "N with real TV listings" figure in the status bar.
+  function updateTvCount() {
+    var withTv = state.fixtures.filter(function (f) { return f.tv && f.tv.length; }).length;
+    var node = el.status && el.status.querySelector(".tv-count");
+    if (node) node.textContent = withTv ? " · 📡 " + withTv + " with real TV listings" : "";
   }
 
   function loadFixtures(silent) {
     if (!silent) renderSkeletons();
+
+    // Bumped each load so a stale prefetch run from a previous date stops.
+    state.loadToken = (state.loadToken || 0) + 1;
+    var token = state.loadToken;
 
     var day = ymd(state.date);
     var requests = [
@@ -303,6 +373,12 @@
         });
         attachTv(fixtures, tv);
 
+        // Reapply listings already fetched this session so a silent refresh
+        // keeps them and doesn't re-hit the sources.
+        fixtures.forEach(function (fx) {
+          if (loadedTv[fx.id]) { fx.tv = mergeTv(fx.tv, loadedTv[fx.id]); fx._tvLoaded = true; }
+        });
+
         if (!fixtures.length) {
           if (silent) return; // keep current view on an empty silent refresh
           showEmpty(feedReachable
@@ -315,13 +391,18 @@
         fixtures.forEach(function (f) { comps[f.competition] = true; });
         var live = fixtures.filter(function (f) { return statusOf(f).state === "live"; }).length;
         var withTv = fixtures.filter(function (f) { return f.tv && f.tv.length; }).length;
-        var msg = fixtures.length + " games · " + Object.keys(comps).length + " competitions" +
-          (live ? " · " + live + " live now" : "") +
-          (withTv ? " · 📡 " + withTv + " with real TV listings" : "") +
-          " · updated " + formatClock(new Date());
-        showStatus("badge", live ? "LIVE" : "OK", msg);
+        var base = fixtures.length + " games · " + Object.keys(comps).length + " competitions" +
+          (live ? " · " + live + " live now" : "");
+        el.status.hidden = false;
+        el.status.className = "status";
+        el.status.innerHTML = '<span class="badge">' + (live ? "LIVE" : "OK") + "</span>" +
+          escapeHtml(base) +
+          '<span class="tv-count">' +
+            (withTv ? " · 📡 " + withTv + " with real TV listings" : "") + "</span>" +
+          escapeHtml(" · updated " + formatClock(new Date()));
         render();
         updateLeaguePanel();
+        prefetchListings(token); // fill in real channels without a click
       });
   }
 
@@ -413,6 +494,19 @@
     return COUNTRY_FLAGS[(name || "").trim()] || "📺";
   }
 
+  // This is a Portuguese app, so listings are surfaced Portugal-first, then a
+  // few major markets, then everything else alphabetically.
+  var COUNTRY_PRIORITY = ["Portugal", "United Kingdom", "England", "Spain",
+    "Brazil", "France", "Italy", "Germany", "Netherlands", "United States"];
+
+  function orderCountries(names) {
+    return names.slice().sort(function (a, b) {
+      var ia = COUNTRY_PRIORITY.indexOf(a); if (ia === -1) ia = 999;
+      var ib = COUNTRY_PRIORITY.indexOf(b); if (ib === -1) ib = 999;
+      return ia !== ib ? ia - ib : a.localeCompare(b);
+    });
+  }
+
   // A single channel chip, tagged free-to-air or paid cable / subscription.
   function channelChip(name) {
     var paid = window.isPaidChannel(name);
@@ -425,13 +519,12 @@
   // Real per-match listings (from TheSportsDB's TV feed), grouped by country.
   function realChannelsHtml(tv) {
     var byCountry = {};
-    var order = [];
     tv.forEach(function (t) {
       var c = t.country || "International";
-      if (!byCountry[c]) { byCountry[c] = []; order.push(c); }
+      if (!byCountry[c]) byCountry[c] = [];
       if (byCountry[c].indexOf(t.channel) === -1) byCountry[c].push(t.channel);
     });
-    var groups = order.map(function (c) {
+    var groups = orderCountries(Object.keys(byCountry)).map(function (c) {
       var chips = byCountry[c].map(channelChip).join("");
       return '<span class="country-group" title="' + escapeHtml(c) + '">' +
         '<span class="flag">' + countryFlag(c) + "</span>" + chips + "</span>";
@@ -625,14 +718,14 @@
 
   function detailChannelsHtml(fx, checking) {
     if (fx.tv && fx.tv.length) {
-      var byCountry = {}, order = [];
+      var byCountry = {};
       fx.tv.forEach(function (t) {
         var c = t.country || "International";
-        if (!byCountry[c]) { byCountry[c] = []; order.push(c); }
+        if (!byCountry[c]) byCountry[c] = [];
         if (byCountry[c].indexOf(t.channel) === -1) byCountry[c].push(t.channel);
       });
       return '<p class="src-note real">📡 Real broadcast listings</p>' +
-        order.map(function (c) {
+        orderCountries(Object.keys(byCountry)).map(function (c) {
           return detailChannelRow(countryFlag(c), c, byCountry[c].map(channelChip).join(""));
         }).join("");
     }
@@ -683,9 +776,9 @@
     if (!fx) return;
     state.detailId = String(id);
 
-    // If the day feed had no listing, try the per-event lookup on open.
-    var pending = (!fx.tv || !fx.tv.length) &&
-      /^\d+$/.test(String(fx.id)) && !tvCache[fx.id];
+    // Listings usually arrive via the background prefetch; if this match hasn't
+    // resolved yet, show a "checking" state and load it on demand.
+    var pending = !fx._tvLoaded;
 
     el.detailBody.innerHTML = buildDetailBody(fx, pending);
     el.detailOverlay.hidden = false;
@@ -697,7 +790,7 @@
         // Only patch if the same match's modal is still open.
         if (el.detailOverlay.hidden || state.detailId !== String(id)) return;
         el.detailBody.innerHTML = buildDetailBody(fx, false);
-        if (list && list.length) render(); // refresh card so it shows 📡 Listings
+        if (list && list.length) { updateCardListings(fx); updateTvCount(); }
       });
     }
   }

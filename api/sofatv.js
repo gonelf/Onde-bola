@@ -87,6 +87,25 @@ async function getDayIndex(date) {
   return index;
 }
 
+// Batch resolver: one call per country returns that country's channels as
+// id -> name. Much cheaper and more reliable than resolving ids one by one,
+// which is what was dropping Portuguese channel names. Cached 7 days.
+async function getCountryChannelNames(code) {
+  const key = `sofa:pop:${code}`;
+  const cached = await kv(["GET", key]);
+  if (cached) { try { return JSON.parse(cached); } catch (e) {} }
+
+  const data = await getJson(`${BASE}/tv/country/${code}/popular-channels`);
+  const arr = data && (data.tvChannels || data.channels || data.popularChannels);
+  const map = {};
+  if (Array.isArray(arr)) {
+    arr.forEach((c) => { if (c && c.id != null && c.name) map[c.id] = c.name; });
+  }
+  await kv(["SET", key, JSON.stringify(map), "EX", "604800"]);
+  return map;
+}
+
+// Per-id fallback for channels the batch list didn't include.
 async function resolveChannelName(id) {
   const key = `sofa:ch:${id}`;
   const cached = await kv(["GET", key]);
@@ -127,18 +146,33 @@ module.exports = async (req, res) => {
       const countryChannels = (cc && cc.countryChannels) || {};
 
       // Collect (countryCode, channelId|name) pairs, bounded for safety.
+      // Process preferred markets (Portugal first) ahead of the rest so a busy
+      // World Cup match's many countries never push PT past the cap.
+      const PREFERRED = ["PT", "GB", "ES", "BR", "FR", "IT", "DE", "NL", "US", "IE"];
+      const codes = Object.keys(countryChannels).sort((a, b) => {
+        const ia = PREFERRED.indexOf(a), ib = PREFERRED.indexOf(b);
+        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+      });
       const pairs = [];
-      for (const code of Object.keys(countryChannels)) {
+      for (const code of codes) {
         const arr = countryChannels[code] || [];
         for (const item of arr) {
-          if (pairs.length >= 80) break;
+          if (pairs.length >= 120) break;
           pairs.push([code, item]);
         }
       }
 
-      // Resolve any numeric channel ids to names (cached per id, in parallel).
-      const ids = [...new Set(pairs.map((p) => p[1]).filter((v) => typeof v === "number" || /^\d+$/.test(String(v))))];
+      // Resolve channel ids to names. First batch-load each country's channel
+      // list (one call per country, Portugal-first), then fall back to the
+      // per-id lookup only for ids the batch lists didn't cover.
       const names = {};
+      const usedCodes = [...new Set(pairs.map((p) => p[0]))].slice(0, 14);
+      await Promise.all(usedCodes.map(async (code) => {
+        Object.assign(names, await getCountryChannelNames(code));
+      }));
+
+      const ids = [...new Set(pairs.map((p) => p[1]).filter((v) =>
+        (typeof v === "number" || /^\d+$/.test(String(v))) && !names[v]))];
       await Promise.all(ids.map(async (id) => { names[id] = await resolveChannelName(id); }));
 
       const seen = {};

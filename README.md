@@ -66,17 +66,30 @@ api/sofatv.js                    Unofficial SofaScore TV proxy (on-demand fallba
 
 ## Where the TV data comes from
 
-Real per-match channels are sourced from free feeds, in order:
+Real per-match channels are **merged** from several free feeds, then surfaced
+**Portugal-first** (this is a Portuguese app). Listings load in the background
+for every visible match, so they appear on the cards without a click.
 
 1. **TheSportsDB** `eventstv.php?d=DATE&s=Soccer` — the whole day's TV schedule
    (one call), loaded up front for every match.
-2. **TheSportsDB** `lookuptv.php?id=EVENT` — a single match's broadcasts,
-   fetched on demand when you open a match, to fill gaps the day feed missed.
-3. **SofaScore** (unofficial) via `api/sofatv.js` — tried on demand when the
-   above return nothing. SofaScore's API blocks browser CORS, so it goes through
-   the server proxy. ⚠️ This source is **unofficial and against SofaScore's
-   ToS**; it may be blocked at any time and degrades gracefully to nothing.
-   Disable it with `SOFASCORE_DISABLED=1`.
+2. **TheSportsDB** `lookuptv.php?id=EVENT` — a single match's broadcasts, used
+   to fill gaps the day feed missed.
+3. **SofaScore** (unofficial) via `api/sofatv.js` — merged in for every match,
+   which is what surfaces Portuguese channels (Sport TV, DAZN, RTP…) the
+   TheSportsDB feeds often lack. SofaScore's API blocks browser CORS, so it goes
+   through the server proxy. The proxy maps a fixture to its SofaScore event by
+   date + team names, then uses these endpoints (confirmed against several
+   open-source SofaScore clients on GitHub):
+   - `GET /api/v1/sport/football/scheduled-events/{date}` — the day's events.
+   - `GET /api/v1/tv/event/{eventId}/country-channels` — `{ countryChannels:
+     { "PT": [channelId, …] } }`.
+   - `GET /api/v1/tv/country/{code}/popular-channels` — batch id→name per
+     country (one call instead of one per channel).
+   - `GET /api/v1/tv/channel/{id}` — per-id name fallback.
+
+   ⚠️ SofaScore is **unofficial and against its ToS**; it may be blocked at any
+   time and degrades gracefully to nothing. Disable it with
+   `SOFASCORE_DISABLED=1`.
 
 There is no curated/guessed fallback — if no source has a listing, the match
 shows *“No TV listing yet”*.

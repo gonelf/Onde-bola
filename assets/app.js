@@ -59,6 +59,9 @@
     leagueList: document.getElementById("league-list"),
     resetFilters: document.getElementById("reset-filters"),
     rememberFilters: document.getElementById("remember-filters"),
+    detailOverlay: document.getElementById("detail-overlay"),
+    detailClose: document.getElementById("detail-close"),
+    detailBody: document.getElementById("detail-body"),
   };
 
   // ---- Helpers ------------------------------------------------------------
@@ -320,15 +323,22 @@
     return '<span class="score">' + escapeHtml(val) + "</span>";
   }
 
+  // A single channel chip, tagged free-to-air or paid cable / subscription.
+  function channelChip(name) {
+    var paid = window.isPaidChannel(name);
+    return '<span class="channel ' + (paid ? "paid" : "free") + '" title="' +
+      (paid ? "Paid cable / subscription" : "Free-to-air") + '">' +
+      (paid ? '<span class="lock" aria-hidden="true">🔒</span>' : "") +
+      escapeHtml(name) + "</span>";
+  }
+
   function channelsHtml(competition) {
     // Show every country's listing for this game, each prefixed with its flag.
     var groups = Object.keys(window.BROADCASTERS).map(function (code) {
       var country = window.BROADCASTERS[code];
       var chans = channelsFor(code, competition);
       if (!chans || !chans.length) return "";
-      var chips = chans.map(function (c) {
-        return '<span class="channel">' + escapeHtml(c) + "</span>";
-      }).join("");
+      var chips = chans.map(channelChip).join("");
       return '<span class="country-group" title="' + escapeHtml(country.name) + '">' +
         '<span class="flag">' + country.flag + "</span>" + chips + "</span>";
     }).filter(Boolean);
@@ -342,7 +352,8 @@
   function matchHtml(fx) {
     var st = statusOf(fx);
     var cls = "match" + (st.state === "live" ? " is-live" : "");
-    return '<article class="' + cls + '">' +
+    return '<article class="' + cls + '" data-id="' + escapeHtml(fx.id) +
+        '" tabindex="0" role="button" aria-label="Match details">' +
       '<div class="match-time">' + timeCellHtml(fx) + "</div>" +
       '<div class="teams">' +
         '<div class="team">' + badgeHtml(fx.homeBadge, fx.home) +
@@ -353,6 +364,7 @@
           scoreHtml(fx, "away") + "</div>" +
       "</div>" +
       '<div class="channels">' + channelsHtml(fx.competition) + "</div>" +
+      '<span class="details-hint">Click for details ›</span>' +
     "</article>";
   }
 
@@ -502,6 +514,74 @@
     el.leagueToggle.setAttribute("aria-expanded", open ? "true" : "false");
   }
 
+  // ---- Match details modal ------------------------------------------------
+
+  // Full where-to-watch breakdown for the modal: one row per country, with
+  // each channel clearly labelled free-to-air or paid cable / subscription.
+  function detailChannelsHtml(competition) {
+    var rows = Object.keys(window.BROADCASTERS).map(function (code) {
+      var country = window.BROADCASTERS[code];
+      var chans = channelsFor(code, competition);
+      if (!chans || !chans.length) return "";
+      var chips = chans.map(channelChip).join("");
+      return '<div class="detail-channel-row">' +
+        '<span class="detail-country"><span class="flag">' + country.flag + "</span>" +
+          escapeHtml(country.name) + "</span>" +
+        '<span class="detail-chips">' + chips + "</span></div>";
+    }).filter(Boolean).join("");
+    return rows || '<p class="muted">No listings available.</p>';
+  }
+
+  function openDetails(id) {
+    var fx = state.fixtures.filter(function (f) { return String(f.id) === String(id); })[0];
+    if (!fx) return;
+
+    var st = statusOf(fx);
+    var kickoff = new Date(fx.kickoff);
+    var dateStr = kickoff.toLocaleDateString([], {
+      weekday: "long", day: "numeric", month: "long", year: "numeric",
+    });
+    var timeStr = kickoff.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    var score = hasScore(fx) && st.state !== "upcoming"
+      ? '<div class="detail-score">' + escapeHtml(fx.homeScore) + " – " + escapeHtml(fx.awayScore) + "</div>"
+      : '<div class="detail-vs">vs</div>';
+    var statusBadge = st.state === "live"
+      ? '<span class="detail-status live">' + escapeHtml(st.label || "LIVE") + "</span>"
+      : st.state === "finished"
+        ? '<span class="detail-status ft">' + escapeHtml(st.label || "FT") + "</span>"
+        : '<span class="detail-status">' + escapeHtml(timeStr) + "</span>";
+
+    el.detailBody.innerHTML =
+      '<div class="detail-comp">' + leagueLogoHtml(fx.leagueBadgeUrl, fx.competition) +
+        '<span id="detail-title">' + escapeHtml(fx.competition) + "</span></div>" +
+      '<div class="detail-teams">' +
+        '<div class="detail-team">' + badgeHtml(fx.homeBadge, fx.home) +
+          "<span>" + escapeHtml(fx.home) + "</span></div>" +
+        score +
+        '<div class="detail-team">' + badgeHtml(fx.awayBadge, fx.away) +
+          "<span>" + escapeHtml(fx.away) + "</span></div>" +
+      "</div>" +
+      '<div class="detail-meta">' + statusBadge +
+        "<span>📅 " + escapeHtml(dateStr) + " · " + escapeHtml(timeStr) + "</span>" +
+        (fx.venue ? "<span>📍 " + escapeHtml(fx.venue) + "</span>" : "") +
+      "</div>" +
+      '<h3 class="detail-h">Where to watch</h3>' +
+      '<div class="detail-legend">' +
+        '<span class="channel free">Free-to-air</span>' +
+        '<span class="channel paid"><span class="lock">🔒</span>Paid cable / subscription</span>' +
+      "</div>" +
+      detailChannelsHtml(fx.competition);
+
+    el.detailOverlay.hidden = false;
+    document.body.style.overflow = "hidden";
+    el.detailClose.focus();
+  }
+
+  function closeDetails() {
+    el.detailOverlay.hidden = true;
+    document.body.style.overflow = "";
+  }
+
   // ---- Events -------------------------------------------------------------
 
   function shiftDay(delta) {
@@ -546,10 +626,26 @@
       state.remember = el.rememberFilters.checked;
       saveFilters();
     });
+
+    // Open match details on click or keyboard activation.
+    el.games.addEventListener("click", function (e) {
+      var card = e.target.closest(".match[data-id]");
+      if (card) openDetails(card.getAttribute("data-id"));
+    });
+    el.games.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      var card = e.target.closest(".match[data-id]");
+      if (card) { e.preventDefault(); openDetails(card.getAttribute("data-id")); }
+    });
+    el.detailClose.addEventListener("click", closeDetails);
+    el.detailOverlay.addEventListener("click", function (e) {
+      if (e.target === el.detailOverlay) closeDetails();
+    });
+
     // Close the dropdown when clicking elsewhere or pressing Escape.
     document.addEventListener("click", function () { openPanel(false); });
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") openPanel(false);
+      if (e.key === "Escape") { openPanel(false); closeDetails(); }
     });
   }
 

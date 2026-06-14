@@ -34,8 +34,8 @@ window.BROADCASTERS = {
       "uefa europa league": ["Sport TV", "DAZN"],
       "europa league": ["Sport TV", "DAZN"],
       "uefa conference league": ["Sport TV"],
-      "fifa world cup": ["RTP"],
-      "uefa euro": ["RTP"],
+      "fifa world cup": ["RTP", "Sport TV"],
+      "uefa euro": ["RTP", "Sport TV"],
       _default: ["Sport TV"],
     },
   },
@@ -85,7 +85,7 @@ window.BROADCASTERS = {
       "champions league": ["Paramount+", "CBS"],
       "uefa europa league": ["Paramount+"],
       "europa league": ["Paramount+"],
-      "fifa world cup": ["FOX", "Telemundo"],
+      "fifa world cup": ["FOX", "FS1", "Telemundo", "Fubo"],
       _default: ["Fox Soccer Plus"],
     },
   },
@@ -125,8 +125,30 @@ window.BROADCASTERS = {
       "champions league": ["TNT Sports", "HBO Max", "Space"],
       "uefa europa league": ["ESPN", "Star+"],
       "europa league": ["ESPN", "Star+"],
-      "fifa world cup": ["Globo", "SporTV"],
+      "fifa world cup": ["Globo", "SporTV", "Premiere"],
       _default: ["SporTV"],
     },
   },
+};
+
+/*
+ * Free-to-air (over-the-air) broadcasters. Any channel NOT in this set is
+ * treated as a paid cable / pay-TV / subscription streaming service and is
+ * tagged accordingly in the UI.
+ */
+window.FREE_TO_AIR = {
+  // Portugal
+  "RTP": true, "TVI": true,
+  // United Kingdom
+  "BBC": true, "ITV": true,
+  // United States (over-the-air networks)
+  "NBC": true, "FOX": true, "CBS": true, "Telemundo": true, "ABC": true,
+  // Spain
+  "RTVE": true,
+  // Brazil
+  "Globo": true, "CazéTV": true,
+};
+
+window.isPaidChannel = function (name) {
+  return !window.FREE_TO_AIR[name];
 };

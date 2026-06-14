@@ -13,7 +13,11 @@ country — inspired by [ondebola.com](https://ondebola.com/).
 - **Where to watch, everywhere** — every match lists the channels/streaming
   services that carry it in each covered country (🇵🇹 Portugal, 🇬🇧 UK,
   🇺🇸 USA, 🇪🇸 Spain, 🇧🇷 Brazil), with each country's flag in front of
-  its channels — all in one combined list.
+  its channels — all in one combined list. **Free-to-air** channels are shown
+  in green and **paid cable / subscription** channels in amber with a 🔒.
+- **Click for details** — click (or keyboard-activate) any match to open a
+  detail view with the score/status, full date, time and venue, and the
+  complete free-vs-paid where-to-watch breakdown per country.
 - **Date navigation** — jump to previous/next day or back to today.
 - **Live scores & status** — in-play matches show the current score, the
   minute (e.g. `67'`) or `HT`, and a pulsing live badge; finished games show

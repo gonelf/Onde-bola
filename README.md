@@ -6,8 +6,10 @@ country — inspired by [ondebola.com](https://ondebola.com/).
 
 ## Features
 
-- **Today's games worldwide** — fixtures are fetched live from the free
-  [TheSportsDB](https://www.thesportsdb.com) API, grouped by competition.
+- **Today's games worldwide** — every soccer fixture for the day from across
+  the globe is fetched live from the free [TheSportsDB](https://www.thesportsdb.com)
+  API and grouped by competition, each headed with the **championship's logo**
+  (falling back to a monogram when the feed has no artwork).
 - **Where to watch, everywhere** — every match lists the channels/streaming
   services that carry it in each covered country (🇵🇹 Portugal, 🇬🇧 UK,
   🇺🇸 USA, 🇪🇸 Spain, 🇧🇷 Brazil), with each country's flag in front of

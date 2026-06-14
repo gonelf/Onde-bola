@@ -11,7 +11,7 @@
 (function () {
   "use strict";
 
-  var API_BASE = "https://www.thesportsdb.com/api/v1/json/3";
+  var API_BASE = "https://www.thesportsdb.com/api/v1/json/123";
 
   var state = {
     date: new Date(),
@@ -149,6 +149,7 @@
       awayBadge: ev.strAwayTeamBadge || "",
       kickoff: kickoff.toISOString(),
       venue: ev.strVenue || "",
+      leagueBadgeUrl: ev.strLeagueBadge || "",
       homeScore: (hs === 0 || hs) ? String(hs) : null,
       awayScore: (as === 0 || as) ? String(as) : null,
       status: ev.strStatus || ev.strProgress || "",
@@ -225,6 +226,17 @@
 
   function initials(name) {
     return (name || "?").trim().slice(0, 2).toUpperCase();
+  }
+
+  // Championship / league logo, with a monogram fallback when the feed has
+  // no badge (e.g. offline sample data or a competition without artwork).
+  function leagueLogoHtml(url, name) {
+    if (url) {
+      return '<img class="league-logo" src="' + escapeHtml(url) + '" alt="" loading="lazy" ' +
+        "onerror=\"this.outerHTML='<span class=\\'league-logo league-fallback\\'>" +
+        escapeHtml(initials(name)) + "</span>'\" />";
+    }
+    return '<span class="league-logo league-fallback">' + escapeHtml(initials(name)) + "</span>";
   }
 
   function timeCellHtml(fx) {
@@ -318,8 +330,12 @@
       var games = groups[comp].sort(function (a, b) {
         return new Date(a.kickoff) - new Date(b.kickoff);
       });
+      var badged = games.filter(function (g) { return g.leagueBadgeUrl; })[0];
+      var badgeUrl = badged ? badged.leagueBadgeUrl : "";
       return '<section class="competition">' +
-        '<h2 class="competition-head">' + escapeHtml(comp) +
+        '<h2 class="competition-head">' +
+          leagueLogoHtml(badgeUrl, comp) +
+          '<span class="competition-name">' + escapeHtml(comp) + "</span>" +
           '<span class="count">' + games.length + "</span></h2>" +
         games.map(matchHtml).join("") +
       "</section>";

@@ -40,6 +40,10 @@
   .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); } .dot.warn { background: var(--warn); }
   .test .name { font-weight: 600; }
   .test .meta { margin-left: auto; color: var(--muted); font-size: 12px; text-align: right; }
+  .test .copy { width: auto; padding: 5px 10px; font-size: 12px; font-weight: 600;
+                background: var(--panel); border-color: var(--line); color: var(--text); flex: none; }
+  .test .copy:hover { filter: brightness(1.15); }
+  .test .copy.done { background: #065f46; border-color: #065f46; }
   .test .summary-line { padding: 0 14px 8px 34px; color: var(--text); font-size: 13px; }
   .test .summary-line .k { color: var(--muted); }
   pre { margin: 0; padding: 12px 14px; background: #0a1120; border-top: 1px solid var(--line);
@@ -151,11 +155,35 @@
         d.innerHTML =
           '<summary><span class="dot" id="dot-' + t.id + '"></span>' +
           '<span class="name">' + t.label + '</span>' +
-          '<span class="meta" id="meta-' + t.id + '"></span></summary>' +
+          '<span class="meta" id="meta-' + t.id + '"></span>' +
+          '<button class="copy" id="copy-' + t.id + '">Copy</button></summary>' +
           '<div class="summary-line" id="sum-' + t.id + '"><span class="k">not run yet</span></div>' +
           '<pre id="pre-' + t.id + '">—</pre>';
         box.appendChild(d);
+        var btn = $("copy-" + t.id);
+        btn.addEventListener("click", function (e) {
+          e.preventDefault(); e.stopPropagation();
+          copyText($("pre-" + t.id).textContent, btn);
+        });
       });
+    }
+
+    function copyText(text, btn) {
+      var done = function () {
+        var old = btn.textContent; btn.textContent = "Copied ✓"; btn.classList.add("done");
+        setTimeout(function () { btn.textContent = old; btn.classList.remove("done"); }, 1400);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text); done(); });
+      } else { fallbackCopy(text); done(); }
+    }
+
+    function fallbackCopy(text) {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta);
     }
 
     function setDot(id, cls) { $("dot-" + id).className = "dot " + cls; }

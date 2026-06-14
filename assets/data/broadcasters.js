@@ -1,0 +1,132 @@
+/*
+ * Broadcaster rights mapping.
+ *
+ * Maps a competition to the TV channels / streaming services that hold the
+ * broadcasting rights in a given country. This mirrors how real sites work:
+ * fixtures come from a sports data feed, while the "where to watch" answer
+ * comes from a curated rights table per market.
+ *
+ * Keys are normalised competition names (lower-cased, see normaliseCompetition
+ * in app.js). The special key "_default" is used as a fallback per country.
+ */
+
+window.BROADCASTERS = {
+  // country code -> { competitionKey: [channels] }
+  PT: {
+    name: "Portugal",
+    flag: "🇵🇹",
+    rights: {
+      "primeira liga": ["Sport TV", "DAZN"],
+      "liga portugal": ["Sport TV", "DAZN"],
+      "taca de portugal": ["RTP", "Sport TV"],
+      "english premier league": ["DAZN", "Eleven"],
+      "premier league": ["DAZN", "Eleven"],
+      "spanish la liga": ["DAZN"],
+      "la liga": ["DAZN"],
+      "italian serie a": ["Sport TV"],
+      "serie a": ["Sport TV"],
+      "german bundesliga": ["Sport TV"],
+      "bundesliga": ["Sport TV"],
+      "french ligue 1": ["DAZN"],
+      "ligue 1": ["DAZN"],
+      "uefa champions league": ["TVI", "Eleven", "DAZN"],
+      "champions league": ["TVI", "Eleven", "DAZN"],
+      "uefa europa league": ["Sport TV", "DAZN"],
+      "europa league": ["Sport TV", "DAZN"],
+      "uefa conference league": ["Sport TV"],
+      "fifa world cup": ["RTP"],
+      "uefa euro": ["RTP"],
+      _default: ["Sport TV"],
+    },
+  },
+  GB: {
+    name: "United Kingdom",
+    flag: "🇬🇧",
+    rights: {
+      "english premier league": ["Sky Sports", "TNT Sports", "Amazon Prime"],
+      "premier league": ["Sky Sports", "TNT Sports", "Amazon Prime"],
+      "english league championship": ["Sky Sports"],
+      "championship": ["Sky Sports"],
+      "english fa cup": ["BBC", "ITV"],
+      "fa cup": ["BBC", "ITV"],
+      "spanish la liga": ["Premier Sports"],
+      "la liga": ["Premier Sports"],
+      "italian serie a": ["TNT Sports"],
+      "serie a": ["TNT Sports"],
+      "german bundesliga": ["Sky Sports"],
+      "bundesliga": ["Sky Sports"],
+      "uefa champions league": ["TNT Sports"],
+      "champions league": ["TNT Sports"],
+      "uefa europa league": ["TNT Sports"],
+      "europa league": ["TNT Sports"],
+      "fifa world cup": ["BBC", "ITV"],
+      "uefa euro": ["BBC", "ITV"],
+      _default: ["Sky Sports"],
+    },
+  },
+  US: {
+    name: "United States",
+    flag: "🇺🇸",
+    rights: {
+      "english premier league": ["NBC", "Peacock", "USA Network"],
+      "premier league": ["NBC", "Peacock", "USA Network"],
+      "spanish la liga": ["ESPN+"],
+      "la liga": ["ESPN+"],
+      "italian serie a": ["Paramount+", "CBS"],
+      "serie a": ["Paramount+", "CBS"],
+      "german bundesliga": ["ESPN+"],
+      "bundesliga": ["ESPN+"],
+      "french ligue 1": ["beIN Sports"],
+      "ligue 1": ["beIN Sports"],
+      "american major league soccer": ["Apple TV"],
+      "major league soccer": ["Apple TV"],
+      "mls": ["Apple TV"],
+      "uefa champions league": ["Paramount+", "CBS"],
+      "champions league": ["Paramount+", "CBS"],
+      "uefa europa league": ["Paramount+"],
+      "europa league": ["Paramount+"],
+      "fifa world cup": ["FOX", "Telemundo"],
+      _default: ["Fox Soccer Plus"],
+    },
+  },
+  ES: {
+    name: "Spain",
+    flag: "🇪🇸",
+    rights: {
+      "spanish la liga": ["Movistar+", "DAZN"],
+      "la liga": ["Movistar+", "DAZN"],
+      "spanish segunda division": ["LaLiga+"],
+      "copa del rey": ["RTVE", "Movistar+"],
+      "english premier league": ["DAZN"],
+      "premier league": ["DAZN"],
+      "italian serie a": ["DAZN"],
+      "serie a": ["DAZN"],
+      "uefa champions league": ["Movistar+", "Amazon Prime"],
+      "champions league": ["Movistar+", "Amazon Prime"],
+      "uefa europa league": ["Movistar+"],
+      "europa league": ["Movistar+"],
+      "fifa world cup": ["RTVE"],
+      _default: ["Movistar+"],
+    },
+  },
+  BR: {
+    name: "Brazil",
+    flag: "🇧🇷",
+    rights: {
+      "brazilian serie a": ["Globo", "Premiere", "Amazon Prime"],
+      "campeonato brasileiro": ["Globo", "Premiere", "Amazon Prime"],
+      "english premier league": ["ESPN", "Star+"],
+      "premier league": ["ESPN", "Star+"],
+      "spanish la liga": ["ESPN", "Star+"],
+      "la liga": ["ESPN", "Star+"],
+      "italian serie a": ["CazéTV"],
+      "serie a": ["CazéTV"],
+      "uefa champions league": ["TNT Sports", "HBO Max", "Space"],
+      "champions league": ["TNT Sports", "HBO Max", "Space"],
+      "uefa europa league": ["ESPN", "Star+"],
+      "europa league": ["ESPN", "Star+"],
+      "fifa world cup": ["Globo", "SporTV"],
+      _default: ["SporTV"],
+    },
+  },
+};

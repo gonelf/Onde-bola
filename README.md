@@ -62,6 +62,7 @@ assets/app.js                    Fetching, matching, rendering
 assets/data/broadcasters.js      Free-to-air channel classifier (green vs amber)
 api/tv.js                        Cached serverless proxy for TV listings
 api/sofatv.js                    Unofficial SofaScore TV proxy (on-demand fallback)
+api/fmtv.js                      Unofficial FotMob TV proxy (free day-bulk, Portugal-first)
 api/smtv.js                      SportMonks TV proxy (optional, paid; needs SPORTMONKS_KEY)
 ```
 
@@ -91,7 +92,16 @@ for every visible match, so they appear on the cards without a click.
    ⚠️ SofaScore is **unofficial and against its ToS**; it may be blocked at any
    time and degrades gracefully to nothing. Disable it with
    `SOFASCORE_DISABLED=1`.
-4. **SportMonks** (official, paid) via `api/smtv.js` — *optional*, off unless a
+4. **FotMob** (unofficial, free) via `api/fmtv.js` — merged in for every match.
+   FotMob's `GET /api/data/tvlistings?countryCode=XX` returns a whole region's
+   listings keyed by matchId, each carrying the team names and channel, so one
+   call per country yields a full day's broadcasters with no matchId mapping.
+   The proxy queries a Portugal-first set of countries (`FOTMOB_COUNTRIES`,
+   default `PT,GB,ES,BR,US,FR,DE,IT,NL`), merges by match, and returns the same
+   shape as SportMonks so the client merges it identically. Like SofaScore it's
+   unofficial and best-effort; disable with `FOTMOB_DISABLED=1`. Append
+   `&debug=1` to inspect what FotMob returned (per-country counts + a sample).
+5. **SportMonks** (official, paid) via `api/smtv.js` — *optional*, off unless a
    key is set. SportMonks returns a whole day's fixtures with their TV stations
    in **one call** (`GET /v3/football/fixtures/date/{date}?include=participants;
    tvStations.tvStation;tvStations.country`), so the client fetches it once per

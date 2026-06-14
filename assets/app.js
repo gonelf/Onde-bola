@@ -2,10 +2,11 @@
  * Onde Bola — today's football games worldwide and where to watch them.
  *
  * Fixtures are fetched client-side from TheSportsDB's free API. Real TV
- * channels come from TheSportsDB's TV feeds, with SofaScore (via the
- * api/sofatv proxy) as an unofficial on-demand fallback. Only real listings
- * are ever shown — when no source has data the match shows "No TV listing yet",
- * and when there are no fixtures the page shows an empty state.
+ * channels come from TheSportsDB's TV feeds, plus FotMob (api/fmtv) and
+ * SofaScore (api/sofatv) as unofficial broadcaster sources, and SportMonks
+ * (api/smtv) when a paid key is set. Only real listings are ever shown — when
+ * no source has data the match shows "No TV listing yet", and when there are no
+ * fixtures the page shows an empty state.
  */
 
 (function () {
@@ -268,6 +269,15 @@
       .catch(function () { return []; });
   }
 
+  // FotMob day-bulk broadcaster source (free, Portugal-first). Same shape as the
+  // SportMonks day map, so it merges through the exact same path.
+  function fetchFotMobDay(day) {
+    return fetch("/api/fmtv?date=" + day, { headers: { Accept: "application/json" } })
+      .then(function (r) { if (!r.ok) throw new Error("fmtv " + r.status); return r.json(); })
+      .then(function (d) { return (d && d.matches) || []; })
+      .catch(function () { return []; });
+  }
+
   function normName(s) {
     return (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
       .replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
@@ -378,11 +388,12 @@
     var feedReachable = true;
     requests[0] = requests[0].catch(function () { feedReachable = false; return []; });
 
-    return Promise.all([Promise.all(requests), fetchTv(day), fetchSportMonksDay(day)])
+    return Promise.all([Promise.all(requests), fetchTv(day), fetchSportMonksDay(day), fetchFotMobDay(day)])
       .then(function (res) {
         var lists = res[0];
         var tv = res[1];
-        var smDay = res[2] || [];
+        // Day-bulk broadcaster sources, merged through one path below.
+        var dayMaps = (res[2] || []).concat(res[3] || []);
         // Merge all sources and de-duplicate by event id.
         var seen = {};
         var fixtures = [];
@@ -395,16 +406,18 @@
         });
         attachTv(fixtures, tv);
 
-        // Merge the SportMonks day map (empty unless the paid source is
-        // enabled). This gives every match its broadcasters up front, with no
+        // Merge the day-bulk broadcaster maps (FotMob, and SportMonks when its
+        // key is set). This gives every match its broadcasters up front, with no
         // per-match call.
-        if (smDay.length) {
+        if (dayMaps.length) {
           fixtures.forEach(function (fx) {
-            var h = normName(fx.home), a = normName(fx.away), hit = null;
-            for (var i = 0; i < smDay.length; i++) {
-              if (teamMatch(h, smDay[i].h) && teamMatch(a, smDay[i].a)) { hit = smDay[i]; break; }
+            var h = normName(fx.home), a = normName(fx.away);
+            for (var i = 0; i < dayMaps.length; i++) {
+              var e = dayMaps[i];
+              if (e.rows && e.rows.length && teamMatch(h, e.h) && teamMatch(a, e.a)) {
+                fx.tv = mergeTv(fx.tv, e.rows);
+              }
             }
-            if (hit && hit.rows && hit.rows.length) fx.tv = mergeTv(fx.tv, hit.rows);
           });
         }
 

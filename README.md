@@ -65,14 +65,20 @@ api/tv.js                        Cached serverless proxy for TV listings
 
 ## Where the TV data comes from
 
-Real per-match channels are sourced from TheSportsDB's free TV feeds:
+Real per-match channels are sourced from free feeds, in order:
 
-- `eventstv.php?d=DATE&s=Soccer` — the whole day's TV schedule (one call).
-- `lookuptv.php?id=EVENT` — a single match's broadcasts, fetched on demand when
-  you open a match, to fill gaps the day feed missed.
+1. **TheSportsDB** `eventstv.php?d=DATE&s=Soccer` — the whole day's TV schedule
+   (one call), loaded up front for every match.
+2. **TheSportsDB** `lookuptv.php?id=EVENT` — a single match's broadcasts,
+   fetched on demand when you open a match, to fill gaps the day feed missed.
+3. **SofaScore** (unofficial) via `api/sofatv.js` — tried on demand when the
+   above return nothing. SofaScore's API blocks browser CORS, so it goes through
+   the server proxy. ⚠️ This source is **unofficial and against SofaScore's
+   ToS**; it may be blocked at any time and degrades gracefully to nothing.
+   Disable it with `SOFASCORE_DISABLED=1`.
 
-There is no curated/guessed fallback — if a match has no crowd-sourced listing,
-it shows *“No TV listing yet”*.
+There is no curated/guessed fallback — if no source has a listing, the match
+shows *“No TV listing yet”*.
 
 ## Caching (Vercel KV)
 

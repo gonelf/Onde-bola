@@ -241,14 +241,33 @@
       });
   }
 
-  // Resolve real listings for one fixture, trying the per-event lookup when the
-  // day feed had nothing. Resolves to the (possibly empty) listings array.
+  // Unofficial secondary source (SofaScore via our server proxy). Best effort:
+  // only works where /api/sofatv is deployed, and degrades to [] on any failure.
+  function fetchSofaTv(fx) {
+    var day = ymd(state.date);
+    var q = "date=" + day + "&home=" + encodeURIComponent(fx.home) +
+      "&away=" + encodeURIComponent(fx.away);
+    return fetch("/api/sofatv?" + q, { headers: { Accept: "application/json" } })
+      .then(function (r) { if (!r.ok) throw new Error("sofa " + r.status); return r.json(); })
+      .then(function (data) {
+        return ((data && data.tvevent) || []).filter(function (r) { return r.strChannel; })
+          .map(function (r) { return { channel: r.strChannel, country: r.strCountry || "International" }; });
+      })
+      .catch(function () { return []; });
+  }
+
+  // Resolve real listings for one fixture: TheSportsDB per-event lookup first,
+  // then the SofaScore proxy as a fallback. Resolves to the listings array.
   function ensureEventTv(fx) {
     if (fx.tv && fx.tv.length) return Promise.resolve(fx.tv);
-    if (state.usingSample || !/^\d+$/.test(String(fx.id))) return Promise.resolve(fx.tv || []);
-    return fetchEventTv(fx.id).then(function (list) {
-      if (list.length) fx.tv = list;
-      return fx.tv || [];
+    if (state.usingSample) return Promise.resolve(fx.tv || []);
+    var primary = /^\d+$/.test(String(fx.id)) ? fetchEventTv(fx.id) : Promise.resolve([]);
+    return primary.then(function (list) {
+      if (list && list.length) { fx.tv = list; return fx.tv; }
+      return fetchSofaTv(fx).then(function (list2) {
+        if (list2 && list2.length) fx.tv = list2;
+        return fx.tv || [];
+      });
     });
   }
 
@@ -616,7 +635,7 @@
         if (!byCountry[c]) { byCountry[c] = []; order.push(c); }
         if (byCountry[c].indexOf(t.channel) === -1) byCountry[c].push(t.channel);
       });
-      return '<p class="src-note real">📡 Real broadcast listings (TheSportsDB)</p>' +
+      return '<p class="src-note real">📡 Real broadcast listings</p>' +
         order.map(function (c) {
           return detailChannelRow(countryFlag(c), c, byCountry[c].map(channelChip).join(""));
         }).join("");

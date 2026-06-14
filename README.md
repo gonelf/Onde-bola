@@ -10,12 +10,16 @@ country — inspired by [ondebola.com](https://ondebola.com/).
   the globe is fetched live from the free [TheSportsDB](https://www.thesportsdb.com)
   API and grouped by competition, each headed with the **championship's logo**
   (falling back to a monogram when the feed has no artwork).
-- **Where to watch** — real per-match broadcast channels (with country) come
-  from TheSportsDB's free TV feed (`eventstv.php`) and are tagged **📡 Listings**.
-  Coverage is crowd-sourced, so matches without a real listing fall back to a
-  curated **Guide** of the primary rights holder per country (🇵🇹 Portugal,
-  🇬🇧 UK, 🇺🇸 USA, 🇪🇸 Spain, 🇧🇷 Brazil). **Free-to-air** channels are
-  shown in green and **paid cable / subscription** channels in amber with a 🔒.
+- **Where to watch (real data only)** — per-match broadcast channels, grouped
+  by country, come from TheSportsDB's free TV feeds — the day schedule
+  (`eventstv.php`) plus an on-demand per-event lookup (`lookuptv.php`) when you
+  open a match. There is **no curated guesswork**: coverage is crowd-sourced,
+  so matches without a listing simply show *“No TV listing yet”*. **Free-to-air**
+  channels are shown in green and **paid cable / subscription** in amber with a 🔒.
+- **Cached** — TV data is fetched through a small Vercel serverless function
+  (`/api/tv`) that caches results in a Vercel KV store, so repeat loads and
+  visitors don't re-hit the upstream API (with a direct fallback when the
+  function isn't deployed).
 - **Click for details** — click (or keyboard-activate) any match to open a
   detail view with the score/status, full date, time and venue, and the
   complete free-vs-paid where-to-watch breakdown per country.
@@ -51,19 +55,42 @@ when served over `http://`).
 ## Project structure
 
 ```
-index.html                  Page shell
-assets/styles.css           Styling
-assets/app.js               Fetching, matching, rendering
-assets/data/broadcasters.js Competition → TV channel rights per country
-assets/data/sample-fixtures.js  Fallback schedule when the feed is offline
+index.html                       Page shell
+assets/styles.css                Styling
+assets/app.js                    Fetching, matching, rendering
+assets/data/broadcasters.js      Free-to-air channel classifier (green vs amber)
+assets/data/sample-fixtures.js   Fallback schedule when the feed is offline
+api/tv.js                        Cached serverless proxy for TV listings
 ```
 
-## How "where to watch" works
+## Where the TV data comes from
 
-Fixtures come from a sports data feed; the TV answer comes from a per-country
-rights table in `assets/data/broadcasters.js`. To add a country or update
-listings, edit that file — keys are normalised competition names and the
-special `_default` key is the per-country fallback.
+Real per-match channels are sourced from TheSportsDB's free TV feeds:
 
-> TV listings are an indicative rights guide and can vary by region, platform
-> and individual match. Always confirm with your provider.
+- `eventstv.php?d=DATE&s=Soccer` — the whole day's TV schedule (one call).
+- `lookuptv.php?id=EVENT` — a single match's broadcasts, fetched on demand when
+  you open a match, to fill gaps the day feed missed.
+
+There is no curated/guessed fallback — if a match has no crowd-sourced listing,
+it shows *“No TV listing yet”*.
+
+## Caching (Vercel KV)
+
+`api/tv.js` proxies those calls and caches the responses so repeat loads and
+visitors don't re-hit the upstream API. It works with no DB (pass-through), and
+the client falls back to calling TheSportsDB directly if the function isn't
+deployed — but to enable caching on Vercel:
+
+1. In your Vercel project, create a **KV** store (Storage → Create → KV) and
+   connect it to the project. This injects `KV_REST_API_URL` and
+   `KV_REST_API_TOKEN` automatically.
+2. *(Optional)* set `THESPORTSDB_KEY` if you have a premium key — otherwise it
+   defaults to the free `123` key.
+3. Redeploy. Responses include an `X-Cache: HIT|MISS` header so you can verify
+   caching is working.
+
+Cache TTL adapts to the date: ~10 min for today (so live listings stay fresh),
+1 hour for future dates, and 24 hours for past dates.
+
+> TV listings are crowd-sourced and can vary by region, platform and individual
+> match. Always confirm with your provider.

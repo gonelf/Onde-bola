@@ -79,33 +79,6 @@
       a.getDate() === b.getDate();
   }
 
-  function normaliseCompetition(name) {
-    return (name || "")
-      .toLowerCase()
-      .replace(/[^a-z0-9 ]/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-
-  // Resolve channels for a competition in a given country.
-  function channelsFor(countryCode, competition) {
-    var country = window.BROADCASTERS[countryCode];
-    if (!country) return [];
-    var key = normaliseCompetition(competition);
-    var rights = country.rights;
-    if (rights[key]) return rights[key];
-    // Looser match for naming differences (e.g. an API suffix like a year),
-    // but anchored on word boundaries so "Brazilian Serie A" does NOT match
-    // the unrelated "serie a" key — it should fall through to the default.
-    for (var rkey in rights) {
-      if (rkey === "_default") continue;
-      if (key.indexOf(rkey + " ") === 0 || rkey.indexOf(key + " ") === 0) {
-        return rights[rkey];
-      }
-    }
-    return rights._default || [];
-  }
-
   function formatClock(date) {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
@@ -210,12 +183,23 @@
     return (home + " vs " + away).toLowerCase().replace(/\s+/g, " ").trim();
   }
 
+  // Fetch TV rows via the cached /api/tv proxy when available (it caches in a
+  // Vercel DB to avoid repeat upstream calls), falling back to TheSportsDB
+  // directly when the proxy isn't deployed (e.g. static/local hosting).
+  function fetchTvRows(proxyQuery, directUrl) {
+    return fetch("/api/tv?" + proxyQuery, { headers: { Accept: "application/json" } })
+      .then(function (r) { if (!r.ok) throw new Error("proxy " + r.status); return r.json(); })
+      .catch(function () {
+        return fetch(directUrl, { headers: { Accept: "application/json" } })
+          .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+      })
+      .then(function (data) { return (data && (data.tvevent || data.events)) || []; })
+      .catch(function () { return []; });
+  }
+
   function fetchTv(day) {
-    var url = API_BASE + "/eventstv.php?d=" + day + "&s=Soccer";
-    return fetch(url, { headers: { Accept: "application/json" } })
-      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-      .then(function (data) {
-        var rows = (data && (data.tvevent || data.events)) || [];
+    return fetchTvRows("date=" + day, API_BASE + "/eventstv.php?d=" + day + "&s=Soccer")
+      .then(function (rows) {
         var byId = {}, byName = {};
         rows.forEach(function (row) {
           var channel = row.strChannel;
@@ -227,8 +211,7 @@
           if (nm) (byName[nm] = byName[nm] || []).push(entry);
         });
         return { byId: byId, byName: byName };
-      })
-      .catch(function () { return { byId: {}, byName: {} }; });
+      });
   }
 
   // Attach real listings to fixtures, matching by event id then by name.
@@ -238,6 +221,34 @@
         tv.byName[nameKey(fx.home, fx.away)] ||
         tv.byName[nameKey(fx.away, fx.home)];
       fx.tv = t || [];
+    });
+  }
+
+  // Second free source: TheSportsDB's per-event TV lookup, fetched on demand
+  // (when a match is opened) to fill gaps the day feed missed. Cached per id.
+  var tvCache = {};
+
+  function fetchEventTv(id) {
+    if (tvCache[id]) return Promise.resolve(tvCache[id]);
+    return fetchTvRows("id=" + encodeURIComponent(id),
+        API_BASE + "/lookuptv.php?id=" + encodeURIComponent(id))
+      .then(function (rows) {
+        var list = rows.filter(function (r) { return r.strChannel; }).map(function (r) {
+          return { channel: r.strChannel, country: r.strCountry || "International" };
+        });
+        tvCache[id] = list;
+        return list;
+      });
+  }
+
+  // Resolve real listings for one fixture, trying the per-event lookup when the
+  // day feed had nothing. Resolves to the (possibly empty) listings array.
+  function ensureEventTv(fx) {
+    if (fx.tv && fx.tv.length) return Promise.resolve(fx.tv);
+    if (state.usingSample || !/^\d+$/.test(String(fx.id))) return Promise.resolve(fx.tv || []);
+    return fetchEventTv(fx.id).then(function (list) {
+      if (list.length) fx.tv = list;
+      return fx.tv || [];
     });
   }
 
@@ -414,28 +425,11 @@
       groups.join("");
   }
 
-  // Curated rights guide grouped by our supported countries.
-  function curatedChannelsHtml(competition) {
-    var groups = Object.keys(window.BROADCASTERS).map(function (code) {
-      var country = window.BROADCASTERS[code];
-      var chans = channelsFor(code, competition);
-      if (!chans || !chans.length) return "";
-      var chips = chans.map(channelChip).join("");
-      return '<span class="country-group" title="' + escapeHtml(country.name) + '">' +
-        '<span class="flag">' + country.flag + "</span>" + chips + "</span>";
-    }).filter(Boolean);
-
-    if (!groups.length) {
-      return '<span class="channel none">No listing</span>';
-    }
-    return '<span class="src-tag guide" title="Indicative rights guide">Guide</span>' +
-      groups.join("");
-  }
-
-  // Prefer real per-match listings; fall back to the curated rights guide.
+  // Real listings only — no curated guesswork. Matches without a crowd-sourced
+  // listing simply show "No TV listing yet".
   function channelsHtml(fx) {
     if (fx && fx.tv && fx.tv.length) return realChannelsHtml(fx.tv);
-    return curatedChannelsHtml(fx ? fx.competition : "");
+    return '<span class="channel none">No TV listing yet</span>';
   }
 
   function matchHtml(fx) {
@@ -614,7 +608,7 @@
       '<span class="detail-chips">' + chips + "</span></div>";
   }
 
-  function detailChannelsHtml(fx) {
+  function detailChannelsHtml(fx, checking) {
     if (fx.tv && fx.tv.length) {
       var byCountry = {}, order = [];
       fx.tv.forEach(function (t) {
@@ -627,20 +621,12 @@
           return detailChannelRow(countryFlag(c), c, byCountry[c].map(channelChip).join(""));
         }).join("");
     }
-    var rows = Object.keys(window.BROADCASTERS).map(function (code) {
-      var country = window.BROADCASTERS[code];
-      var chans = channelsFor(code, fx.competition);
-      if (!chans || !chans.length) return "";
-      return detailChannelRow(country.flag, country.name, chans.map(channelChip).join(""));
-    }).filter(Boolean).join("");
-    return '<p class="src-note guide">Indicative rights guide — no live listing for this match yet</p>' +
-      (rows || '<p class="muted">No listings available.</p>');
+    return checking
+      ? '<p class="src-note checking">⏳ Checking live listings…</p>'
+      : '<p class="src-note guide">No broadcast listing found for this match yet.</p>';
   }
 
-  function openDetails(id) {
-    var fx = state.fixtures.filter(function (f) { return String(f.id) === String(id); })[0];
-    if (!fx) return;
-
+  function buildDetailBody(fx, checking) {
     var st = statusOf(fx);
     var kickoff = new Date(fx.kickoff);
     var dateStr = kickoff.toLocaleDateString([], {
@@ -656,8 +642,7 @@
         ? '<span class="detail-status ft">' + escapeHtml(st.label || "FT") + "</span>"
         : '<span class="detail-status">' + escapeHtml(timeStr) + "</span>";
 
-    el.detailBody.innerHTML =
-      '<div class="detail-comp">' + leagueLogoHtml(fx.leagueBadgeUrl, fx.competition) +
+    return '<div class="detail-comp">' + leagueLogoHtml(fx.leagueBadgeUrl, fx.competition) +
         '<span id="detail-title">' + escapeHtml(fx.competition) + "</span></div>" +
       '<div class="detail-teams">' +
         '<div class="detail-team">' + badgeHtml(fx.homeBadge, fx.home) +
@@ -675,11 +660,31 @@
         '<span class="channel free">Free-to-air</span>' +
         '<span class="channel paid"><span class="lock">🔒</span>Paid cable / subscription</span>' +
       "</div>" +
-      detailChannelsHtml(fx);
+      detailChannelsHtml(fx, checking);
+  }
 
+  function openDetails(id) {
+    var fx = state.fixtures.filter(function (f) { return String(f.id) === String(id); })[0];
+    if (!fx) return;
+    state.detailId = String(id);
+
+    // If the day feed had no listing, try the per-event lookup on open.
+    var pending = (!fx.tv || !fx.tv.length) && !state.usingSample &&
+      /^\d+$/.test(String(fx.id)) && !tvCache[fx.id];
+
+    el.detailBody.innerHTML = buildDetailBody(fx, pending);
     el.detailOverlay.hidden = false;
     document.body.style.overflow = "hidden";
     el.detailClose.focus();
+
+    if (pending) {
+      ensureEventTv(fx).then(function (list) {
+        // Only patch if the same match's modal is still open.
+        if (el.detailOverlay.hidden || state.detailId !== String(id)) return;
+        el.detailBody.innerHTML = buildDetailBody(fx, false);
+        if (list && list.length) render(); // refresh card so it shows 📡 Listings
+      });
+    }
   }
 
   function closeDetails() {

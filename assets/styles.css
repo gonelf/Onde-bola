@@ -419,6 +419,7 @@ body {
 .src-note { font-size: 0.82rem; font-weight: 600; margin: 0 0 10px; }
 .src-note.real { color: #38bdf8; }
 .src-note.guide { color: var(--text-dim); }
+.src-note.checking { color: var(--text-dim); }
 
 /* Loading skeletons */
 .skeleton {

@@ -74,15 +74,40 @@ const norm = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u
 
 const nameOf = (x) => (typeof x === "string" ? x : (x && (x.name || x.title || x.shortName)) || "");
 
-// Pull [home, away] out of a listing's program, defensively (shape varies).
+// FotMob serves .NET-style "/Date(1781798400000)/" timestamps (and a sentinel
+// min-date for unset ones). Return epoch ms, or 0 if not parseable/usable.
+function parseMsDate(v) {
+  if (typeof v === "number") return v > 0 ? v : 0;
+  if (typeof v === "string") {
+    const m = v.match(/\/Date\((-?\d+)\)\//);
+    if (m) { const n = Number(m[1]); return n > 0 ? n : 0; }
+    const n = Number(v);
+    if (!isNaN(n) && n > 0) return n;
+  }
+  return 0;
+}
+
+// Pull [home, away] out of a listing's program. FotMob's shape is
+// program.teams = [{ name, isHome }, ...]; other shapes handled defensively.
 function teamsOf(program) {
   if (!program) return [null, null];
-  const h = nameOf(program.homeTeam || program.home || program.homeTeamName ||
-    (program.teams && program.teams.home));
-  const a = nameOf(program.awayTeam || program.away || program.awayTeamName ||
-    (program.teams && program.teams.away));
+  if (Array.isArray(program.teams)) {
+    let home = null, away = null;
+    program.teams.forEach((t) => {
+      if (!t) return;
+      if (t.isHome === true) home = nameOf(t);
+      else if (away == null) away = nameOf(t);
+    });
+    if (home && away) return [home, away];
+    if (program.teams.length >= 2) {
+      const h2 = nameOf(program.teams[0]), a2 = nameOf(program.teams[1]);
+      if (h2 && a2) return [h2, a2];
+    }
+  }
+  const h = nameOf(program.homeTeam || program.home || program.homeTeamName);
+  const a = nameOf(program.awayTeam || program.away || program.awayTeamName);
   if (h && a) return [h, a];
-  const title = nameOf(program) || program.title || program.name || "";
+  const title = program.title || program.name || "";
   const parts = String(title).split(/\s+(?:vs\.?|v|-|–|—)\s+/i);
   if (parts.length === 2 && parts[0].trim() && parts[1].trim()) {
     return [parts[0].trim(), parts[1].trim()];
@@ -127,12 +152,14 @@ module.exports = async (req, res) => {
     }
   }
 
-  // Day window [start, end) in UTC ms, used to keep only this date's matches
-  // (FotMob's feed tracks a live window with no date param).
-  const dayStart = Date.parse(date + "T00:00:00Z");
-  const dayEnd = dayStart + 86400000;
+  // Day window in UTC ms, used to keep only this date's matches (FotMob's feed
+  // is a forward-looking window with no date param). Padded ±12h so timezone
+  // differences vs. TheSportsDB's date grouping don't drop legit same-day games.
+  const midnight = Date.parse(date + "T00:00:00Z");
+  const dayStart = midnight - 12 * 3600000;
+  const dayEnd = midnight + 86400000 + 12 * 3600000;
 
-  const dbg = { countries: {}, sampleListing: null };
+  const dbg = { countries: {}, sampleListing: null, droppedNoTeams: 0, droppedDate: 0, kept: 0 };
   const byMatch = {}; // "h|a" -> { h, a, names: {country: Set} , when }
 
   const results = await Promise.all(COUNTRIES.map(async (code) => {
@@ -153,11 +180,12 @@ module.exports = async (req, res) => {
 
       const withProgram = listings.find((l) => l && l.program) || listings[0];
       const [h, a] = teamsOf(withProgram && withProgram.program);
-      if (!h || !a) continue;
+      if (!h || !a) { if (debug) dbg.droppedNoTeams++; continue; }
 
       // Date filter (when timestamps are present).
-      const when = Number(listings[0] && (listings[0].startTime || listings[0].matchTime)) || 0;
-      if (when && (when < dayStart || when >= dayEnd)) continue;
+      const when = parseMsDate(listings[0] && (listings[0].startTime || listings[0].matchTime));
+      if (when && (when < dayStart || when >= dayEnd)) { if (debug) dbg.droppedDate++; continue; }
+      if (debug) dbg.kept++;
 
       const key = norm(h) + "|" + norm(a);
       if (!byMatch[key]) byMatch[key] = { h: norm(h), a: norm(a), names: {} };

@@ -1,11 +1,11 @@
 /*
  * Onde Bola — today's football games worldwide and where to watch them.
  *
- * Fixtures are fetched client-side from TheSportsDB's free API. Each fixture
- * is matched against a curated broadcaster-rights table (broadcasters.js) to
- * resolve which TV channels / streaming services carry it in the chosen
- * country. If the API is unreachable, a bundled sample schedule is shown so
- * the page is never empty.
+ * Fixtures are fetched client-side from TheSportsDB's free API. Real TV
+ * channels come from TheSportsDB's TV feeds, with SofaScore (via the
+ * api/sofatv proxy) as an unofficial on-demand fallback. Only real listings
+ * are ever shown — when no source has data the match shows "No TV listing yet",
+ * and when there are no fixtures the page shows an empty state.
  */
 
 (function () {
@@ -40,7 +40,6 @@
     date: new Date(),
     search: "",
     fixtures: [],
-    usingSample: false,
     hidden: {},       // competition name -> true when hidden from the list
     remember: false,  // persist the filter selection across visits
   };
@@ -260,7 +259,6 @@
   // then the SofaScore proxy as a fallback. Resolves to the listings array.
   function ensureEventTv(fx) {
     if (fx.tv && fx.tv.length) return Promise.resolve(fx.tv);
-    if (state.usingSample) return Promise.resolve(fx.tv || []);
     var primary = /^\d+$/.test(String(fx.id)) ? fetchEventTv(fx.id) : Promise.resolve([]);
     return primary.then(function (list) {
       if (list && list.length) { fx.tv = list; return fx.tv; }
@@ -284,8 +282,8 @@
         "&l=" + encodeURIComponent(league));
     }));
 
-    // Track whether the primary worldwide call actually succeeded so we only
-    // fall back to the sample when the feed is genuinely unreachable.
+    // Track whether the primary worldwide call actually succeeded so we can
+    // tell "no games today" apart from "the feed is unreachable".
     var feedReachable = true;
     requests[0] = requests[0].catch(function () { feedReachable = false; return []; });
 
@@ -307,12 +305,11 @@
 
         if (!fixtures.length) {
           if (silent) return; // keep current view on an empty silent refresh
-          useSample(feedReachable
-            ? "No fixtures found for this date — showing a sample schedule."
-            : "Couldn't reach the live data feed. Showing a sample schedule so you can explore the app.");
+          showEmpty(feedReachable
+            ? "No fixtures found for this date."
+            : "Couldn't reach the live data feed. Please try again in a moment.");
           return;
         }
-        state.usingSample = false;
         state.fixtures = fixtures;
         var comps = {};
         fixtures.forEach(function (f) { comps[f.competition] = true; });
@@ -328,10 +325,9 @@
       });
   }
 
-  function useSample(message) {
-    state.usingSample = true;
-    state.fixtures = window.buildSampleFixtures();
-    showStatus("error", "SAMPLE", message);
+  function showEmpty(message) {
+    state.fixtures = [];
+    showStatus("error", "NONE", message);
     render();
     updateLeaguePanel();
   }
@@ -688,7 +684,7 @@
     state.detailId = String(id);
 
     // If the day feed had no listing, try the per-event lookup on open.
-    var pending = (!fx.tv || !fx.tv.length) && !state.usingSample &&
+    var pending = (!fx.tv || !fx.tv.length) &&
       /^\d+$/.test(String(fx.id)) && !tvCache[fx.id];
 
     el.detailBody.innerHTML = buildDetailBody(fx, pending);
@@ -788,7 +784,6 @@
     // When viewing today, silently refresh live scores/status every 60s.
     // On other days just re-render to keep time-based badges accurate.
     setInterval(function () {
-      if (state.usingSample) return;
       if (isSameDay(state.date, new Date())) {
         loadFixtures(true);
       } else if (!state.search) {

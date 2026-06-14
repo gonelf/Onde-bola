@@ -36,8 +36,9 @@ country — inspired by [ondebola.com](https://ondebola.com/).
   time** checkbox persists your choices to `localStorage` across visits (leave
   it unchecked to keep the filter for the current session only).
 - **Search** — filter by team or competition.
-- **Responsive & offline-friendly** — if the live feed can't be reached, a
-  sample schedule is shown so the app is always usable.
+- **Real data only** — no placeholder/sample schedule. When there are no
+  fixtures, or the live feed can't be reached, the app shows a clear empty
+  state instead of fake games.
 
 ## Running it
 
@@ -59,8 +60,8 @@ index.html                       Page shell
 assets/styles.css                Styling
 assets/app.js                    Fetching, matching, rendering
 assets/data/broadcasters.js      Free-to-air channel classifier (green vs amber)
-assets/data/sample-fixtures.js   Fallback schedule when the feed is offline
 api/tv.js                        Cached serverless proxy for TV listings
+api/sofatv.js                    Unofficial SofaScore TV proxy (on-demand fallback)
 ```
 
 ## Where the TV data comes from

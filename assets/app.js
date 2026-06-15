@@ -362,9 +362,16 @@
 
   // Build the public share link for a match: a server-rendered /g page that
   // carries this game's Open Graph card (custom preview image via /og) and then
-  // deep-links real visitors into the app with the match open. Display fields
-  // are forwarded so the preview image can be drawn without any data fetch.
+  // deep-links real visitors into the app with the match open.
+  //
+  // When the match has a FotMob id the link is short — /g/<id> — and the share
+  // page rebuilds every display field server-side from that id (api/cardinfo).
+  // The rare match without an id falls back to carrying its fields in the query.
   function shareLink(fx) {
+    if (fx.fmid && /^\d+$/.test(fx.fmid)) {
+      return location.origin + "/g/" + fx.fmid;
+    }
+
     var st = statusOf(fx);
     var kickoff = new Date(fx.kickoff);
     var score = (hasScore(fx) && st.state !== "upcoming")

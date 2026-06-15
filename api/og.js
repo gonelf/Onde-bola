@@ -142,20 +142,39 @@ function teamColumn(uri, name) {
 }
 
 export default async function handler(req) {
-  const { searchParams } = new URL(req.url);
+  const url = new URL(req.url);
+  const searchParams = url.searchParams;
   const g = (k) => searchParams.get(k) || "";
 
-  const home = clamp(g("home") || "Home", 28);
-  const away = clamp(g("away") || "Away", 28);
-  const comp = clamp(g("comp"), 42);
-  const score = clamp(g("score"), 9);
-  const status = clamp(g("status"), 10);
-  const date = clamp(g("date"), 40);
+  // Short form: /og/<id> (rewritten to ?id=<id>). Rebuild the game's display
+  // from the match id via /api/cardinfo (FotMob + KV cache); fall back to any
+  // display fields passed directly in the query (legacy/no-id case).
+  const fmid = g("id").replace(/^fm:/, "").trim();
+  let card = null;
+  if (/^\d+$/.test(fmid)) {
+    try {
+      const r = await fetch(`${url.origin}/api/cardinfo?id=${fmid}`, {
+        headers: { Accept: "application/json" },
+      });
+      if (r.ok) {
+        const j = await r.json();
+        if (j && j.ok) card = j.card;
+      }
+    } catch (e) { /* fall back to query params */ }
+  }
+  const f = (k, fallback) => (card && card[k]) || g(fallback || k) || "";
+
+  const home = clamp(f("home") || "Home", 28);
+  const away = clamp(f("away") || "Away", 28);
+  const comp = clamp(f("comp"), 42);
+  const score = clamp(f("score"), 9);
+  const status = clamp(f("status"), 10);
+  const date = clamp((card && card.date) || g("date"), 40);
 
   const [homeBadge, awayBadge, compBadge] = await Promise.all([
-    toDataUri(g("hb")),
-    toDataUri(g("ab")),
-    toDataUri(g("cb")),
+    toDataUri((card && card.homeBadge) || g("hb")),
+    toDataUri((card && card.awayBadge) || g("ab")),
+    toDataUri((card && card.leagueBadge) || g("cb")),
   ]);
 
   // Center column: the score (finished/live) or the kickoff time (upcoming),

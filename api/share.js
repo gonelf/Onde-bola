@@ -1,23 +1,20 @@
 /*
- * /api/share  (public path: /g) — per-game share landing page.
+ * /api/share  (public path: /g/<id>) — per-game share landing page.
  *
  * Social crawlers (WhatsApp, Twitter/X, Facebook, iMessage, Slack, Discord)
  * don't run JavaScript, so they can't see the app's client-rendered match view.
  * This tiny server-rendered page gives each game its own Open Graph / Twitter
- * card — title, description and a custom preview image (/og, generated on the
- * fly) — then redirects real visitors into the app with the match open
- * (`/?match=<id>&date=<YYYY-MM-DD>`).
+ * card — title, description and a custom preview image (/og/<id>) — then
+ * redirects real visitors into the app with the match open
+ * (`/?match=fm:<id>&date=<YYYY-MM-DD>`).
  *
- * Query (all optional except a sensible default):
- *   id           match id used to open the detail in-app (e.g. "fm:12345")
- *   date         YYYY-MM-DD — the day to load so the match is present
- *   home, away   team names
- *   hb, ab       team crest URLs               } forwarded to /og as-is
- *   comp, cb     competition name + badge URL  }
- *   score        e.g. "2 - 1"                  }
- *   status       e.g. "FT" / "LIVE" / "20:00"  }
- *   d            human date label, e.g. "Mon, 15 Jun 2026"
+ * The game's display (teams, competition, score, date) is rebuilt server-side
+ * from the match id alone via api/cardinfo (FotMob + KV cache), so the shared
+ * link is short: /g/4667790. A legacy query form (?home=&away=&…) is still
+ * honoured for back-compat and for the rare match that has no FotMob id.
  */
+
+const { getCard } = require("./cardinfo.js");
 
 function esc(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -25,48 +22,58 @@ function esc(s) {
   });
 }
 
-module.exports = (req, res) => {
+module.exports = async (req, res) => {
   const q = req.query || {};
   const get = (k) => (q[k] == null ? "" : String(q[k]));
 
-  const home = get("home") || "Home";
-  const away = get("away") || "Away";
-  const comp = get("comp");
-  const score = get("score");
-  const status = get("status");
-  const dLabel = get("d");
-  const id = get("id");
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(get("date")) ? get("date") : "";
-
-  // Absolute origin (Vercel sits behind a proxy, so trust the forwarded host).
   const proto = (req.headers["x-forwarded-proto"] || "https").split(",")[0];
   const host = req.headers["x-forwarded-host"] || req.headers.host || "hojehabola.com";
   const origin = `${proto}://${host}`;
 
-  // The preview image forwards every display field to /og.
-  const imgParams = new URLSearchParams();
-  ["home", "away", "hb", "ab", "comp", "cb", "score", "status"].forEach((k) => {
-    if (get(k)) imgParams.set(k, get(k));
-  });
-  if (dLabel) imgParams.set("date", dLabel);
-  const imageUrl = `${origin}/og?${imgParams.toString()}`;
+  const fmid = get("id").replace(/^fm:/, "").trim();
+  const hasId = /^\d+$/.test(fmid);
 
-  // The page's own canonical URL (what gets unfurled).
-  const shareUrl = `${origin}/g?${new URLSearchParams(
+  // Prefer rebuilding from the id; fall back to any display fields in the query.
+  let card = null;
+  if (hasId) {
+    const r = await getCard(fmid).catch(() => null);
+    if (r && r.ok) card = r.card;
+  }
+
+  const home = (card && card.home) || get("home") || "Home";
+  const away = (card && card.away) || get("away") || "Away";
+  const comp = (card && card.comp) || get("comp");
+  const score = (card && card.score) || get("score");
+  const status = (card && card.status) || get("status");
+  const dLabel = (card && card.date) || get("d");
+  const isoDate = (card && card.isoDate) || (/^\d{4}-\d{2}-\d{2}$/.test(get("date")) ? get("date") : "");
+
+  // Preview image: short /og/<id> when we have one, else legacy query form.
+  let imageUrl;
+  if (hasId) {
+    imageUrl = `${origin}/og/${fmid}`;
+  } else {
+    const p = new URLSearchParams();
+    ["home", "away", "hb", "ab", "comp", "cb", "score", "status"].forEach((k) => {
+      if (get(k)) p.set(k, get(k));
+    });
+    if (dLabel) p.set("date", dLabel);
+    imageUrl = `${origin}/og?${p.toString()}`;
+  }
+
+  // Where a real visitor lands: the app, with this match open on its day.
+  const appParams = new URLSearchParams();
+  if (hasId) appParams.set("match", "fm:" + fmid);
+  else if (get("id")) appParams.set("match", get("id"));
+  if (isoDate) appParams.set("date", isoDate);
+  const appUrl = "/" + (appParams.toString() ? "?" + appParams.toString() : "");
+
+  const shareUrl = hasId ? `${origin}/g/${fmid}` : `${origin}/g?${new URLSearchParams(
     Object.keys(q).reduce((o, k) => ((o[k] = get(k)), o), {})
   ).toString()}`;
 
-  // Where a real visitor lands: the app, with this match open.
-  const appUrl =
-    "/" +
-    (id || date
-      ? "?" +
-        new URLSearchParams(
-          Object.assign(id ? { match: id } : {}, date ? { date: date } : {})
-        ).toString()
-      : "");
-
   const vs = `${home} vs ${away}`;
+  const headline = vs + (comp ? " — " + comp : "");
   const title = `${vs}${comp ? " — " + comp : ""} · Hoje Há Bola`;
   const result = score ? `${score} (${status || "FT"})` : status ? status : "";
   const when = [dLabel, result].filter(Boolean).join(" · ");
@@ -86,20 +93,20 @@ module.exports = (req, res) => {
 
 <meta property="og:type" content="article" />
 <meta property="og:site_name" content="Hoje Há Bola" />
-<meta property="og:title" content="${esc(vs + (comp ? " — " + comp : ""))}" />
+<meta property="og:title" content="${esc(headline)}" />
 <meta property="og:description" content="${esc(description)}" />
 <meta property="og:url" content="${esc(shareUrl)}" />
 <meta property="og:image" content="${esc(imageUrl)}" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:image:alt" content="${esc(vs + (comp ? " — " + comp : ""))}" />
+<meta property="og:image:alt" content="${esc(headline)}" />
 
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="${esc(vs + (comp ? " — " + comp : ""))}" />
+<meta name="twitter:title" content="${esc(headline)}" />
 <meta name="twitter:description" content="${esc(description)}" />
 <meta name="twitter:image" content="${esc(imageUrl)}" />
-<meta name="twitter:image:alt" content="${esc(vs + (comp ? " — " + comp : ""))}" />
+<meta name="twitter:image:alt" content="${esc(headline)}" />
 
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>" />
 <script>location.replace(${JSON.stringify(appUrl)});</script>
@@ -122,6 +129,6 @@ module.exports = (req, res) => {
 </html>`;
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.setHeader("Cache-Control", "public, s-maxage=600, stale-while-revalidate=86400");
+  res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=86400");
   res.status(200).send(html);
 };

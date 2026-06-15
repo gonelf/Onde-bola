@@ -14,6 +14,11 @@
 
   var API_BASE = "https://www.thesportsdb.com/api/v1/json/123";
 
+  // FotMob's day-bulk source now fills cards with Portuguese (and other) channels
+  // up front, so the per-match SofaScore call is off by default — it's kept as an
+  // optional fallback (flip to true to consult it on match open).
+  var USE_SOFASCORE = false;
+
   // The worldwide "all soccer" feed for a day can be dominated by a single big
   // tournament (e.g. the World Cup, when most domestic leagues pause). To keep
   // coverage broad we also query a set of leagues that commonly run mid-year,
@@ -36,6 +41,7 @@
 
   var STORAGE_HIDDEN = "ondebola.hiddenLeagues";
   var STORAGE_REMEMBER = "ondebola.rememberFilters";
+  var STORAGE_COUNTRY = "ondebola.primaryCountry";
 
   var state = {
     date: new Date(),
@@ -43,6 +49,7 @@
     fixtures: [],
     hidden: {},       // competition name -> true when hidden from the list
     remember: false,  // persist the filter selection across visits
+    primaryCountry: "Portugal", // country shown first on cards; default by IP
   };
 
   var el = {
@@ -62,6 +69,7 @@
     detailOverlay: document.getElementById("detail-overlay"),
     detailClose: document.getElementById("detail-close"),
     detailBody: document.getElementById("detail-body"),
+    countrySelect: document.getElementById("country-select"),
   };
 
   // ---- Helpers ------------------------------------------------------------
@@ -312,7 +320,8 @@
     // always consult SofaScore, since that's what surfaces Portuguese channels.
     var primary = (!dayList.length && /^\d+$/.test(String(fx.id)))
       ? fetchEventTv(fx.id) : Promise.resolve([]);
-    return Promise.all([primary, fetchSofaTv(fx)]).then(function (res) {
+    var sofa = USE_SOFASCORE ? fetchSofaTv(fx) : Promise.resolve([]);
+    return Promise.all([primary, sofa]).then(function (res) {
       fx.tv = mergeTv(mergeTv(dayList, res[0]), res[1]);
       fx._tvLoaded = true;
       loadedTv[fx.id] = fx.tv;
@@ -435,6 +444,7 @@
           return;
         }
         state.fixtures = fixtures;
+        populateCountrySelect(); // surface any extra countries seen in listings
         var comps = {};
         fixtures.forEach(function (f) { comps[f.competition] = true; });
         var live = fixtures.filter(function (f) { return statusOf(f).state === "live"; }).length;
@@ -542,13 +552,28 @@
     return COUNTRY_FLAGS[(name || "").trim()] || "📺";
   }
 
-  // This is a Portuguese app, so listings are surfaced Portugal-first, then a
-  // few major markets, then everything else alphabetically.
-  var COUNTRY_PRIORITY = ["Portugal", "United Kingdom", "England", "Spain",
+  // ISO country code -> display name, for the IP-derived default country.
+  var CODE_TO_COUNTRY = {
+    PT: "Portugal", GB: "United Kingdom", IE: "Ireland", US: "United States",
+    ES: "Spain", BR: "Brazil", FR: "France", DE: "Germany", IT: "Italy",
+    NL: "Netherlands", BE: "Belgium", AR: "Argentina", MX: "Mexico", CA: "Canada",
+    AU: "Australia", SA: "Saudi Arabia", TR: "Turkey", GR: "Greece", CH: "Switzerland",
+    AT: "Austria", PL: "Poland", SE: "Sweden", NO: "Norway", DK: "Denmark",
+    FI: "Finland", JP: "Japan", KR: "South Korea", CN: "China", IN: "India",
+    RO: "Romania", UA: "Ukraine", CZ: "Czech Republic", HU: "Hungary", RS: "Serbia",
+    HR: "Croatia",
+  };
+
+  // Listings are surfaced with the user's chosen country first (defaults to the
+  // IP country, or Portugal), then a few major markets, then the rest A–Z.
+  var COUNTRY_PRIORITY = ["United Kingdom", "England", "Spain",
     "Brazil", "France", "Italy", "Germany", "Netherlands", "United States"];
 
   function orderCountries(names) {
+    var primary = state.primaryCountry;
     return names.slice().sort(function (a, b) {
+      if (a === primary && b !== primary) return -1;
+      if (b === primary && a !== primary) return 1;
       var ia = COUNTRY_PRIORITY.indexOf(a); if (ia === -1) ia = 999;
       var ib = COUNTRY_PRIORITY.indexOf(b); if (ib === -1) ib = 999;
       return ia !== ib ? ia - ib : a.localeCompare(b);
@@ -564,21 +589,32 @@
       escapeHtml(name) + "</span>";
   }
 
-  // Real per-match listings (from TheSportsDB's TV feed), grouped by country.
-  function realChannelsHtml(tv) {
+  function groupByCountry(tv) {
     var byCountry = {};
     tv.forEach(function (t) {
       var c = t.country || "International";
       if (!byCountry[c]) byCountry[c] = [];
       if (byCountry[c].indexOf(t.channel) === -1) byCountry[c].push(t.channel);
     });
-    var groups = orderCountries(Object.keys(byCountry)).map(function (c) {
-      var chips = byCountry[c].map(channelChip).join("");
-      return '<span class="country-group" title="' + escapeHtml(c) + '">' +
-        '<span class="flag">' + countryFlag(c) + "</span>" + chips + "</span>";
-    });
+    return byCountry;
+  }
+
+  // Card view: show the primary country's channels (or the top available country
+  // if the primary has none for this match), with the rest summarised as
+  // "+N more in details" — the full per-country breakdown lives in the modal.
+  function realChannelsHtml(tv) {
+    var byCountry = groupByCountry(tv);
+    var ordered = orderCountries(Object.keys(byCountry));
+    var lead = byCountry[state.primaryCountry] ? state.primaryCountry : ordered[0];
+    var chips = byCountry[lead].map(channelChip).join("");
+    var others = ordered.filter(function (c) { return c !== lead; }).length;
+    var more = others
+      ? '<span class="more-countries">+' + others +
+        (others === 1 ? " country" : " countries") + " in details ›</span>"
+      : "";
     return '<span class="src-tag real" title="Real broadcast listings">📡 Listings</span>' +
-      groups.join("");
+      '<span class="country-group" title="' + escapeHtml(lead) + '">' +
+      '<span class="flag">' + countryFlag(lead) + "</span>" + chips + "</span>" + more;
   }
 
   // Real listings only — no curated guesswork. Matches without a crowd-sourced
@@ -858,7 +894,66 @@
     loadFixtures();
   }
 
+  // ---- Primary country (TV listings) --------------------------------------
+
+  // Options = the known countries plus any seen in the loaded fixtures, A–Z.
+  function countryOptionSet() {
+    var set = {};
+    Object.keys(CODE_TO_COUNTRY).forEach(function (k) { set[CODE_TO_COUNTRY[k]] = true; });
+    state.fixtures.forEach(function (fx) {
+      (fx.tv || []).forEach(function (t) { if (t.country) set[t.country] = true; });
+    });
+    set[state.primaryCountry] = true;
+    return Object.keys(set).sort(function (a, b) { return a.localeCompare(b); });
+  }
+
+  function populateCountrySelect() {
+    if (!el.countrySelect) return;
+    el.countrySelect.innerHTML = countryOptionSet().map(function (c) {
+      return '<option value="' + escapeHtml(c) + '"' +
+        (c === state.primaryCountry ? " selected" : "") + ">" +
+        countryFlag(c) + " " + escapeHtml(c) + "</option>";
+    }).join("");
+  }
+
+  function setPrimaryCountry(name, persist) {
+    if (!name || name === state.primaryCountry) {
+      if (persist && name) { try { localStorage.setItem(STORAGE_COUNTRY, name); } catch (e) {} }
+      return;
+    }
+    state.primaryCountry = name;
+    if (persist) { try { localStorage.setItem(STORAGE_COUNTRY, name); } catch (e) {} }
+    populateCountrySelect();
+    render();
+    if (!el.detailOverlay.hidden && state.detailId) {
+      var fx = state.fixtures.filter(function (f) { return String(f.id) === state.detailId; })[0];
+      if (fx) el.detailBody.innerHTML = buildDetailBody(fx, !fx._tvLoaded);
+    }
+  }
+
+  // Default the primary country to the visitor's IP country (no geolocation
+  // permission prompt) unless they've already chosen one. Their choice wins and
+  // is remembered.
+  function initCountry() {
+    var stored = null;
+    try { stored = localStorage.getItem(STORAGE_COUNTRY); } catch (e) {}
+    if (stored) { state.primaryCountry = stored; populateCountrySelect(); return; }
+    populateCountrySelect();
+    fetch("/api/geo", { headers: { Accept: "application/json" } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var name = d && d.country && CODE_TO_COUNTRY[d.country];
+        if (name) setPrimaryCountry(name, false);
+      })
+      .catch(function () {});
+  }
+
   function bindEvents() {
+    if (el.countrySelect) {
+      el.countrySelect.addEventListener("change", function () {
+        setPrimaryCountry(el.countrySelect.value, true);
+      });
+    }
     el.prev.addEventListener("click", function () { shiftDay(-1); });
     el.next.addEventListener("click", function () { shiftDay(1); });
     el.today.addEventListener("click", function () {
@@ -919,6 +1014,7 @@
 
   function init() {
     loadFilters();
+    initCountry();
     renderDateLabel();
     bindEvents();
     loadFixtures();

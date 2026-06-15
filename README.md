@@ -64,7 +64,16 @@ api/tv.js                        Cached serverless proxy for TV listings
 api/sofatv.js                    Unofficial SofaScore TV proxy (on-demand fallback)
 api/fmtv.js                      Unofficial FotMob TV proxy (free day-bulk, Portugal-first)
 api/smtv.js                      SportMonks TV proxy (optional, paid; needs SPORTMONKS_KEY)
+api/geo.js                       Visitor country (Vercel edge header) for the default listings country
+api/health.js                    Read-only config/KV diagnostics for the admin page
+admin.html                       Connections debugger (live-tests every source)
 ```
+
+The card shows the **primary country**'s channels first; the rest fold into the
+match-details modal. The primary country defaults to the visitor's country via
+`api/geo` (Vercel's `x-vercel-ip-country` edge header — no geolocation prompt),
+falls back to Portugal, and can be changed with the country picker in the
+toolbar (the choice is remembered in `localStorage`).
 
 ## Where the TV data comes from
 
@@ -76,12 +85,11 @@ for every visible match, so they appear on the cards without a click.
    (one call), loaded up front for every match.
 2. **TheSportsDB** `lookuptv.php?id=EVENT` — a single match's broadcasts, used
    to fill gaps the day feed missed.
-3. **SofaScore** (unofficial) via `api/sofatv.js` — merged in for every match,
-   which is what surfaces Portuguese channels (Sport TV, DAZN, RTP…) the
-   TheSportsDB feeds often lack. SofaScore's API blocks browser CORS, so it goes
-   through the server proxy. The proxy maps a fixture to its SofaScore event by
-   date + team names, then uses these endpoints (confirmed against several
-   open-source SofaScore clients on GitHub):
+3. **SofaScore** (unofficial) via `api/sofatv.js` — **off by default**
+   (`USE_SOFASCORE = false` in `assets/app.js`) now that FotMob covers Portugal;
+   kept as an optional per-match fallback. When enabled it maps a fixture to its
+   SofaScore event by date + team names, then uses these endpoints (confirmed
+   against several open-source SofaScore clients on GitHub):
    - `GET /api/v1/sport/football/scheduled-events/{date}` — the day's events.
    - `GET /api/v1/tv/event/{eventId}/country-channels` — `{ countryChannels:
      { "PT": [channelId, …] } }`.
@@ -133,6 +141,13 @@ deployed — but to enable caching on Vercel:
    (`api/smtv.js`). Leave unset to keep it disabled.
 4. Redeploy. Responses include an `X-Cache: HIT|MISS` header so you can verify
    caching is working.
+
+> **Before launch — enable KV.** FotMob is fetched once per page load, one
+> request per country in `FOTMOB_COUNTRIES` (9 by default). Without KV every
+> visitor triggers all of them live, which is slow and risks FotMob
+> rate-limiting/blocking the deployment. With KV connected it becomes ~one
+> cached fetch per ~30 min for everyone. The `/admin.html` health check shows
+> whether KV is reachable.
 
 Cache TTL adapts to the date: ~10 min for today (so live listings stay fresh),
 1 hour for future dates, and 24 hours for past dates.

@@ -145,7 +145,7 @@
           if (!j) return "no response";
           if (!j.ok) return "no details (ok=false)";
           var d = j.details || {};
-          return "venue " + (d.venue ? "✅" : "—") +
+          var line = "venue " + (d.venue ? "✅" : "—") +
             " · ref " + (d.referee ? "✅" : "—") +
             " · att " + (d.attendance || "—") +
             " · events " + ((d.events || []).length) +
@@ -154,6 +154,15 @@
             " · h2h " + (d.h2h ? "✅" : "—") +
             " · motm " + (d.motm ? "✅" : "—") +
             " · highlights " + (d.highlights ? "✅" : "—");
+          var s = j._shape;
+          if (s) {
+            line += "\n  content: " + (s.content || []).join(",") +
+              "\n  matchFacts: " + (s.matchFacts || []).join(",") +
+              "\n  h2h keys: " + (s.h2h_keys ? s.h2h_keys.join(",") : "none") +
+              "\n  h2h sample: " + (s.h2h_sample || "") +
+              "\n  motm: " + (s.motm_candidates || "");
+          }
+          return line;
         } },
       { id: "sofatv", label: "SofaScore (api/sofatv)", needs: ["date", "home", "away"],
         url: function (p) { return "/api/sofatv?date=" + p.date + "&home=" + encodeURIComponent(p.home) +

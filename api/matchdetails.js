@@ -263,7 +263,27 @@ module.exports = async (req, res) => {
   }
 
   const details = normalize(data);
-  const payload = debug ? { ok: true, details, _raw: Object.keys(data) } : { ok: true, details };
+  // In debug mode, expose the upstream structure around h2h / player-of-the-match
+  // so we can see where FotMob actually puts them without dumping the whole blob.
+  const shape = debug ? safe(function () {
+    const content = data.content || {};
+    const mf = content.matchFacts || {};
+    const keysOf = function (o) { return o && typeof o === "object" ? Object.keys(o) : null; };
+    return {
+      top: keysOf(data),
+      content: keysOf(content),
+      matchFacts: keysOf(mf),
+      infoBox: keysOf(mf.infoBox || mf.info),
+      h2h_keys: keysOf(content.h2h),
+      h2h_sample: JSON.stringify(content.h2h || null).slice(0, 600),
+      motm_candidates: JSON.stringify({
+        mfPotm: mf.playerOfTheMatch || null,
+        contentPotm: content.playerOfTheMatch || null,
+        topPlayers: mf.topPlayers || content.topPlayers || null,
+      }).slice(0, 600),
+    };
+  }, null) : null;
+  const payload = debug ? { ok: true, details, _shape: shape } : { ok: true, details };
 
   if (!debug) {
     // Finished matches are immutable — cache them for a day; live/upcoming

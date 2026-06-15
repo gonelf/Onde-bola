@@ -363,43 +363,26 @@
     '<circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/>' +
     '<line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>';
 
-  // Build the public share link for a match: a server-rendered /g page that
-  // carries this game's Open Graph card (custom preview image via /og) and then
+  // The kickoff day in Europe/Lisbon, so the share URL the client builds matches
+  // the canonical the server-rendered page emits (which also uses Lisbon time).
+  function lisbonYmd(date) {
+    try {
+      return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit",
+      }).format(date);
+    } catch (e) { return ymd(date); }
+  }
+  // A team's URL slug (matches the server's slugify): accent-folded, a-z0-9, "-".
+  function teamSlug(name) { return normName(name).replace(/ /g, "-"); }
+
+  // Build the public share / detail URL for a match: a descriptive, crawlable
+  // /g/<date>/<home>-vs-<away> page. The server resolves it back to the day's
+  // fixture to render the Open Graph card, broadcasts and match facts, then
   // deep-links real visitors into the app with the match open.
-  //
-  // When the match has a FotMob id the link is short — /g/<id> — and the share
-  // page rebuilds every display field server-side from that id (api/cardinfo).
-  // The rare match without an id falls back to carrying its fields in the query.
   function shareLink(fx) {
-    if (fx.fmid && /^\d+$/.test(fx.fmid)) {
-      return location.origin + "/g/" + fx.fmid;
-    }
-
-    var st = statusOf(fx);
-    var kickoff = new Date(fx.kickoff);
-    var score = (hasScore(fx) && st.state !== "upcoming")
-      ? (fx.homeScore + " - " + fx.awayScore) : "";
-    var status = st.state === "finished" ? t("ft")
-      : st.state === "live" ? (st.label || t("live"))
-      : kickoff.toLocaleTimeString(locale() || [], { hour: "2-digit", minute: "2-digit" });
-    var dLabel = kickoff.toLocaleDateString(locale() || [], {
-      weekday: "short", day: "numeric", month: "short", year: "numeric",
-    });
-    var comp = fx.competition + (fx.group ? " " + t("group") + " " + fx.group : "");
-
-    var p = new URLSearchParams();
-    p.set("id", fx.id);
-    p.set("date", ymd(kickoff));
-    p.set("home", fx.home);
-    p.set("away", fx.away);
-    if (fx.homeBadge) p.set("hb", fx.homeBadge);
-    if (fx.awayBadge) p.set("ab", fx.awayBadge);
-    if (comp) p.set("comp", comp);
-    if (fx.leagueBadgeUrl) p.set("cb", fx.leagueBadgeUrl);
-    if (score) p.set("score", score);
-    if (status) p.set("status", status);
-    if (dLabel) p.set("d", dLabel);
-    return location.origin + "/g?" + p.toString();
+    var d = new Date(fx.kickoff);
+    var date = isNaN(d.getTime()) ? lisbonYmd(new Date()) : lisbonYmd(d);
+    return location.origin + "/g/" + date + "/" + teamSlug(fx.home) + "-vs-" + teamSlug(fx.away);
   }
 
   function legacyCopy(text) {

@@ -99,6 +99,38 @@ const formDots = (list) =>
     .map((r) => `<span class="form form-${esc(r).toLowerCase()}">${esc(r)}</span>`)
     .join("");
 
+// --- pretty URLs: /g/<date>/<home>-vs-<away> ------------------------------
+// A team's URL slug (same normalization the client uses), and the matchup slug.
+const slugify = (name) => norm(name).replace(/ /g, "-");
+const matchSlug = (home, away) => `${slugify(home)}-vs-${slugify(away)}`;
+// Split "home-vs-away" at the first "-vs-" (team names don't contain a bare "vs").
+function parseSlug(slug) {
+  const m = /^(.+?)-vs-(.+)$/.exec(String(slug || ""));
+  return m ? { home: m[1], away: m[2] } : null;
+}
+// Readable fallback names when a slug can't be resolved to a fixture.
+const titleize = (s) => String(s || "").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+function addDays(date, n) {
+  const d = new Date(date + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+// Resolve a /g/<date>/<home>-vs-<away> URL to that day's fixture (and its
+// FotMob id) by matching the day's feed. Checks ±1 day so a timezone bucket
+// difference between the slug date and FotMob's grouping doesn't lose the game.
+async function resolveSlug(origin, date, slug) {
+  const p = parseSlug(slug);
+  if (!p) return null;
+  for (const d of [date, addDays(date, -1), addDays(date, 1)]) {
+    const data = await getJson(`${origin}/api/fixtures?date=${d}&all=1`, 5000);
+    const list = data && Array.isArray(data.fixtures) ? data.fixtures : [];
+    const fx = list.find((f) => f && slugify(f.home) === p.home && slugify(f.away) === p.away);
+    if (fx) return fx;
+  }
+  return null;
+}
+
 module.exports = async (req, res) => {
   const q = req.query || {};
   const get = (k) => (q[k] == null ? "" : String(q[k]));
@@ -107,26 +139,43 @@ module.exports = async (req, res) => {
   const host = req.headers["x-forwarded-host"] || req.headers.host || "hojehabola.com";
   const origin = `${proto}://${host}`;
 
-  const fmid = get("id").replace(/^fm:/, "").trim();
+  const slug = get("slug");
+  const pathDate = /^\d{4}-\d{2}-\d{2}$/.test(get("date")) ? get("date") : "";
+
+  // The canonical URL is /g/<date>/<home>-vs-<away>; resolve it to the day's
+  // fixture so the page enriches exactly like the legacy /g/<id> form. The
+  // short id form (and the legacy ?home=&away= query) are still honoured.
+  let resolvedFx = null;
+  if (slug && pathDate) {
+    resolvedFx = await resolveSlug(origin, pathDate, slug).catch(() => null);
+  }
+  const slugNames = slug ? parseSlug(slug) : null;
+
+  let fmid = get("id").replace(/^fm:/, "").trim();
+  if (resolvedFx && resolvedFx.fmid) fmid = String(resolvedFx.fmid);
   const hasId = /^\d+$/.test(fmid);
 
-  // Prefer rebuilding from the id; fall back to any display fields in the query.
+  // Prefer rebuilding from the id; fall back to the resolved fixture, the slug,
+  // then any display fields in the query.
   let card = null;
   if (hasId) {
     const r = await getCard(fmid).catch(() => null);
     if (r && r.ok) card = r.card;
   }
 
-  const home = (card && card.home) || get("home") || "Home";
-  const away = (card && card.away) || get("away") || "Away";
-  const comp = (card && card.comp) || get("comp");
+  const home = (card && card.home) || (resolvedFx && resolvedFx.home) ||
+    (slugNames && titleize(slugNames.home)) || get("home") || "Home";
+  const away = (card && card.away) || (resolvedFx && resolvedFx.away) ||
+    (slugNames && titleize(slugNames.away)) || get("away") || "Away";
+  const comp = (card && card.comp) || (resolvedFx && resolvedFx.competition) || get("comp");
   const score = (card && card.score) || get("score");
   const status = (card && card.status) || get("status");
   const dLabel = (card && card.date) || get("d");
-  const kickoff = (card && card.kickoff) || "";
-  const homeBadge = (card && card.homeBadge) || "";
-  const awayBadge = (card && card.awayBadge) || "";
-  const isoDate = (card && card.isoDate) || (/^\d{4}-\d{2}-\d{2}$/.test(get("date")) ? get("date") : "");
+  const kickoff = (card && card.kickoff) || (resolvedFx && resolvedFx.kickoff) || "";
+  const homeBadge = (card && card.homeBadge) || (resolvedFx && resolvedFx.homeBadge) || "";
+  const awayBadge = (card && card.awayBadge) || (resolvedFx && resolvedFx.awayBadge) || "";
+  const isoDate = (card && card.isoDate) || pathDate ||
+    (/^\d{4}-\d{2}-\d{2}$/.test(get("date")) ? get("date") : "");
   const finished = !!(card && card.finished);
 
   // Enrich (best-effort, parallel): TV listings for the day + match facts.
@@ -142,15 +191,20 @@ module.exports = async (req, res) => {
     if (md && md.ok && md.details) details = md.details;
   }
 
-  // Preview image: short /og/<id> when we have one, else legacy query form.
+  // Preview image: short /og/<id> when we have one, else build from the fields.
   let imageUrl;
   if (hasId) {
     imageUrl = `${origin}/og/${fmid}`;
   } else {
     const p = new URLSearchParams();
-    ["home", "away", "hb", "ab", "comp", "cb", "score", "status"].forEach((k) => {
-      if (get(k)) p.set(k, get(k));
-    });
+    if (home) p.set("home", home);
+    if (away) p.set("away", away);
+    if (homeBadge) p.set("hb", homeBadge);
+    if (awayBadge) p.set("ab", awayBadge);
+    if (comp) p.set("comp", comp);
+    if (get("cb")) p.set("cb", get("cb"));
+    if (score) p.set("score", score);
+    if (status) p.set("status", status);
     if (dLabel) p.set("date", dLabel);
     imageUrl = `${origin}/og?${p.toString()}`;
   }
@@ -162,9 +216,15 @@ module.exports = async (req, res) => {
   if (isoDate) appParams.set("date", isoDate);
   const appUrl = "/" + (appParams.toString() ? "?" + appParams.toString() : "");
 
-  const shareUrl = hasId ? `${origin}/g/${fmid}` : `${origin}/g?${new URLSearchParams(
-    Object.keys(q).reduce((o, k) => ((o[k] = get(k)), o), {})
-  ).toString()}`;
+  // Canonical: the pretty /g/<date>/<home>-vs-<away> URL. Old /g/<id> and
+  // ?home=&away= links still render, but point search engines here.
+  const shareUrl = isoDate
+    ? `${origin}/g/${isoDate}/${matchSlug(home, away)}`
+    : hasId
+      ? `${origin}/g/${fmid}`
+      : `${origin}/g?${new URLSearchParams(
+          Object.keys(q).reduce((o, k) => ((o[k] = get(k)), o), {})
+        ).toString()}`;
 
   const vs = `${home} vs ${away}`;
   const heading = `Where to watch ${vs}`;

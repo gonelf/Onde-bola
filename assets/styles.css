@@ -789,6 +789,8 @@ body {
   .header-inner { height: 54px; }
   .brand { font-size: 1.1rem; }
 
+  .view-tabs { display: flex; width: 100%; }
+  .view-tab { flex: 1; padding: 0 10px; }
   .toolbar { gap: 10px; margin: 14px 0 14px; }
   .toolbar-right { flex-wrap: wrap; gap: 8px; width: 100%; }
   .country-pick { flex: 1 1 auto; }
@@ -987,25 +989,36 @@ body {
   pointer-events: none;
 }
 
-/* ---- View toggle (Fixtures <-> Highlights) ----------------------------- */
-.view-toggle {
+/* ---- View tabs (Games / Highlights) ------------------------------------ */
+.view-tabs {
+  display: inline-flex;
+  gap: 4px;
+  margin: 16px 0 0;
+  padding: 4px;
   background: var(--bg-elev);
-  color: var(--text);
   border: 1px solid var(--line);
-  border-radius: 10px;
-  height: 38px;
-  padding: 0 14px;
+  border-radius: 12px;
+}
+.view-tab {
+  background: transparent;
+  color: var(--text-dim);
+  border: 0;
+  border-radius: 9px;
+  height: 36px;
+  padding: 0 18px;
   cursor: pointer;
   font-size: 0.95rem;
+  font-weight: 600;
   white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
 }
-.view-toggle:hover { border-color: var(--accent); color: var(--accent); }
-.view-toggle.active {
+.view-tab:hover { color: var(--text); }
+.view-tab.is-active {
   background: var(--accent);
   color: #06281a;
-  border-color: var(--accent);
   font-weight: 700;
 }
+.view-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* In the highlights view the date pager and league filter don't apply. */
 body.view-highlights .date-nav,
 body.view-highlights .league-filter { display: none; }

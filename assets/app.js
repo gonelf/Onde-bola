@@ -57,7 +57,9 @@
     adPrefs: document.getElementById("ad-prefs"),
     adTop: document.getElementById("ad-top"),
     adBottom: document.getElementById("ad-bottom"),
-    viewHighlights: document.getElementById("view-highlights"),
+    viewTabs: document.querySelector(".view-tabs"),
+    tabGames: document.getElementById("tab-games"),
+    tabHighlights: document.getElementById("tab-highlights"),
   };
 
   // ---- Display ads + consent ----------------------------------------------
@@ -206,7 +208,7 @@
       noSearch: "No games match your search for this date.",
       noFixtures: "No fixtures found for this date.",
       feedDown: "Couldn’t reach the live data feed. Please try again in a moment.",
-      hlTab: "🎬 Highlights", hlBack: "‹ Games",
+      gamesTab: "⚽ Games", hlTab: "🎬 Highlights",
       hlTitle: "Match highlights", hlSub: "Recently finished games — tap a card to watch.",
       hlOpenYt: "Open on YouTube ↗", hlLoading: "Loading highlights…",
       hlEmpty: "No highlights yet. Finished games appear here once their clips are ready.",
@@ -247,7 +249,7 @@
       noSearch: "Nenhum jogo corresponde à tua pesquisa nesta data.",
       noFixtures: "Sem jogos para esta data.",
       feedDown: "Não foi possível contactar o feed de dados. Tenta novamente daqui a momentos.",
-      hlTab: "🎬 Resumos", hlBack: "‹ Jogos",
+      gamesTab: "⚽ Jogos", hlTab: "🎬 Resumos",
       hlTitle: "Resumos dos jogos", hlSub: "Jogos terminados recentemente — toca num cartão para ver.",
       hlOpenYt: "Abrir no YouTube ↗", hlLoading: "A carregar resumos…",
       hlEmpty: "Ainda sem resumos. Os jogos terminados aparecem aqui assim que os vídeos estiverem prontos.",
@@ -285,9 +287,8 @@
     set("#detail-close", "ariaLabel", t("close"));
     set("#detail-share", "ariaLabel", t("shareGame"));
     set("#detail-share", "title", t("shareGame"));
-    if (el.viewHighlights) {
-      el.viewHighlights.textContent = state.view === "highlights" ? t("hlBack") : t("hlTab");
-    }
+    if (el.tabGames) el.tabGames.textContent = t("gamesTab");
+    if (el.tabHighlights) el.tabHighlights.textContent = t("hlTab");
   }
 
   // ---- Helpers ------------------------------------------------------------
@@ -809,17 +810,19 @@
 
   // ---- Highlights view ----------------------------------------------------
 
-  // Switch between the day's fixtures and the recent-highlights feed. The toggle
-  // hides the date pager + league filter (which don't apply to highlights) via a
-  // body class, and routes render() to the right builder.
+  // Switch between the day's fixtures and the recent-highlights feed. Marks the
+  // active tab, hides the date pager + league filter (which don't apply to
+  // highlights) via a body class, and routes render() to the right builder.
   function setView(view) {
+    if (view !== "highlights") view = "fixtures";
     state.view = view;
     document.body.classList.toggle("view-highlights", view === "highlights");
-    if (el.viewHighlights) {
-      el.viewHighlights.classList.toggle("active", view === "highlights");
-      el.viewHighlights.setAttribute("aria-pressed", view === "highlights" ? "true" : "false");
-      el.viewHighlights.textContent = view === "highlights" ? t("hlBack") : t("hlTab");
-    }
+    [[el.tabGames, "fixtures"], [el.tabHighlights, "highlights"]].forEach(function (pair) {
+      var btn = pair[0], on = pair[1] === view;
+      if (!btn) return;
+      btn.classList.toggle("is-active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    });
     if (view === "highlights") {
       el.status.hidden = true;
       if (!state.highlightsLoaded) loadHighlights();
@@ -1654,9 +1657,10 @@
       renderDateLabel();
       loadFixtures();
     });
-    if (el.viewHighlights) {
-      el.viewHighlights.addEventListener("click", function () {
-        setView(state.view === "highlights" ? "fixtures" : "highlights");
+    if (el.viewTabs) {
+      el.viewTabs.addEventListener("click", function (e) {
+        var tab = e.target.closest(".view-tab[data-view]");
+        if (tab) setView(tab.getAttribute("data-view"));
       });
     }
     var t;

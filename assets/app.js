@@ -189,6 +189,12 @@
       whereToWatch: "Where to watch", realListings: "📡 Real broadcast listings",
       checking: "⏳ Checking live listings…",
       noListingDetail: "No broadcast listing found for this match yet.", vs: "vs",
+      mdReferee: "Referee", mdAttendance: "Attendance", mdMotm: "Player of the match",
+      mdForm: "Recent form", mdH2h: "Head-to-head", mdTimeline: "Timeline",
+      mdStats: "Match stats", mdLoading: "Loading match details…",
+      mdW: "W", mdD: "D", mdL: "L",
+      stPossession: "Possession", stShots: "Shots", stSot: "On target",
+      stXg: "Expected goals (xG)", stCorners: "Corners", stFouls: "Fouls",
       allFiltered: "All leagues are filtered out — open <strong>Leagues</strong> and re-enable some, or hit Reset filters.",
       noSearch: "No games match your search for this date.",
       noFixtures: "No fixtures found for this date.",
@@ -217,6 +223,12 @@
       whereToWatch: "Onde ver", realListings: "📡 Emissões de TV reais",
       checking: "⏳ A verificar emissões…",
       noListingDetail: "Ainda sem emissão conhecida para este jogo.", vs: "vs",
+      mdReferee: "Árbitro", mdAttendance: "Assistência", mdMotm: "Homem do jogo",
+      mdForm: "Forma recente", mdH2h: "Confrontos diretos", mdTimeline: "Cronologia",
+      mdStats: "Estatísticas", mdLoading: "A carregar detalhes do jogo…",
+      mdW: "V", mdD: "E", mdL: "D",
+      stPossession: "Posse de bola", stShots: "Remates", stSot: "À baliza",
+      stXg: "Golos esperados (xG)", stCorners: "Cantos", stFouls: "Faltas",
       allFiltered: "Todas as ligas estão filtradas — abre <strong>Ligas</strong> e reativa algumas, ou carrega em Repor filtros.",
       noSearch: "Nenhum jogo corresponde à tua pesquisa nesta data.",
       noFixtures: "Sem jogos para esta data.",
@@ -489,6 +501,30 @@
     });
   }
 
+  // Per-match FotMob detail (venue, referee, timeline, form, h2h, stats) via the
+  // cached /api/matchdetails proxy. Loaded on demand when a match is opened —
+  // it's a heavier per-match call, so we never prefetch it. Cached per id and
+  // stashed on the fixture (fx._details / fx._detailsLoaded) for the session.
+  var detailsCache = {};
+  function fetchMatchDetails(id) {
+    if (detailsCache[id]) return Promise.resolve(detailsCache[id]);
+    return fetch("/api/matchdetails?id=" + encodeURIComponent(id),
+        { headers: { Accept: "application/json" } })
+      .then(function (r) { if (!r.ok) throw new Error("md " + r.status); return r.json(); })
+      .then(function (d) { var det = (d && d.ok && d.details) || null; detailsCache[id] = det; return det; })
+      .catch(function () { return null; });
+  }
+
+  function ensureDetails(fx) {
+    if (fx._detailsLoaded) return Promise.resolve(fx._details || null);
+    if (!fx.fmid) { fx._detailsLoaded = true; return Promise.resolve(null); }
+    return fetchMatchDetails(fx.fmid).then(function (det) {
+      fx._details = det;
+      fx._detailsLoaded = true;
+      return det;
+    });
+  }
+
   // Eagerly load listings for every visible fixture (bounded concurrency) so
   // channels appear without the user having to open each match. Stale runs are
   // abandoned when the date changes via the load token.
@@ -576,6 +612,11 @@
         // keeps them and doesn't re-hit the sources.
         fixtures.forEach(function (fx) {
           if (loadedTv[fx.id]) { fx.tv = mergeTv(fx.tv, loadedTv[fx.id]); fx._tvLoaded = true; }
+          // Likewise reuse any match detail already fetched this session.
+          if (fx.fmid && Object.prototype.hasOwnProperty.call(detailsCache, fx.fmid)) {
+            fx._details = detailsCache[fx.fmid];
+            fx._detailsLoaded = true;
+          }
         });
 
         if (!fixtures.length) {
@@ -1025,7 +1066,81 @@
       : '<p class="src-note guide">' + t("noListingDetail") + "</p>";
   }
 
+  // Localised label for a normalised stat key from /api/matchdetails.
+  var STAT_LABEL = { possession: "stPossession", shots: "stShots", sot: "stSot",
+    xg: "stXg", corners: "stCorners", fouls: "stFouls" };
+  function statLabel(key) { return STAT_LABEL[key] ? t(STAT_LABEL[key]) : key; }
+
+  function formPills(arr) {
+    if (!arr || !arr.length) return '<span class="muted">—</span>';
+    return arr.map(function (r) {
+      var cls = r === "W" ? "w" : r === "L" ? "l" : "d";
+      var label = r === "W" ? t("mdW") : r === "L" ? t("mdL") : t("mdD");
+      return '<span class="form-pill ' + cls + '">' + escapeHtml(label) + "</span>";
+    }).join("");
+  }
+
+  var EVENT_ICON = { goal: "⚽", owngoal: "⚽", pengoal: "⚽", yellow: "🟨", red: "🟥", sub: "🔁" };
+  function eventLine(ev) {
+    var icon = EVENT_ICON[ev.kind] || "•";
+    var who = escapeHtml(ev.player || "");
+    if (ev.kind === "owngoal") who += ' <span class="muted">(OG)</span>';
+    else if (ev.kind === "pengoal") who += ' <span class="muted">(pen)</span>';
+    else if (ev.kind === "sub" && ev.note) who += ' <span class="muted">↔ ' + escapeHtml(ev.note) + "</span>";
+    else if (ev.note) who += ' <span class="muted">(' + escapeHtml(ev.note) + ")</span>";
+    var side = ev.side === "away" ? " away" : "";
+    return '<div class="event-row' + side + '">' +
+      '<span class="event-min">' + escapeHtml(ev.min || "") + "</span>" +
+      '<span class="event-icon">' + icon + "</span>" +
+      '<span class="event-text">' + who + "</span></div>";
+  }
+
+  // Everything sourced from /api/matchdetails. Renders only the sections that
+  // came back with data; shows a one-line loading hint until the fetch resolves.
+  function detailExtrasHtml(fx) {
+    if (!fx._detailsLoaded) {
+      return '<p class="src-note checking">' + t("mdLoading") + "</p>";
+    }
+    var d = fx._details;
+    if (!d) return "";
+    var out = "";
+
+    if (d.events && d.events.length) {
+      out += '<h3 class="detail-h">' + t("mdTimeline") + "</h3>" +
+        '<div class="detail-timeline">' + d.events.map(eventLine).join("") + "</div>";
+    }
+
+    if (d.stats && d.stats.length) {
+      out += '<h3 class="detail-h">' + t("mdStats") + "</h3>" +
+        '<div class="detail-stats">' + d.stats.map(function (s) {
+          return '<div class="stat-row"><span class="stat-h">' + escapeHtml(s.home) + "</span>" +
+            '<span class="stat-label">' + escapeHtml(statLabel(s.key)) + "</span>" +
+            '<span class="stat-a">' + escapeHtml(s.away) + "</span></div>";
+        }).join("") + "</div>";
+    }
+
+    if (d.form && (d.form.home.length || d.form.away.length)) {
+      out += '<h3 class="detail-h">' + t("mdForm") + "</h3>" +
+        '<div class="detail-form">' +
+          '<div class="form-side"><span>' + escapeHtml(fx.home) + "</span>" + formPills(d.form.home) + "</div>" +
+          '<div class="form-side"><span>' + escapeHtml(fx.away) + "</span>" + formPills(d.form.away) + "</div>" +
+        "</div>";
+    }
+
+    if (d.h2h) {
+      out += '<h3 class="detail-h">' + t("mdH2h") + "</h3>" +
+        '<div class="detail-h2h">' +
+          "<span><strong>" + d.h2h.home + "</strong> " + escapeHtml(fx.home) + "</span>" +
+          "<span><strong>" + d.h2h.draw + "</strong> " + t("mdD") + "</span>" +
+          "<span><strong>" + d.h2h.away + "</strong> " + escapeHtml(fx.away) + "</span>" +
+        "</div>";
+    }
+
+    return out;
+  }
+
   function buildDetailBody(fx, checking) {
+    var d = fx._details || null;
     var st = statusOf(fx);
     var kickoff = new Date(fx.kickoff);
     var dateStr = kickoff.toLocaleDateString(locale() || [], {
@@ -1041,7 +1156,9 @@
         ? '<span class="detail-status ft">' + escapeHtml(st.label || "FT") + "</span>"
         : '<span class="detail-status">' + escapeHtml(timeStr) + "</span>";
 
-    var compLabel = fx.competition + (fx.group ? " · " + t("group") + " " + fx.group : "");
+    var round = d && d.round ? " · " + d.round : "";
+    var compLabel = fx.competition + (fx.group ? " · " + t("group") + " " + fx.group : "") + round;
+    var venue = fx.venue || (d && d.venue) || "";
     return '<div class="detail-comp">' + leagueLogoHtml(fx.leagueBadgeUrl, fx.competition) +
         '<span id="detail-title">' + escapeHtml(compLabel) + "</span></div>" +
       '<div class="detail-teams">' +
@@ -1052,15 +1169,21 @@
           "<span>" + escapeHtml(fx.away) + "</span></div>" +
       "</div>" +
       '<div class="detail-meta">' + statusBadge +
+        (fx.note ? '<span class="detail-note">⚠ ' + escapeHtml(fx.note) + "</span>" : "") +
         "<span>📅 " + escapeHtml(dateStr) + " · " + escapeHtml(timeStr) + "</span>" +
-        (fx.venue ? "<span>📍 " + escapeHtml(fx.venue) + "</span>" : "") +
+        (venue ? "<span>📍 " + escapeHtml(venue) + "</span>" : "") +
+        (d && d.referee ? "<span>🧑‍⚖️ " + escapeHtml(d.referee) + "</span>" : "") +
+        (d && d.attendance ? "<span>👥 " + escapeHtml(d.attendance) + "</span>" : "") +
+        (d && d.motm ? '<span class="detail-motm">⭐ ' + t("mdMotm") + ": " + escapeHtml(d.motm.name) +
+          (d.motm.rating ? " (" + escapeHtml(d.motm.rating) + ")" : "") + "</span>" : "") +
       "</div>" +
       '<h3 class="detail-h">' + t("whereToWatch") + "</h3>" +
       '<div class="detail-legend">' +
         '<span class="channel free">' + t("freeAir") + "</span>" +
         '<span class="channel paid"><span class="lock">🔒</span>' + t("paidSub") + "</span>" +
       "</div>" +
-      detailChannelsHtml(fx, checking);
+      detailChannelsHtml(fx, checking) +
+      detailExtrasHtml(fx);
   }
 
   function openDetails(id) {
@@ -1077,13 +1200,19 @@
     document.body.style.overflow = "hidden";
     el.detailClose.focus();
 
+    // Re-render the modal in place once either source resolves, but only while
+    // this same match is still open.
+    var stillOpen = function () { return !el.detailOverlay.hidden && state.detailId === String(id); };
+    var repaint = function () { if (stillOpen()) el.detailBody.innerHTML = buildDetailBody(fx, !fx._tvLoaded); };
+
     if (pending) {
       ensureEventTv(fx).then(function (list) {
-        // Only patch if the same match's modal is still open.
-        if (el.detailOverlay.hidden || state.detailId !== String(id)) return;
-        el.detailBody.innerHTML = buildDetailBody(fx, false);
-        if (list && list.length) { updateCardListings(fx); updateTvCount(); }
+        repaint();
+        if (stillOpen() && list && list.length) { updateCardListings(fx); updateTvCount(); }
       });
+    }
+    if (!fx._detailsLoaded) {
+      ensureDetails(fx).then(repaint);
     }
   }
 

@@ -659,6 +659,73 @@ body {
 .detail-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .muted { color: var(--text-dim); }
 
+/* Match-detail extras (venue, referee, timeline, stats, form, h2h) */
+.detail-note {
+  background: rgba(255, 77, 79, 0.16);
+  color: #ff9b9c;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-weight: 700;
+}
+.detail-meta .detail-motm { color: var(--text); }
+
+.detail-timeline { display: flex; flex-direction: column; gap: 2px; }
+.event-row {
+  display: grid;
+  grid-template-columns: 40px 22px 1fr;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 0.9rem;
+}
+.event-row.away {
+  grid-template-columns: 1fr 22px 40px;
+  text-align: right;
+  direction: rtl;
+}
+.event-row.away .event-text { direction: ltr; }
+.event-min { color: var(--text-dim); font-variant-numeric: tabular-nums; font-size: 0.82rem; }
+.event-icon { text-align: center; }
+
+.detail-stats { display: flex; flex-direction: column; gap: 8px; }
+.stat-row {
+  display: grid;
+  grid-template-columns: 3ch 1fr 3ch;
+  align-items: center;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.stat-row .stat-h { text-align: right; font-weight: 700; }
+.stat-row .stat-a { text-align: left; font-weight: 700; }
+.stat-row .stat-label {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+}
+
+.detail-form { display: flex; flex-direction: column; gap: 8px; }
+.form-side { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.form-side > span:first-child { flex: 1; font-weight: 600; font-size: 0.9rem; }
+.form-pill {
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  font-size: 0.75rem; font-weight: 800; color: #fff;
+}
+.form-pill.w { background: var(--accent); color: #06231a; }
+.form-pill.d { background: #6b7a8d; }
+.form-pill.l { background: var(--live); }
+
+.detail-h2h {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+.detail-h2h strong { display: block; color: var(--text); font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+
 @media (max-width: 560px) {
   .container { width: min(960px, 100% - 24px); }
   .header-inner { height: 54px; }

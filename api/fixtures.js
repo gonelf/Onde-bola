@@ -118,6 +118,17 @@ function statusStr(status) {
   return "";
 }
 
+// Surface an abnormal-state note (postponed / cancelled / abandoned / suspended)
+// so the client can show *why* a match isn't a normal upcoming/live game. Normal
+// states (scheduled, in-play, finished) return "" — there's nothing to flag.
+function statusNote(status) {
+  if (!status || status.finished) return "";
+  const reason = status.reason && (status.reason.long || status.reason.short) || "";
+  const abnormal = status.cancelled || status.awarded ||
+    /postpon|abandon|cancel|suspend|await|delay/i.test(reason);
+  return abnormal && reason ? String(reason) : "";
+}
+
 // FotMob roots the day's matches as { leagues: [ { name, id, matches: [...] } ] }.
 function leaguesOf(data) {
   if (!data || typeof data !== "object") return [];
@@ -142,6 +153,7 @@ function normalize(data, date, majorOnly) {
       const [hs, as] = parseScore(status, home, away);
       out.push({
         id: "fm:" + (m.id != null ? m.id : home.name + away.name),
+        fmid: m.id != null ? String(m.id) : "",
         competition: comp,
         home: home.name,
         away: away.name,
@@ -155,6 +167,7 @@ function normalize(data, date, majorOnly) {
         homeScore: hs,
         awayScore: as,
         status: statusStr(status),
+        note: statusNote(status),
         tv: [],
       });
     });

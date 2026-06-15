@@ -24,9 +24,27 @@ async function kvPing() {
   }
 }
 
+// Which KV-related env var NAMES are visible to this function (booleans only,
+// never values). Helps distinguish "needs redeploy" from "wrong var name".
+function kvEnvPresence() {
+  const names = [
+    "KV_REST_API_URL",
+    "KV_REST_API_TOKEN",
+    "KV_REST_API_READ_ONLY_TOKEN",
+    "KV_URL",
+    "REDIS_URL",
+    "UPSTASH_REDIS_REST_URL",
+    "UPSTASH_REDIS_REST_TOKEN",
+  ];
+  const present = {};
+  for (const n of names) present[n] = !!process.env[n];
+  return present;
+}
+
 module.exports = async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const kv = await kvPing();
+  kv.env = kvEnvPresence();
   res.status(200).json({
     ok: true,
     time: new Date().toISOString(),

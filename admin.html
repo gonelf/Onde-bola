@@ -104,7 +104,12 @@
         url: function () { return "/api/health"; },
         summary: function (j) {
           if (!j) return "no response";
-          return "KV " + (j.kv && j.kv.ping ? "✅ " + j.kv.ping : (j.kv && j.kv.configured ? "⚠️ configured, no ping" : "❌ off")) +
+          var kvSeen = "";
+          if (j.kv && j.kv.env) {
+            var seen = Object.keys(j.kv.env).filter(function (k) { return j.kv.env[k]; });
+            kvSeen = " (env seen: " + (seen.length ? seen.join(", ") : "none") + ")";
+          }
+          return "KV " + (j.kv && j.kv.ping ? "✅ " + j.kv.ping : (j.kv && j.kv.configured ? "⚠️ configured, no ping" + (j.kv.status ? " (HTTP " + j.kv.status + ")" : "") : "❌ off" + kvSeen)) +
             " · SofaScore " + (j.sofascore && j.sofascore.enabled ? "on" : "off") +
             " · FotMob " + (j.fotmob && j.fotmob.enabled ? "on" : "off") +
             " · SportMonks " + (j.sportmonks && j.sportmonks.keyConfigured ? "key set" : "no key");

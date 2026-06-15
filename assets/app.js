@@ -1081,17 +1081,21 @@
   }
 
   var EVENT_ICON = { goal: "⚽", owngoal: "⚽", pengoal: "⚽", yellow: "🟨", red: "🟥", sub: "🔁" };
-  function eventLine(ev) {
-    var icon = EVENT_ICON[ev.kind] || "•";
-    var who = escapeHtml(ev.player || "");
-    if (ev.kind === "owngoal") who += ' <span class="muted">(OG)</span>';
-    else if (ev.kind === "pengoal") who += ' <span class="muted">(pen)</span>';
-    else if (ev.kind === "sub" && ev.note) who += ' <span class="muted">↔ ' + escapeHtml(ev.note) + "</span>";
-    else if (ev.note) who += ' <span class="muted">(' + escapeHtml(ev.note) + ")</span>";
-    var side = ev.side === "away" ? " away" : "";
-    return '<div class="event-row' + side + '">' +
-      '<span class="event-min">' + escapeHtml(ev.min || "") + "</span>" +
-      '<span class="event-icon">' + icon + "</span>" +
+  function eventLine(ev, scoreStr) {
+    var kindCls = (ev.kind === "yellow" || ev.kind === "red") ? "card "
+      : ev.kind === "sub" ? "sub " : "goal ";
+    var icon = '<span class="event-icon ' + kindCls + ev.kind + '">' + (EVENT_ICON[ev.kind] || "•") +
+      (scoreStr ? '<b>' + escapeHtml(scoreStr) + "</b>" : "") + "</span>";
+    var who = '<span class="event-player">' + escapeHtml(ev.player || "") + "</span>";
+    if (ev.kind === "owngoal") who += ' <span class="event-note">(OG)</span>';
+    else if (ev.kind === "pengoal") who += ' <span class="event-note">(pen.)</span>';
+    else if (ev.kind === "sub" && ev.note) who += ' <span class="event-note">↔ ' + escapeHtml(ev.note) + "</span>";
+    else if (ev.note) who += ' <span class="event-note">(' + escapeHtml(ev.note) + ")</span>";
+    var min = '<span class="event-min">' + escapeHtml(ev.min || "") + "</span>";
+    var side = ev.side === "away" ? "away" : "home";
+    // Home: [min][icon][who] left-aligned. Away: row-reversed so it reads
+    // [who][icon][min] anchored to the right edge.
+    return '<div class="event-row ' + side + '">' + min + icon +
       '<span class="event-text">' + who + "</span></div>";
   }
 
@@ -1106,8 +1110,22 @@
     var out = "";
 
     if (d.events && d.events.length) {
+      var hs = 0, as = 0;
+      var rows = d.events.map(function (ev) {
+        var scoreStr = "";
+        if (ev.kind === "goal" || ev.kind === "pengoal" || ev.kind === "owngoal") {
+          // An own goal credits the opposing side.
+          var scoresHome = ev.kind === "owngoal" ? (ev.side === "away") : (ev.side === "home");
+          if (scoresHome) hs++; else as++;
+          scoreStr = hs + "–" + as;
+        }
+        return eventLine(ev, scoreStr);
+      });
       out += '<h3 class="detail-h">' + t("mdTimeline") + "</h3>" +
-        '<div class="detail-timeline">' + d.events.map(eventLine).join("") + "</div>";
+        '<div class="detail-timeline">' +
+          '<div class="timeline-legend"><span>' + escapeHtml(fx.home) + "</span>" +
+            "<span>" + escapeHtml(fx.away) + "</span></div>" +
+          rows.join("") + "</div>";
     }
 
     if (d.stats && d.stats.length) {

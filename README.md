@@ -205,13 +205,14 @@ Each run it:
    quota**. Detail fetches are capped by `HL_DETAIL_LIMIT` (default 40) and Data
    API searches by `HL_YT_LIMIT` (default 25) per run.
 
-The match-details modal and the Highlights view **embed the video inline**
+On the client, finished games whose highlight has been collected show a
+**▶ Highlights button on the game card** (the app indexes `/api/highlights` by
+match id on load), and the **match-details modal embeds the video inline**
 (click-to-load via `youtube-nocookie.com`, so no YouTube cookies until the user
-hits play); when there's no embeddable video they fall back to the FotMob clip
-link or a YouTube search. `api/matchdetails.js` also merges a stored clip/video
-when FotMob's live payload doesn't include one yet, and `GET /api/highlights`
-returns the collected list (most-recent first; `?date=YYYY-MM-DD`, `?days=N`, or
-`?withUrl=1` for only real clips).
+hits play). `api/matchdetails.js` also merges a stored clip/video when FotMob's
+live payload doesn't include one yet, and `GET /api/highlights` returns the
+collected list (most-recent first; `?date=YYYY-MM-DD`, `?days=N`, or `?withUrl=1`
+for only real clips).
 
 > **Embedding without a key:** most football highlights on FotMob are already
 > YouTube links, so inline playback works with **no `YOUTUBE_API_KEY`** for those

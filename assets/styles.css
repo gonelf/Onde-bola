@@ -789,8 +789,6 @@ body {
   .header-inner { height: 54px; }
   .brand { font-size: 1.1rem; }
 
-  .view-tabs { display: flex; width: 100%; }
-  .view-tab { flex: 1; padding: 0 10px; }
   .toolbar { gap: 10px; margin: 14px 0 14px; }
   .toolbar-right { flex-wrap: wrap; gap: 8px; width: 100%; }
   .country-pick { flex: 1 1 auto; }
@@ -989,84 +987,29 @@ body {
   pointer-events: none;
 }
 
-/* ---- View tabs (Games / Highlights) ------------------------------------ */
-.view-tabs {
+/* ---- Highlights button on the card ------------------------------------- */
+.hl-card-btn {
   display: inline-flex;
+  align-items: center;
   gap: 4px;
-  margin: 16px 0 0;
-  padding: 4px;
-  background: var(--bg-elev);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-}
-.view-tab {
-  background: transparent;
-  color: var(--text-dim);
-  border: 0;
-  border-radius: 9px;
-  height: 36px;
-  padding: 0 18px;
-  cursor: pointer;
-  font-size: 0.95rem;
-  font-weight: 600;
+  flex: 0 0 auto;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: rgba(22, 210, 122, 0.12);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
   white-space: nowrap;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s;
 }
-.view-tab:hover { color: var(--text); }
-.view-tab.is-active {
+.hl-card-btn:hover, .hl-card-btn:focus-visible {
   background: var(--accent);
   color: #06281a;
-  font-weight: 700;
+  outline: none;
 }
-.view-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* In the highlights view the date pager and league filter don't apply. */
-body.view-highlights .date-nav,
-body.view-highlights .league-filter { display: none; }
-
-/* ---- Highlights view --------------------------------------------------- */
-.hl-head { margin: 2px 2px 14px; }
-.hl-title { font-size: 1.15rem; margin: 0; }
-.hl-sub { margin: 3px 0 0; color: var(--text-dim); font-size: 0.85rem; }
-.hl-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px;
-}
-.hl-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  background: var(--bg-card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 12px 14px;
-  box-shadow: var(--shadow);
-  text-decoration: none;
-  color: inherit;
-  transition: border-color 0.15s, transform 0.05s;
-}
-.hl-card:hover { border-color: var(--accent); }
-.hl-card:active { transform: scale(0.997); }
-.hl-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.hl-comp {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.78rem;
-  color: var(--text-dim);
-  min-width: 0;
-}
-.hl-comp .league-logo { width: 18px; height: 18px; flex: 0 0 18px; object-fit: contain; }
-.hl-comp .comp-name {
-  font-weight: 600;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.hl-when { margin-left: auto; white-space: nowrap; padding-left: 8px; }
-.hl-cta { align-self: flex-start; font-weight: 700; font-size: 0.85rem; color: var(--accent); }
-.hl-card.no-clip .hl-cta { color: var(--text-dim); }
 
 /* ---- Highlight video embed (click-to-load) ----------------------------- */
 .hl-embed {

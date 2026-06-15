@@ -30,9 +30,7 @@
     hidden: {},       // competition name -> true when hidden from the list
     remember: false,  // persist the filter selection across visits
     primaryCountry: "Portugal", // country shown first on cards; default by IP
-    view: "fixtures", // "fixtures" (the day's games) | "highlights" (recent clips)
-    highlights: [],   // collected highlights from /api/highlights
-    highlightsLoaded: false,
+    highlightsById: {}, // fmid -> highlight record, for the per-card button
   };
 
   var el = {
@@ -57,9 +55,6 @@
     adPrefs: document.getElementById("ad-prefs"),
     adTop: document.getElementById("ad-top"),
     adBottom: document.getElementById("ad-bottom"),
-    viewTabs: document.querySelector(".view-tabs"),
-    tabGames: document.getElementById("tab-games"),
-    tabHighlights: document.getElementById("tab-highlights"),
   };
 
   // ---- Display ads + consent ----------------------------------------------
@@ -208,11 +203,7 @@
       noSearch: "No games match your search for this date.",
       noFixtures: "No fixtures found for this date.",
       feedDown: "Couldn’t reach the live data feed. Please try again in a moment.",
-      gamesTab: "⚽ Games", hlTab: "🎬 Highlights",
-      hlTitle: "Match highlights", hlSub: "Recently finished games — tap a card to watch.",
-      hlOpenYt: "Open on YouTube ↗", hlLoading: "Loading highlights…",
-      hlEmpty: "No highlights yet. Finished games appear here once their clips are ready.",
-      hlError: "Couldn’t load highlights. Please try again in a moment.",
+      hlCard: "Highlights", hlCardAria: "Watch highlights",
       consent: "Hoje Há Bola is free thanks to ads. We’d like to use cookies to show ads and measure traffic. You can change this anytime via “Ad preferences” in the footer.",
       accept: "Accept", reject: "Reject",
     },
@@ -249,11 +240,7 @@
       noSearch: "Nenhum jogo corresponde à tua pesquisa nesta data.",
       noFixtures: "Sem jogos para esta data.",
       feedDown: "Não foi possível contactar o feed de dados. Tenta novamente daqui a momentos.",
-      gamesTab: "⚽ Jogos", hlTab: "🎬 Resumos",
-      hlTitle: "Resumos dos jogos", hlSub: "Jogos terminados recentemente — toca num cartão para ver.",
-      hlOpenYt: "Abrir no YouTube ↗", hlLoading: "A carregar resumos…",
-      hlEmpty: "Ainda sem resumos. Os jogos terminados aparecem aqui assim que os vídeos estiverem prontos.",
-      hlError: "Não foi possível carregar os resumos. Tenta novamente daqui a momentos.",
+      hlCard: "Resumo", hlCardAria: "Ver resumo",
       consent: "O Hoje Há Bola é grátis graças aos anúncios. Gostaríamos de usar cookies para mostrar anúncios e medir o tráfego. Podes alterar isto a qualquer momento em “Preferências de anúncios” no rodapé.",
       accept: "Aceitar", reject: "Rejeitar",
     },
@@ -287,8 +274,6 @@
     set("#detail-close", "ariaLabel", t("close"));
     set("#detail-share", "ariaLabel", t("shareGame"));
     set("#detail-share", "title", t("shareGame"));
-    if (el.tabGames) el.tabGames.textContent = t("gamesTab");
-    if (el.tabHighlights) el.tabHighlights.textContent = t("hlTab");
   }
 
   // ---- Helpers ------------------------------------------------------------
@@ -812,62 +797,34 @@
 
   // Switch between the day's fixtures and the recent-highlights feed. Marks the
   // active tab, hides the date pager + league filter (which don't apply to
-  // highlights) via a body class, and routes render() to the right builder.
-  function setView(view) {
-    if (view !== "highlights") view = "fixtures";
-    state.view = view;
-    document.body.classList.toggle("view-highlights", view === "highlights");
-    [[el.tabGames, "fixtures"], [el.tabHighlights, "highlights"]].forEach(function (pair) {
-      var btn = pair[0], on = pair[1] === view;
-      if (!btn) return;
-      btn.classList.toggle("is-active", on);
-      btn.setAttribute("aria-selected", on ? "true" : "false");
-    });
-    if (view === "highlights") {
-      el.status.hidden = true;
-      if (!state.highlightsLoaded) loadHighlights();
-      else renderHighlights();
-    } else {
-      el.status.hidden = !state.fixtures.length;
-      render();
-    }
-  }
-
-  // Fetch the highlights collected by the cron sweep (/api/highlights). Best
-  // effort: any failure shows an empty/error state rather than throwing.
+  // Fetch the highlights collected by the cron sweep (/api/highlights) and index
+  // them by FotMob match id, so each finished game's card can show a Highlights
+  // button. Best effort: any failure just leaves the map empty (no buttons).
   function loadHighlights() {
-    renderSkeletons();
-    el.status.hidden = true;
     fetch("/api/highlights", { headers: { Accept: "application/json" } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
-        state.highlights = (d && d.highlights) || [];
-        state.highlightsLoaded = true;
-        if (state.view === "highlights") renderHighlights();
+        var map = {};
+        ((d && d.highlights) || []).forEach(function (h) {
+          if (h && h.fmid) map[String(h.fmid)] = h;
+        });
+        state.highlightsById = map;
+        // Re-render only if games are already on screen (otherwise the fixtures
+        // load will render with the map in place, with no empty-state flash).
+        if (state.fixtures.length) render();
       })
-      .catch(function () {
-        state.highlights = [];
-        state.highlightsLoaded = true;
-        if (state.view === "highlights") {
-          el.games.innerHTML = '<div class="empty"><div class="big">🎬</div><p>' +
-            escapeHtml(t("hlError")) + "</p></div>";
-        }
-      });
+      .catch(function () {});
   }
 
-  // FotMob stores the final score as "h-a"; split it for the two team rows.
-  function parseHlScore(s) {
-    var m = String(s == null ? "" : s).match(/(\d+)\s*-\s*(\d+)/);
-    return m ? { home: m[1], away: m[2] } : null;
-  }
-
-  function formatHlDate(v) {
-    var d = new Date(v);
-    if (isNaN(d.getTime())) return "";
-    try {
-      return d.toLocaleDateString(locale() || [], { weekday: "short", day: "numeric", month: "short" }) +
-        " · " + formatClock(d);
-    } catch (e) { return ""; }
+  // The watch link for a finished game's highlight, or "" when none is available.
+  // Prefers the embeddable YouTube video, then FotMob's own clip.
+  function highlightLink(fx) {
+    var h = fx && fx.fmid && state.highlightsById[String(fx.fmid)];
+    if (!h) return "";
+    var id = ytIdOf(h);
+    if (id) return "https://youtu.be/" + id;
+    if (h.url && /^https?:\/\//.test(h.url)) return h.url;
+    return "";
   }
 
   // Resolve an 11-char YouTube id from a highlight record — the cron's resolved
@@ -895,71 +852,10 @@
     var id = box.getAttribute("data-yt") || "";
     if (!/^[A-Za-z0-9_-]{11}$/.test(id) || box.querySelector("iframe")) return;
     box.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' +
-      encodeURIComponent(id) + '?autoplay=1&rel=0" title="' + escapeHtml(t("hlTitle")) +
+      encodeURIComponent(id) + '?autoplay=1&rel=0" title="' + escapeHtml(t("mdHighlights")) +
       '" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture; web-share" ' +
       "allowfullscreen></iframe>";
     box.classList.add("playing");
-  }
-
-  // One highlight card. When we have an embeddable YouTube video the card plays
-  // inline (a <div> with the facade); otherwise it's a single link to the FotMob
-  // clip or a YouTube search. Reuses the .teams/.team match styling.
-  function highlightCardHtml(h) {
-    var id = ytIdOf(h);
-    var hasClip = h.url && /^https?:\/\//.test(h.url);
-    var primary = id ? ("https://youtu.be/" + id) : (hasClip ? h.url : (h.youtube || ""));
-    var cta = id ? t("hlOpenYt") : (hasClip ? t("mdWatch") : t("mdYouTube"));
-    var sc = parseHlScore(h.score);
-    var scoreFor = function (side) {
-      return sc ? '<span class="score">' + escapeHtml(sc[side]) + "</span>" : "";
-    };
-    var when = formatHlDate(h.kickoff || h.date);
-
-    var meta =
-      (id ? ytFacadeHtml(id) : "") +
-      '<div class="hl-comp">' + leagueLogoHtml(h.leagueBadgeUrl, h.competition) +
-        '<span class="comp-name">' + escapeHtml(h.competition || "") + "</span>" +
-        (when ? '<span class="hl-when">' + escapeHtml(when) + "</span>" : "") + "</div>" +
-      '<div class="teams">' +
-        '<div class="team">' + badgeHtml(h.homeBadge, h.home) +
-          '<span class="team-name">' + escapeHtml(h.home) + "</span>" + scoreFor("home") + "</div>" +
-        '<div class="team">' + badgeHtml(h.awayBadge, h.away) +
-          '<span class="team-name">' + escapeHtml(h.away) + "</span>" + scoreFor("away") + "</div>" +
-      "</div>";
-
-    if (id) {
-      // Inline-playable card: the CTA is a real link to the full video.
-      return '<div class="hl-card">' + meta +
-        '<a class="hl-cta" href="' + escapeHtml(primary) + '" target="_blank" rel="noopener">' +
-          escapeHtml(cta) + "</a></div>";
-    }
-    // Link-only card: the whole card opens the clip / search.
-    return '<a class="hl-card' + (hasClip ? "" : " no-clip") + '" href="' + escapeHtml(primary) +
-      '" target="_blank" rel="noopener">' + meta +
-      '<span class="hl-cta">' + escapeHtml(cta) + "</span></a>";
-  }
-
-  function renderHighlights() {
-    var head = '<div class="hl-head"><h2 class="hl-title">' + escapeHtml(t("hlTitle")) +
-      '</h2><p class="hl-sub">' + escapeHtml(t("hlSub")) + "</p></div>";
-
-    var list = state.highlights || [];
-    var q = state.search.trim().toLowerCase();
-    if (q) {
-      list = list.filter(function (h) {
-        return (h.home + " " + h.away + " " + (h.competition || "")).toLowerCase().indexOf(q) > -1;
-      });
-    }
-
-    if (!list.length) {
-      var msg = !state.highlightsLoaded ? t("hlLoading")
-        : (q ? t("noSearch") : t("hlEmpty"));
-      el.games.innerHTML = head + '<div class="empty"><div class="big">🎬</div><p>' +
-        escapeHtml(msg) + "</p></div>";
-      return;
-    }
-    el.games.innerHTML = head + '<div class="hl-grid">' +
-      list.map(highlightCardHtml).join("") + "</div>";
   }
 
   // ---- Rendering ----------------------------------------------------------
@@ -1120,6 +1016,15 @@
     return '<span class="channel none">' + t("noListing") + "</span>";
   }
 
+  // A "▶ Highlights" link on the card, shown only when the cron has collected a
+  // watchable highlight for this game (see highlightLink). Opens the video.
+  function highlightBtnHtml(fx) {
+    var link = highlightLink(fx);
+    if (!link) return "";
+    return '<a class="hl-card-btn" href="' + escapeHtml(link) + '" target="_blank" rel="noopener" ' +
+      'aria-label="' + escapeHtml(t("hlCardAria")) + '">▶ ' + escapeHtml(t("hlCard")) + "</a>";
+  }
+
   function matchHtml(fx) {
     var st = statusOf(fx);
     var cls = "match" + (st.state === "live" ? " is-live" : "");
@@ -1137,7 +1042,7 @@
           '<span class="team-name">' + escapeHtml(fx.away) + "</span>" +
           scoreHtml(fx, "away") + "</div>" +
       "</div>" +
-      '<div class="channels">' + channelsHtml(fx) + "</div>" +
+      '<div class="channels">' + highlightBtnHtml(fx) + channelsHtml(fx) + "</div>" +
       '<span class="details-hint">' + t("clickDetails") + "</span>" +
     "</article>";
   }
@@ -1174,7 +1079,6 @@
   }
 
   function render() {
-    if (state.view === "highlights") { renderHighlights(); return; }
     // Drop leagues the user has filtered out, then apply the search.
     var shown = state.fixtures.filter(function (fx) { return !isHidden(fx.competition); });
     var hiddenSome = shown.length !== state.fixtures.length;
@@ -1657,12 +1561,6 @@
       renderDateLabel();
       loadFixtures();
     });
-    if (el.viewTabs) {
-      el.viewTabs.addEventListener("click", function (e) {
-        var tab = e.target.closest(".view-tab[data-view]");
-        if (tab) setView(tab.getAttribute("data-view"));
-      });
-    }
     var t;
     el.search.addEventListener("input", function () {
       clearTimeout(t);
@@ -1690,8 +1588,8 @@
       saveFilters();
     });
 
-    // Open match details on click or keyboard activation. A click on the card's
-    // share button shares instead of opening the modal.
+    // Open match details on click or keyboard activation. Clicks on the card's
+    // share button or highlights link act on their own, not opening the modal.
     el.games.addEventListener("click", function (e) {
       var shareBtn = e.target.closest(".share-btn");
       if (shareBtn) {
@@ -1700,12 +1598,13 @@
         if (sc) shareMatch(fixtureById(sc.getAttribute("data-id")), shareBtn);
         return;
       }
+      if (e.target.closest(".hl-card-btn")) { e.stopPropagation(); return; } // the link navigates itself
       var card = e.target.closest(".match[data-id]");
       if (card) openDetails(card.getAttribute("data-id"));
     });
     el.games.addEventListener("keydown", function (e) {
       if (e.key !== "Enter" && e.key !== " ") return;
-      if (e.target.closest(".share-btn")) return; // let the share button act itself
+      if (e.target.closest(".share-btn") || e.target.closest(".hl-card-btn")) return; // let the button act itself
       var card = e.target.closest(".match[data-id]");
       if (card) { e.preventDefault(); openDetails(card.getAttribute("data-id")); }
     });
@@ -1719,8 +1618,8 @@
       if (e.target === el.detailOverlay) closeDetails();
     });
 
-    // Click-to-load a highlight video (works in both the Highlights grid and the
-    // match-detail modal). Swaps the thumbnail facade for the YouTube iframe.
+    // Click-to-load a highlight video in the match-detail modal: swap the
+    // thumbnail facade for the YouTube iframe.
     document.addEventListener("click", function (e) {
       var box = e.target.closest(".hl-embed[data-yt]");
       if (box) { e.preventDefault(); loadHlEmbed(box); }
@@ -1745,12 +1644,13 @@
     initConsent();
     renderBanners();
     loadFixtures();
+    loadHighlights(); // index recent highlights so finished cards get a button
     // When viewing today, silently refresh live scores/status every 60s.
     // On other days just re-render to keep time-based badges accurate.
     setInterval(function () {
-      if (state.view !== "fixtures") return; // don't clobber the highlights view
       if (isSameDay(state.date, new Date())) {
         loadFixtures(true);
+        loadHighlights(); // pick up clips for games that just finished
       } else if (!state.search) {
         render();
       }

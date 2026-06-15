@@ -1,7 +1,8 @@
 /*
  * Hoje Há Bola — today's football games worldwide and where to watch them.
  *
- * Fixtures are fetched client-side from TheSportsDB's free API. Real TV
+ * Fixtures come from FotMob's day feed via the cached /api/fixtures proxy
+ * (long-term cached/DB-backed, so past days never re-hit upstream). Real TV
  * channels come from TheSportsDB's TV feeds, plus FotMob (api/fmtv) and
  * SofaScore (api/sofatv) as unofficial broadcaster sources. Only real listings
  * are ever shown — when no source has data the match shows "No TV listing yet",
@@ -17,26 +18,6 @@
   // up front, so the per-match SofaScore call is off by default — it's kept as an
   // optional fallback (flip to true to consult it on match open).
   var USE_SOFASCORE = false;
-
-  // The worldwide "all soccer" feed for a day can be dominated by a single big
-  // tournament (e.g. the World Cup, when most domestic leagues pause). To keep
-  // coverage broad we also query a set of leagues that commonly run mid-year,
-  // by name, and merge in any games they have that day. Unknown names simply
-  // return nothing, so the list is safe to extend.
-  var ACTIVE_LEAGUES = [
-    "American Major League Soccer",
-    "Brazilian Serie A",
-    "Mexican Primera League",
-    "Argentine Primera Division",
-    "Swedish Allsvenskan",
-    "Norwegian Eliteserien",
-    "Finnish Veikkausliiga",
-    "Japanese J League",
-    "South Korean K League 1",
-    "Chinese Super League",
-    "Australian A-League",
-    "Indian Super League",
-  ];
 
   var STORAGE_HIDDEN = "ondebola.hiddenLeagues";
   var STORAGE_REMEMBER = "ondebola.rememberFilters";
@@ -161,7 +142,7 @@
       leagues: "Leagues", showLeagues: "Show leagues", reset: "Reset filters",
       remember: "Remember this next time", yourCountry: "📍 Your country",
       connDebug: "Connections debug →", adPrefs: "Ad preferences",
-      footerData: 'Real per-match TV listings & fixtures via <a href="https://www.thesportsdb.com" target="_blank" rel="noopener">TheSportsDB</a>, cached to avoid repeat calls. Channel data is crowd-sourced, so coverage is partial — matches without a listing show <em>“No TV listing yet”</em> rather than a guess.',
+      footerData: 'Fixtures via <a href="https://www.fotmob.com" target="_blank" rel="noopener">FotMob</a> and real per-match TV listings via <a href="https://www.thesportsdb.com" target="_blank" rel="noopener">TheSportsDB</a>, cached to avoid repeat calls. Channel data is crowd-sourced, so coverage is partial — matches without a listing show <em>“No TV listing yet”</em> rather than a guess.',
       close: "Close",
       noListing: "No TV listing yet", clickDetails: "Click for details ›",
       listings: "📡 Listings", moreOne: "more country in details ›",
@@ -186,7 +167,7 @@
       leagues: "Ligas", showLeagues: "Mostrar ligas", reset: "Repor filtros",
       remember: "Lembrar para a próxima", yourCountry: "📍 O teu país",
       connDebug: "Diagnóstico de ligações →", adPrefs: "Preferências de anúncios",
-      footerData: 'Emissões de TV e jogos por <a href="https://www.thesportsdb.com" target="_blank" rel="noopener">TheSportsDB</a>, em cache para evitar chamadas repetidas. Os dados de canais são colaborativos, por isso a cobertura é parcial — jogos sem emissão mostram <em>“Sem emissão conhecida”</em> em vez de adivinhar.',
+      footerData: 'Jogos por <a href="https://www.fotmob.com" target="_blank" rel="noopener">FotMob</a> e emissões de TV por <a href="https://www.thesportsdb.com" target="_blank" rel="noopener">TheSportsDB</a>, em cache para evitar chamadas repetidas. Os dados de canais são colaborativos, por isso a cobertura é parcial — jogos sem emissão mostram <em>“Sem emissão conhecida”</em> em vez de adivinhar.',
       close: "Fechar",
       noListing: "Sem emissão conhecida", clickDetails: "Clica para detalhes ›",
       listings: "📡 Emissões", moreOne: "mais país nos detalhes ›",
@@ -301,84 +282,19 @@
 
   // ---- Data fetching ------------------------------------------------------
 
-  function normaliseApiEvent(ev) {
-    var kickoff = null;
-    if (ev.strTimestamp) {
-      // strTimestamp is UTC, may be "YYYY-MM-DD HH:MM:SS".
-      kickoff = new Date(ev.strTimestamp.replace(" ", "T") + "Z");
-    } else if (ev.dateEvent && ev.strTime) {
-      kickoff = new Date(ev.dateEvent + "T" + ev.strTime + "Z");
-    } else if (ev.dateEvent) {
-      kickoff = new Date(ev.dateEvent + "T00:00:00Z");
-    }
-    if (!kickoff || isNaN(kickoff.getTime())) return null;
-
-    var hs = ev.intHomeScore;
-    var as = ev.intAwayScore;
-    return {
-      id: ev.idEvent || (ev.strHomeTeam + ev.strAwayTeam + ev.strTimestamp),
-      competition: ev.strLeague || "Football",
-      home: ev.strHomeTeam || "Home",
-      away: ev.strAwayTeam || "Away",
-      homeBadge: ev.strHomeTeamBadge || "",
-      awayBadge: ev.strAwayTeamBadge || "",
-      kickoff: kickoff.toISOString(),
-      venue: ev.strVenue || "",
-      leagueBadgeUrl: ev.strLeagueBadge || "",
-      homeScore: (hs === 0 || hs) ? String(hs) : null,
-      awayScore: (as === 0 || as) ? String(as) : null,
-      status: ev.strStatus || ev.strProgress || "",
-    };
-  }
-
-  // Build fixtures out of the FotMob day-bulk broadcaster map. Used as a
-  // fallback when TheSportsDB's day feed returns nothing (e.g. its free
-  // key is rate-limited): those feeds already carry every match's team names,
-  // kickoff and channels, so we can still show the day's games — just without the
-  // richer TheSportsDB extras (league name, badges, live scores). De-duplicated
-  // by normalised "home|away".
-  function fixturesFromDayMaps(dayMaps) {
-    var seen = {}, out = [];
-    (dayMaps || []).forEach(function (e) {
-      if (!e || !e.home || !e.away) return;
-      var key = normName(e.home) + "|" + normName(e.away);
-      if (seen[key]) return;
-      seen[key] = true;
-      var kickoff = e.kickoff;
-      if (!kickoff || isNaN(new Date(kickoff).getTime())) {
-        kickoff = new Date(ymd(state.date) + "T12:00:00Z").toISOString();
-      }
-      out.push({
-        id: "fm:" + key,
-        competition: e.league || "Football",
-        home: e.home,
-        away: e.away,
-        homeBadge: "",
-        awayBadge: "",
-        kickoff: kickoff,
-        venue: "",
-        leagueBadgeUrl: "",
-        homeScore: null,
-        awayScore: null,
-        status: "",
-        tv: (e.rows || []).slice(),
-        _tvLoaded: true, // listings already came with the match; skip per-event calls
+  // The day's fixtures from FotMob via the cached /api/fixtures proxy, which
+  // already returns them fully normalised (id, competition, teams, badges,
+  // kickoff, scores, status). Rejects on a hard failure so the caller can tell
+  // "no games today" apart from "the feed is unreachable".
+  function fetchFotMobFixtures(day) {
+    return fetch("/api/fixtures?date=" + day, { headers: { Accept: "application/json" } })
+      .then(function (r) { if (!r.ok) throw new Error("fixtures " + r.status); return r.json(); })
+      .then(function (d) {
+        return ((d && d.fixtures) || []).map(function (fx) {
+          fx.tv = fx.tv || [];
+          return fx;
+        });
       });
-    });
-    return out;
-  }
-
-  // Fetch one endpoint and return its normalised fixtures (never rejects).
-  function fetchEvents(url) {
-    return fetch(url, { headers: { Accept: "application/json" } })
-      .then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
-      })
-      .then(function (data) {
-        return ((data && data.events) || []).map(normaliseApiEvent).filter(Boolean);
-      })
-      .catch(function () { return []; });
   }
 
   // Real broadcast listings for the day (TheSportsDB TV feed, free key).
@@ -570,36 +486,19 @@
     var token = state.loadToken;
 
     var day = ymd(state.date);
-    var requests = [
-      // The worldwide soccer feed for the day (catches the World Cup etc).
-      fetchEvents(API_BASE + "/eventsday.php?d=" + day + "&s=Soccer"),
-    ].concat(ACTIVE_LEAGUES.map(function (league) {
-      // Plus each commonly-active league explicitly, by name.
-      return fetchEvents(API_BASE + "/eventsday.php?d=" + day +
-        "&l=" + encodeURIComponent(league));
-    }));
 
-    // Track whether the primary worldwide call actually succeeded so we can
-    // tell "no games today" apart from "the feed is unreachable".
+    // Track whether the fixtures feed was reachable so we can tell "no games
+    // today" apart from "the feed is unreachable".
     var feedReachable = true;
-    requests[0] = requests[0].catch(function () { feedReachable = false; return []; });
+    var fixturesReq = fetchFotMobFixtures(day)
+      .catch(function () { feedReachable = false; return []; });
 
-    return Promise.all([Promise.all(requests), fetchTv(day), fetchFotMobDay(day)])
+    return Promise.all([fixturesReq, fetchTv(day), fetchFotMobDay(day)])
       .then(function (res) {
-        var lists = res[0];
+        var fixtures = res[0] || [];
         var tv = res[1];
         // FotMob day-bulk broadcaster map, merged through one path below.
         var dayMaps = res[2] || [];
-        // Merge all sources and de-duplicate by event id.
-        var seen = {};
-        var fixtures = [];
-        lists.forEach(function (list) {
-          list.forEach(function (fx) {
-            if (seen[fx.id]) return;
-            seen[fx.id] = true;
-            fixtures.push(fx);
-          });
-        });
         attachTv(fixtures, tv);
 
         // Merge the FotMob day-bulk broadcaster map. This gives every match its
@@ -621,17 +520,6 @@
         fixtures.forEach(function (fx) {
           if (loadedTv[fx.id]) { fx.tv = mergeTv(fx.tv, loadedTv[fx.id]); fx._tvLoaded = true; }
         });
-
-        // Fallback: if TheSportsDB gave us no games (down or rate-limited), build
-        // the day's fixtures from the FotMob day map, which already carries team
-        // names, kickoff and channels.
-        if (!fixtures.length && dayMaps.length) {
-          fixtures = fixturesFromDayMaps(dayMaps);
-          fixtures.forEach(function (fx) {
-            if (loadedTv[fx.id]) { fx.tv = mergeTv(fx.tv, loadedTv[fx.id]); }
-            loadedTv[fx.id] = fx.tv;
-          });
-        }
 
         if (!fixtures.length) {
           if (silent) return; // keep current view on an empty silent refresh

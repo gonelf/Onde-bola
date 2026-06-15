@@ -1,132 +1,40 @@
 /*
- * Broadcaster rights mapping.
+ * Free-to-air channel classifier.
  *
- * Maps a competition to the TV channels / streaming services that hold the
- * broadcasting rights in a given country. This mirrors how real sites work:
- * fixtures come from a sports data feed, while the "where to watch" answer
- * comes from a curated rights table per market.
- *
- * Keys are normalised competition names (lower-cased, see normaliseCompetition
- * in app.js). The special key "_default" is used as a fallback per country.
+ * The app shows real per-match broadcast listings from TheSportsDB. Those
+ * listings are just channel names + country, so we tag each channel as
+ * free-to-air (shown in green) or otherwise treat it as paid cable /
+ * subscription (amber, with a lock). This set lists common over-the-air
+ * broadcasters across major markets; anything not listed is assumed paid.
  */
 
-window.BROADCASTERS = {
-  // country code -> { competitionKey: [channels] }
-  PT: {
-    name: "Portugal",
-    flag: "🇵🇹",
-    rights: {
-      "primeira liga": ["Sport TV", "DAZN"],
-      "liga portugal": ["Sport TV", "DAZN"],
-      "taca de portugal": ["RTP", "Sport TV"],
-      "english premier league": ["DAZN", "Eleven"],
-      "premier league": ["DAZN", "Eleven"],
-      "spanish la liga": ["DAZN"],
-      "la liga": ["DAZN"],
-      "italian serie a": ["Sport TV"],
-      "serie a": ["Sport TV"],
-      "german bundesliga": ["Sport TV"],
-      "bundesliga": ["Sport TV"],
-      "french ligue 1": ["DAZN"],
-      "ligue 1": ["DAZN"],
-      "uefa champions league": ["TVI", "Eleven", "DAZN"],
-      "champions league": ["TVI", "Eleven", "DAZN"],
-      "uefa europa league": ["Sport TV", "DAZN"],
-      "europa league": ["Sport TV", "DAZN"],
-      "uefa conference league": ["Sport TV"],
-      "fifa world cup": ["RTP"],
-      "uefa euro": ["RTP"],
-      _default: ["Sport TV"],
-    },
-  },
-  GB: {
-    name: "United Kingdom",
-    flag: "🇬🇧",
-    rights: {
-      "english premier league": ["Sky Sports", "TNT Sports", "Amazon Prime"],
-      "premier league": ["Sky Sports", "TNT Sports", "Amazon Prime"],
-      "english league championship": ["Sky Sports"],
-      "championship": ["Sky Sports"],
-      "english fa cup": ["BBC", "ITV"],
-      "fa cup": ["BBC", "ITV"],
-      "spanish la liga": ["Premier Sports"],
-      "la liga": ["Premier Sports"],
-      "italian serie a": ["TNT Sports"],
-      "serie a": ["TNT Sports"],
-      "german bundesliga": ["Sky Sports"],
-      "bundesliga": ["Sky Sports"],
-      "uefa champions league": ["TNT Sports"],
-      "champions league": ["TNT Sports"],
-      "uefa europa league": ["TNT Sports"],
-      "europa league": ["TNT Sports"],
-      "fifa world cup": ["BBC", "ITV"],
-      "uefa euro": ["BBC", "ITV"],
-      _default: ["Sky Sports"],
-    },
-  },
-  US: {
-    name: "United States",
-    flag: "🇺🇸",
-    rights: {
-      "english premier league": ["NBC", "Peacock", "USA Network"],
-      "premier league": ["NBC", "Peacock", "USA Network"],
-      "spanish la liga": ["ESPN+"],
-      "la liga": ["ESPN+"],
-      "italian serie a": ["Paramount+", "CBS"],
-      "serie a": ["Paramount+", "CBS"],
-      "german bundesliga": ["ESPN+"],
-      "bundesliga": ["ESPN+"],
-      "french ligue 1": ["beIN Sports"],
-      "ligue 1": ["beIN Sports"],
-      "american major league soccer": ["Apple TV"],
-      "major league soccer": ["Apple TV"],
-      "mls": ["Apple TV"],
-      "uefa champions league": ["Paramount+", "CBS"],
-      "champions league": ["Paramount+", "CBS"],
-      "uefa europa league": ["Paramount+"],
-      "europa league": ["Paramount+"],
-      "fifa world cup": ["FOX", "Telemundo"],
-      _default: ["Fox Soccer Plus"],
-    },
-  },
-  ES: {
-    name: "Spain",
-    flag: "🇪🇸",
-    rights: {
-      "spanish la liga": ["Movistar+", "DAZN"],
-      "la liga": ["Movistar+", "DAZN"],
-      "spanish segunda division": ["LaLiga+"],
-      "copa del rey": ["RTVE", "Movistar+"],
-      "english premier league": ["DAZN"],
-      "premier league": ["DAZN"],
-      "italian serie a": ["DAZN"],
-      "serie a": ["DAZN"],
-      "uefa champions league": ["Movistar+", "Amazon Prime"],
-      "champions league": ["Movistar+", "Amazon Prime"],
-      "uefa europa league": ["Movistar+"],
-      "europa league": ["Movistar+"],
-      "fifa world cup": ["RTVE"],
-      _default: ["Movistar+"],
-    },
-  },
-  BR: {
-    name: "Brazil",
-    flag: "🇧🇷",
-    rights: {
-      "brazilian serie a": ["Globo", "Premiere", "Amazon Prime"],
-      "campeonato brasileiro": ["Globo", "Premiere", "Amazon Prime"],
-      "english premier league": ["ESPN", "Star+"],
-      "premier league": ["ESPN", "Star+"],
-      "spanish la liga": ["ESPN", "Star+"],
-      "la liga": ["ESPN", "Star+"],
-      "italian serie a": ["CazéTV"],
-      "serie a": ["CazéTV"],
-      "uefa champions league": ["TNT Sports", "HBO Max", "Space"],
-      "champions league": ["TNT Sports", "HBO Max", "Space"],
-      "uefa europa league": ["ESPN", "Star+"],
-      "europa league": ["ESPN", "Star+"],
-      "fifa world cup": ["Globo", "SporTV"],
-      _default: ["SporTV"],
-    },
-  },
+window.FREE_TO_AIR = {};
+[
+  // United Kingdom & Ireland
+  "BBC", "BBC One", "BBC Two", "BBC Three", "BBC iPlayer", "ITV", "ITV1", "ITV4",
+  "ITVX", "STV", "Channel 4", "Channel 5", "S4C", "RTE", "RTÉ", "RTÉ2", "TG4", "Virgin Media",
+  // Portugal
+  "RTP", "RTP1", "RTP2", "RTP3", "TVI", "SIC", "CMTV",
+  // Spain
+  "La 1", "La 2", "RTVE", "TVE", "Telecinco", "Cuatro", "Antena 3", "GOL", "Teledeporte",
+  // United States
+  "ABC", "CBS", "NBC", "FOX", "Telemundo", "Universo", "Univision", "TUDN Free",
+  // Brazil & Latin America
+  "Globo", "TV Globo", "SBT", "Record", "Band", "RedeTV", "CazéTV", "TV Azteca", "Canal 5",
+  // France
+  "TF1", "France 2", "France 3", "M6", "France.tv",
+  // Germany
+  "ARD", "Das Erste", "ZDF", "RTL", "Sat.1", "ProSieben",
+  // Italy
+  "Rai 1", "Rai 2", "Rai 3", "RAI 1", "Mediaset", "Canale 5", "Italia 1",
+  // Netherlands / Belgium
+  "NPO", "NPO 1", "NPO 3", "RTL 7", "VTM", "Eén", "RTBF", "La Une",
+  // Nordics
+  "SVT", "SVT1", "TV4", "NRK", "DR", "DR1", "Yle", "TV2",
+  // Others
+  "SBS", "ABC TV", "Optus Sport Free", "Star Sports First", "DD Sports", "DD National",
+].forEach(function (name) { window.FREE_TO_AIR[name] = true; });
+
+window.isPaidChannel = function (name) {
+  return !window.FREE_TO_AIR[name];
 };

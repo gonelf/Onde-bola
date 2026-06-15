@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Hoje Há Bola — Connections Debug</title>
+<style>
+  :root {
+    --bg: #0b1220; --panel: #131c2e; --panel2: #0f1726; --line: #243349;
+    --text: #e6edf6; --muted: #93a3b8; --accent: #38bdf8; --ok: #34d399;
+    --warn: #fbbf24; --bad: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 16px; max-width: 920px; margin: 0 auto;
+  }
+  h1 { font-size: 20px; margin: 4px 0 2px; }
+  h1 b { color: var(--accent); }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+  input, select, button {
+    font: inherit; color: var(--text); background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; width: 100%;
+  }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > div { flex: 1 1 140px; }
+  button { background: #1d4ed8; border-color: #1d4ed8; cursor: pointer; font-weight: 600; width: auto; }
+  button:hover { filter: brightness(1.08); }
+  button.secondary { background: var(--panel2); border-color: var(--line); }
+  button.run-all { background: #0e7490; border-color: #0e7490; }
+  .tests { display: grid; gap: 12px; }
+  .test { background: var(--panel2); border: 1px solid var(--line); border-radius: 11px; overflow: hidden; }
+  .test > summary { list-style: none; cursor: pointer; padding: 12px 14px; display: flex; align-items: center; gap: 10px; }
+  .test > summary::-webkit-details-marker { display: none; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #475569; flex: none; }
+  .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); } .dot.warn { background: var(--warn); }
+  .test .name { font-weight: 600; }
+  .test .meta { margin-left: auto; color: var(--muted); font-size: 12px; text-align: right; }
+  .test .copy { width: auto; padding: 5px 10px; font-size: 12px; font-weight: 600;
+                background: var(--panel); border-color: var(--line); color: var(--text); flex: none; }
+  .test .copy:hover { filter: brightness(1.15); }
+  .test .copy.done { background: #065f46; border-color: #065f46; }
+  .test .summary-line { padding: 0 14px 8px 34px; color: var(--text); font-size: 13px; }
+  .test .summary-line .k { color: var(--muted); }
+  pre { margin: 0; padding: 12px 14px; background: #0a1120; border-top: 1px solid var(--line);
+        overflow: auto; max-height: 360px; font-size: 12px; color: #cbd5e1; }
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+  .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+  <h1>Hoje Há <b>Bola</b> · Connections Debug</h1>
+  <div class="sub">Live-tests each TV source through its own proxy. Runs from the deployed
+    server, so it can reach upstreams (FotMob/SofaScore) your browser and CI can't. Read-only.</div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label for="date">Date (UTC)</label>
+        <input id="date" type="date" />
+      </div>
+      <div>
+        <label for="match">Match picker (fills teams)</label>
+        <select id="match"><option value="">— load fixtures —</option></select>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="home">Home team</label>
+        <input id="home" type="text" placeholder="e.g. Spain" />
+      </div>
+      <div>
+        <label for="away">Away team</label>
+        <input id="away" type="text" placeholder="e.g. Cape Verde" />
+      </div>
+    </div>
+    <div class="toolbar">
+      <button class="secondary" id="loadFixtures">Load fixtures</button>
+      <button class="run-all" id="runAll">Run all tests ▶</button>
+      <button class="secondary" id="copyReport">Copy report ⧉</button>
+      <span class="pill" id="hint">tip: pick a match, then Run all</span>
+    </div>
+  </div>
+
+  <div class="tests" id="tests"></div>
+
+  <script>
+  (function () {
+    "use strict";
+    var $ = function (id) { return document.getElementById(id); };
+    var SDB = "https://www.thesportsdb.com/api/v1/json/123";
+
+    function todayUTC() { return new Date().toISOString().slice(0, 10); }
+    $("date").value = todayUTC();
+
+    // Each test: id, label, url builder, and a summarizer (json -> short string).
+    var TESTS = [
+      { id: "health", label: "Health / config", needs: [],
+        url: function () { return "/api/health"; },
+        summary: function (j) {
+          if (!j) return "no response";
+          return "KV " + (j.kv && j.kv.ping ? "✅ " + j.kv.ping : (j.kv && j.kv.configured ? "⚠️ configured, no ping" : "❌ off")) +
+            " · SofaScore " + (j.sofascore && j.sofascore.enabled ? "on" : "off") +
+            " · FotMob " + (j.fotmob && j.fotmob.enabled ? "on" : "off") +
+            " · SportMonks " + (j.sportmonks && j.sportmonks.keyConfigured ? "key set" : "no key");
+        } },
+      { id: "tsdb_tv", label: "TheSportsDB · TV day (api/tv)", needs: ["date"],
+        url: function (p) { return "/api/tv?date=" + p.date; },
+        summary: function (j) {
+          var ev = (j && j.tvevents) || (j && j.events) || [];
+          return ev.length + " TV rows";
+        } },
+      { id: "fmtv", label: "FotMob (api/fmtv)", needs: ["date"],
+        url: function (p) { return "/api/fmtv?date=" + p.date + "&debug=1"; },
+        summary: function (j) {
+          if (!j) return "no response";
+          var m = (j.matches || []).length;
+          var d = j._debug || {}; var cs = d.countries || {};
+          var parts = Object.keys(cs).map(function (c) { return c + ":" + (cs[c].matchKeys || 0); });
+          return m + " matches merged · per-country " + (parts.join(" ") || "—");
+        } },
+      { id: "sofatv", label: "SofaScore (api/sofatv)", needs: ["date", "home", "away"],
+        url: function (p) { return "/api/sofatv?date=" + p.date + "&home=" + encodeURIComponent(p.home) +
+          "&away=" + encodeURIComponent(p.away) + "&debug=1"; },
+        summary: function (j) {
+          if (!j) return "no response";
+          var tv = (j.tvevent || []).length; var d = j._debug || {};
+          var pt = d.countries && d.countries.PT;
+          return tv + " channels · event " + (d.matchedEventId || "—") +
+            " · resolved " + (d.resolved || 0) + "/" + (d.totalPairs || 0) +
+            (pt != null ? " · PT raw " + pt : " · no PT");
+        } },
+      { id: "smtv", label: "SportMonks (api/smtv)", needs: ["date"],
+        url: function (p) { return "/api/smtv?date=" + p.date; },
+        summary: function (j) {
+          if (!j) return "no response";
+          if (j.disabled) return "disabled (no SPORTMONKS_KEY)";
+          return (j.matches || []).length + " matches with stations";
+        } }
+    ];
+
+    var results = {}; // id -> { label, url, status, line }
+
+    function params() {
+      return { date: $("date").value || todayUTC(), home: $("home").value.trim(), away: $("away").value.trim() };
+    }
+
+    function render() {
+      var box = $("tests"); box.innerHTML = "";
+      TESTS.forEach(function (t) {
+        var d = document.createElement("details");
+        d.className = "test"; d.id = "t-" + t.id; d.open = true;
+        d.innerHTML =
+          '<summary><span class="dot" id="dot-' + t.id + '"></span>' +
+          '<span class="name">' + t.label + '</span>' +
+          '<span class="meta" id="meta-' + t.id + '"></span>' +
+          '<button class="copy" id="copy-' + t.id + '">Copy</button></summary>' +
+          '<div class="summary-line" id="sum-' + t.id + '"><span class="k">not run yet</span></div>' +
+          '<pre id="pre-' + t.id + '">—</pre>';
+        box.appendChild(d);
+        var btn = $("copy-" + t.id);
+        btn.addEventListener("click", function (e) {
+          e.preventDefault(); e.stopPropagation();
+          copyText($("pre-" + t.id).textContent, btn);
+        });
+      });
+    }
+
+    function copyText(text, btn) {
+      var done = function () {
+        var old = btn.textContent; btn.textContent = "Copied ✓"; btn.classList.add("done");
+        setTimeout(function () { btn.textContent = old; btn.classList.remove("done"); }, 1400);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text); done(); });
+      } else { fallbackCopy(text); done(); }
+    }
+
+    function fallbackCopy(text) {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta);
+    }
+
+    function setDot(id, cls) { $("dot-" + id).className = "dot " + cls; }
+
+    function runTest(t) {
+      var p = params();
+      var missing = t.needs.filter(function (n) { return !p[n]; });
+      if (missing.length) {
+        setDot(t.id, "warn");
+        $("meta-" + t.id).textContent = "needs " + missing.join(", ");
+        $("sum-" + t.id).innerHTML = '<span class="k">skipped — fill ' + missing.join(", ") + '</span>';
+        results[t.id] = { label: t.label, url: "", status: "SKIPPED (need " + missing.join(", ") + ")", line: "" };
+        return Promise.resolve();
+      }
+      var url = t.url(p);
+      var t0 = performance.now();
+      $("meta-" + t.id).textContent = "running…";
+      return fetch(url, { headers: { Accept: "application/json" } }).then(function (r) {
+        var ms = Math.round(performance.now() - t0);
+        var cache = r.headers.get("X-Cache") || "";
+        return r.text().then(function (txt) {
+          var j = null; try { j = JSON.parse(txt); } catch (e) {}
+          setDot(t.id, r.ok ? "ok" : "bad");
+          var status = "HTTP " + r.status + (cache ? " · " + cache : "") + " · " + ms + "ms";
+          var line = j ? t.summary(j) : "non-JSON response";
+          $("meta-" + t.id).textContent = status;
+          $("sum-" + t.id).innerHTML = '<span class="k">' + url + '</span><br>' + line;
+          $("pre-" + t.id).textContent = j ? JSON.stringify(j, null, 2) : txt.slice(0, 4000);
+          results[t.id] = { label: t.label, url: url, status: status, line: line };
+        });
+      }).catch(function (e) {
+        setDot(t.id, "bad");
+        $("meta-" + t.id).textContent = "fetch error";
+        $("sum-" + t.id).textContent = String(e);
+        results[t.id] = { label: t.label, url: url, status: "FETCH ERROR", line: String(e) };
+      });
+    }
+
+    function buildReport() {
+      var p = params();
+      var lines = [
+        "Hoje Há Bola — connections report",
+        "Date: " + p.date + (p.home ? "  ·  " + p.home + " vs " + p.away : ""),
+        "Generated: " + new Date().toISOString(),
+        ""
+      ];
+      TESTS.forEach(function (t) {
+        var r = results[t.id];
+        lines.push("[" + t.label + "]");
+        if (!r) { lines.push("  not run"); lines.push(""); return; }
+        if (r.url) lines.push("  " + r.url);
+        lines.push("  " + r.status);
+        if (r.line) lines.push("  " + r.line);
+        lines.push("");
+      });
+      return lines.join("\n");
+    }
+
+    function runAll() { TESTS.reduce(function (chain, t) {
+      return chain.then(function () { return runTest(t); });
+    }, Promise.resolve()); }
+
+    // Load fixtures from TheSportsDB to populate the match picker.
+    function loadFixtures() {
+      var date = $("date").value || todayUTC();
+      var sel = $("match");
+      sel.innerHTML = '<option value="">loading…</option>';
+      fetch(SDB + "/eventsday.php?d=" + date + "&s=Soccer")
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          var ev = (j && j.events) || [];
+          if (!ev.length) { sel.innerHTML = '<option value="">no fixtures for ' + date + '</option>'; return; }
+          sel.innerHTML = '<option value="">— ' + ev.length + ' matches —</option>';
+          ev.forEach(function (e) {
+            var o = document.createElement("option");
+            o.value = (e.strHomeTeam || "") + "|" + (e.strAwayTeam || "");
+            o.textContent = (e.strHomeTeam || "?") + " vs " + (e.strAwayTeam || "?") +
+              (e.strLeague ? "  ·  " + e.strLeague : "");
+            sel.appendChild(o);
+          });
+        })
+        .catch(function () { sel.innerHTML = '<option value="">failed to load</option>'; });
+    }
+
+    $("match").addEventListener("change", function () {
+      var v = this.value; if (!v) return;
+      var parts = v.split("|"); $("home").value = parts[0] || ""; $("away").value = parts[1] || "";
+    });
+    $("loadFixtures").addEventListener("click", loadFixtures);
+    $("runAll").addEventListener("click", runAll);
+    $("copyReport").addEventListener("click", function () { copyText(buildReport(), $("copyReport")); });
+
+    render();
+    runTest(TESTS[0]); // health on open
+  })();
+  </script>
+</body>
+</html>

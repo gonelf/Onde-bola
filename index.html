@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Onde Bola — Football on TV worldwide</title>
+  <title>Hoje Há Bola — Football on TV worldwide</title>
   <meta name="description" content="See today's football games from around the world and which TV channels and streaming services are broadcasting them." />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>" />
   <link rel="stylesheet" href="assets/styles.css" />
@@ -13,14 +13,9 @@
     <div class="container header-inner">
       <a class="brand" href="./">
         <span class="brand-ball">⚽</span>
-        <span class="brand-name">Onde<span>Bola</span></span>
+        <span class="brand-name">Hoje Há <span>Bola</span></span>
       </a>
-      <div class="header-controls">
-        <label class="country-picker">
-          <span class="visually-hidden">Country</span>
-          <select id="country-select" aria-label="Choose your country"></select>
-        </label>
-      </div>
+      <p class="tagline">Football worldwide &amp; where to watch it</p>
     </div>
   </header>
 
@@ -32,8 +27,30 @@
         <button id="next-day" class="date-btn" aria-label="Next day">›</button>
         <span id="current-date" class="current-date"></span>
       </div>
-      <div class="search-wrap">
-        <input id="search" type="search" placeholder="Search team or competition…" aria-label="Search games" />
+      <div class="toolbar-right">
+        <div class="country-pick">
+          <label for="country-select" class="country-label">📍 Your country</label>
+          <select id="country-select" aria-label="Primary country for TV listings"></select>
+        </div>
+        <div class="league-filter">
+          <button id="league-toggle" class="filter-btn" aria-expanded="false" aria-controls="filter-panel">
+            <span id="league-toggle-label">Leagues</span> ▾
+          </button>
+          <div id="filter-panel" class="filter-panel" hidden>
+            <div class="filter-panel-head">
+              <strong>Show leagues</strong>
+              <button id="reset-filters" type="button" class="reset-btn">Reset filters</button>
+            </div>
+            <div id="league-list" class="league-list"></div>
+            <label class="remember-row">
+              <input type="checkbox" id="remember-filters" />
+              <span>Remember this next time</span>
+            </label>
+          </div>
+        </div>
+        <div class="search-wrap">
+          <input id="search" type="search" placeholder="Search team or competition…" aria-label="Search games" />
+        </div>
       </div>
     </section>
 
@@ -42,17 +59,30 @@
     <section id="games" class="games" aria-live="polite"></section>
   </main>
 
+  <div id="detail-overlay" class="detail-overlay" hidden>
+    <div class="detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+      <button id="detail-close" class="detail-close" aria-label="Close">×</button>
+      <div id="detail-body"></div>
+    </div>
+  </div>
+
   <footer class="site-footer">
     <div class="container">
+      <p id="footer-data">
+        Real per-match TV listings &amp; fixtures via <a href="https://www.thesportsdb.com" target="_blank" rel="noopener">TheSportsDB</a>,
+        cached to avoid repeat calls. Channel data is crowd-sourced, so coverage is partial —
+        matches without a listing show <em>“No TV listing yet”</em> rather than a guess.
+      </p>
       <p>
-        Fixtures via <a href="https://www.thesportsdb.com" target="_blank" rel="noopener">TheSportsDB</a>.
-        TV listings are an indicative rights guide and may vary by region and platform.
+        <a href="/admin.html" id="conn-debug">Connections debug →</a>
+        <span aria-hidden="true"> · </span>
+        <a href="#" id="ad-prefs">Ad preferences</a>
       </p>
     </div>
   </footer>
 
   <script src="assets/data/broadcasters.js"></script>
-  <script src="assets/data/sample-fixtures.js"></script>
+  <script src="assets/data/ads.js"></script>
   <script src="assets/app.js"></script>
 </body>
 </html>

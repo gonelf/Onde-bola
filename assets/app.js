@@ -1,5 +1,5 @@
 /*
- * Onde Bola — today's football games worldwide and where to watch them.
+ * Hoje Há Bola — today's football games worldwide and where to watch them.
  *
  * Fixtures are fetched client-side from TheSportsDB's free API. Real TV
  * channels come from TheSportsDB's TV feeds, plus FotMob (api/fmtv) and
@@ -70,7 +70,168 @@
     detailClose: document.getElementById("detail-close"),
     detailBody: document.getElementById("detail-body"),
     countrySelect: document.getElementById("country-select"),
+    adPrefs: document.getElementById("ad-prefs"),
   };
+
+  // ---- Display ads + consent ----------------------------------------------
+  var ADS = window.ADS_CONFIG || {};
+  var STORAGE_CONSENT = "ondebola.adConsent";
+  var adsScriptLoaded = false;
+
+  function consentStatus() {
+    try { return localStorage.getItem(STORAGE_CONSENT); } catch (e) { return null; }
+  }
+  function adsAllowed() { return consentStatus() === "granted"; }
+  function adsConfigured() { return !!(ADS.client && ADS.slot); }
+  // Whether to emit ad slots into the feed (real once configured, otherwise a
+  // labelled placeholder) — only after the visitor has accepted.
+  function adsEnabled() { return adsAllowed() && (adsConfigured() || ADS.showPlaceholder); }
+
+  function adSlotHtml() {
+    if (adsConfigured()) {
+      return '<div class="ad-slot" aria-label="Advertisement">' +
+        '<span class="ad-label">Publicidade</span>' +
+        '<ins class="adsbygoogle" style="display:block" data-ad-client="' +
+          escapeHtml(ADS.client) + '" data-ad-slot="' + escapeHtml(ADS.slot) +
+          '" data-ad-format="auto" data-full-width-responsive="true"' +
+          (ADS.test ? ' data-adtest="on"' : "") + "></ins></div>";
+    }
+    return '<div class="ad-slot ad-placeholder" aria-label="Advertisement">' +
+      '<span class="ad-label">Publicidade</span>' +
+      '<span class="ad-ph-text">Ad space — set IDs in assets/data/ads.js</span></div>';
+  }
+
+  function loadAdSenseScript() {
+    if (adsScriptLoaded || !ADS.client) return;
+    adsScriptLoaded = true;
+    var s = document.createElement("script");
+    s.async = true;
+    s.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=" +
+      encodeURIComponent(ADS.client);
+    s.crossOrigin = "anonymous";
+    document.head.appendChild(s);
+  }
+
+  function mountAds() {
+    if (!adsAllowed() || !adsConfigured()) return;
+    loadAdSenseScript();
+    try {
+      var slots = el.games.querySelectorAll("ins.adsbygoogle:not([data-ad-status])");
+      for (var i = 0; i < slots.length; i++) {
+        (window.adsbygoogle = window.adsbygoogle || []).push({});
+      }
+    } catch (e) { /* adblock or not ready — ignore */ }
+  }
+
+  function showConsentBanner() {
+    if (document.getElementById("consent-banner")) return;
+    var b = document.createElement("div");
+    b.id = "consent-banner";
+    b.className = "consent-banner";
+    b.innerHTML =
+      '<div class="consent-inner">' +
+      '<p class="consent-text">' + t("consent") + "</p>" +
+      '<div class="consent-actions">' +
+      '<button id="consent-reject" type="button" class="consent-btn ghost">' + t("reject") + "</button>" +
+      '<button id="consent-accept" type="button" class="consent-btn primary">' + t("accept") + "</button>" +
+      "</div></div>";
+    document.body.appendChild(b);
+    document.getElementById("consent-accept").addEventListener("click", function () { setConsent("granted"); });
+    document.getElementById("consent-reject").addEventListener("click", function () { setConsent("denied"); });
+  }
+
+  function setConsent(v) {
+    try { localStorage.setItem(STORAGE_CONSENT, v); } catch (e) {}
+    var b = document.getElementById("consent-banner");
+    if (b && b.parentNode) b.parentNode.removeChild(b);
+    if (v === "granted") { render(); mountAds(); }
+    else { render(); } // remove any slots that were showing
+  }
+
+  function initConsent() {
+    var s = consentStatus();
+    if (s !== "granted" && s !== "denied") showConsentBanner();
+  }
+
+  // ---- Localization (EN default, PT when Portugal is the primary country) --
+  var I18N = {
+    en: {
+      title: "Hoje Há Bola — Football on TV worldwide",
+      tagline: "Football worldwide & where to watch it",
+      today: "Today", search: "Search team or competition…",
+      leagues: "Leagues", showLeagues: "Show leagues", reset: "Reset filters",
+      remember: "Remember this next time", yourCountry: "📍 Your country",
+      connDebug: "Connections debug →", adPrefs: "Ad preferences",
+      footerData: 'Real per-match TV listings & fixtures via <a href="https://www.thesportsdb.com" target="_blank" rel="noopener">TheSportsDB</a>, cached to avoid repeat calls. Channel data is crowd-sourced, so coverage is partial — matches without a listing show <em>“No TV listing yet”</em> rather than a guess.',
+      close: "Close",
+      noListing: "No TV listing yet", clickDetails: "Click for details ›",
+      listings: "📡 Listings", moreOne: "more country in details ›",
+      moreMany: "more countries in details ›",
+      games: "games", competitions: "competitions", liveNow: "live now",
+      withTv: "with real TV listings", updated: "updated", live: "LIVE", ft: "FT",
+      freeAir: "Free-to-air", paidSub: "Paid cable / subscription",
+      whereToWatch: "Where to watch", realListings: "📡 Real broadcast listings",
+      checking: "⏳ Checking live listings…",
+      noListingDetail: "No broadcast listing found for this match yet.", vs: "vs",
+      allFiltered: "All leagues are filtered out — open <strong>Leagues</strong> and re-enable some, or hit Reset filters.",
+      noSearch: "No games match your search for this date.",
+      noFixtures: "No fixtures found for this date.",
+      feedDown: "Couldn’t reach the live data feed. Please try again in a moment.",
+      consent: "Hoje Há Bola is free thanks to ads. We’d like to use cookies to show ads and measure traffic. You can change this anytime via “Ad preferences” in the footer.",
+      accept: "Accept", reject: "Reject",
+    },
+    pt: {
+      title: "Hoje Há Bola — Futebol na TV em todo o mundo",
+      tagline: "Futebol de todo o mundo e onde ver",
+      today: "Hoje", search: "Procurar equipa ou competição…",
+      leagues: "Ligas", showLeagues: "Mostrar ligas", reset: "Repor filtros",
+      remember: "Lembrar para a próxima", yourCountry: "📍 O teu país",
+      connDebug: "Diagnóstico de ligações →", adPrefs: "Preferências de anúncios",
+      footerData: 'Emissões de TV e jogos por <a href="https://www.thesportsdb.com" target="_blank" rel="noopener">TheSportsDB</a>, em cache para evitar chamadas repetidas. Os dados de canais são colaborativos, por isso a cobertura é parcial — jogos sem emissão mostram <em>“Sem emissão conhecida”</em> em vez de adivinhar.',
+      close: "Fechar",
+      noListing: "Sem emissão conhecida", clickDetails: "Clica para detalhes ›",
+      listings: "📡 Emissões", moreOne: "mais país nos detalhes ›",
+      moreMany: "mais países nos detalhes ›",
+      games: "jogos", competitions: "competições", liveNow: "ao vivo",
+      withTv: "com emissão de TV", updated: "atualizado", live: "AO VIVO", ft: "FIM",
+      freeAir: "Sinal aberto", paidSub: "Cabo / subscrição",
+      whereToWatch: "Onde ver", realListings: "📡 Emissões de TV reais",
+      checking: "⏳ A verificar emissões…",
+      noListingDetail: "Ainda sem emissão conhecida para este jogo.", vs: "vs",
+      allFiltered: "Todas as ligas estão filtradas — abre <strong>Ligas</strong> e reativa algumas, ou carrega em Repor filtros.",
+      noSearch: "Nenhum jogo corresponde à tua pesquisa nesta data.",
+      noFixtures: "Sem jogos para esta data.",
+      feedDown: "Não foi possível contactar o feed de dados. Tenta novamente daqui a momentos.",
+      consent: "O Hoje Há Bola é grátis graças aos anúncios. Gostaríamos de usar cookies para mostrar anúncios e medir o tráfego. Podes alterar isto a qualquer momento em “Preferências de anúncios” no rodapé.",
+      accept: "Aceitar", reject: "Rejeitar",
+    },
+  };
+
+  function lang() { return state.primaryCountry === "Portugal" ? "pt" : "en"; }
+  function t(k) { var L = I18N[lang()]; return (L && L[k] != null) ? L[k] : I18N.en[k]; }
+  function locale() { return lang() === "pt" ? "pt-PT" : undefined; }
+
+  // Apply the current language to the fixed page chrome (everything not rebuilt
+  // by render()). Called on load and whenever the primary country changes.
+  function applyStaticText() {
+    document.title = t("title");
+    document.documentElement.lang = lang();
+    var set = function (sel, prop, val) {
+      var n = document.querySelector(sel); if (n) n[prop] = val;
+    };
+    set(".tagline", "textContent", t("tagline"));
+    set("#today-btn", "textContent", t("today"));
+    if (el.search) el.search.placeholder = t("search");
+    set("#league-toggle-label", "textContent", t("leagues"));
+    set(".filter-panel-head strong", "textContent", t("showLeagues"));
+    set("#reset-filters", "textContent", t("reset"));
+    set(".remember-row span", "textContent", t("remember"));
+    set(".country-label", "textContent", t("yourCountry"));
+    set("#conn-debug", "textContent", t("connDebug"));
+    set("#ad-prefs", "textContent", t("adPrefs"));
+    set("#footer-data", "innerHTML", t("footerData"));
+    set("#detail-close", "ariaLabel", t("close"));
+  }
 
   // ---- Helpers ------------------------------------------------------------
 
@@ -88,7 +249,7 @@
   }
 
   function formatClock(date) {
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return date.toLocaleTimeString(locale() || [], { hour: "2-digit", minute: "2-digit" });
   }
 
   function matchStatus(kickoff) {
@@ -108,20 +269,20 @@
     var s = raw.toUpperCase();
 
     if (/(FT|AET|PEN|FINISHED|ENDED|MATCH FINISHED|FULL TIME)/.test(s)) {
-      return { state: "finished", label: "FT" };
+      return { state: "finished", label: t("ft") };
     }
     if (/^(HT|HALF[\s-]?TIME)$/.test(s)) {
       return { state: "live", label: "HT" };
     }
     var min = s.match(/(\d{1,3})\s*'?\+?\d*\s*$/);
     if (/(1H|2H|ET|LIVE|IN PLAY|PLAYING)/.test(s) || (min && s !== "")) {
-      return { state: "live", label: min ? min[1] + "'" : "LIVE" };
+      return { state: "live", label: min ? min[1] + "'" : t("live") };
     }
     if (/^(NS|NOT STARTED|SCHEDULED|TBD|PREVIEW)$/.test(s) || raw === "") {
       // Nothing definitive from the feed — estimate from the clock.
       var est = matchStatus(kickoff);
-      if (est.state === "live") return { state: "live", label: "LIVE" };
-      if (est.state === "finished") return { state: "finished", label: "FT" };
+      if (est.state === "live") return { state: "live", label: t("live") };
+      if (est.state === "finished") return { state: "finished", label: t("ft") };
       return { state: "upcoming", label: "" };
     }
     // Unknown non-empty status: treat as live with the raw label.
@@ -372,7 +533,7 @@
   function updateTvCount() {
     var withTv = state.fixtures.filter(function (f) { return f.tv && f.tv.length; }).length;
     var node = el.status && el.status.querySelector(".tv-count");
-    if (node) node.textContent = withTv ? " · 📡 " + withTv + " with real TV listings" : "";
+    if (node) node.textContent = withTv ? " · 📡 " + withTv + " " + t("withTv") : "";
   }
 
   function loadFixtures(silent) {
@@ -438,9 +599,7 @@
 
         if (!fixtures.length) {
           if (silent) return; // keep current view on an empty silent refresh
-          showEmpty(feedReachable
-            ? "No fixtures found for this date."
-            : "Couldn't reach the live data feed. Please try again in a moment.");
+          showEmpty(feedReachable ? t("noFixtures") : t("feedDown"));
           return;
         }
         state.fixtures = fixtures;
@@ -449,15 +608,15 @@
         fixtures.forEach(function (f) { comps[f.competition] = true; });
         var live = fixtures.filter(function (f) { return statusOf(f).state === "live"; }).length;
         var withTv = fixtures.filter(function (f) { return f.tv && f.tv.length; }).length;
-        var base = fixtures.length + " games · " + Object.keys(comps).length + " competitions" +
-          (live ? " · " + live + " live now" : "");
+        var base = fixtures.length + " " + t("games") + " · " + Object.keys(comps).length +
+          " " + t("competitions") + (live ? " · " + live + " " + t("liveNow") : "");
         el.status.hidden = false;
         el.status.className = "status";
-        el.status.innerHTML = '<span class="badge">' + (live ? "LIVE" : "OK") + "</span>" +
+        el.status.innerHTML = '<span class="badge">' + (live ? t("live") : "OK") + "</span>" +
           escapeHtml(base) +
           '<span class="tv-count">' +
-            (withTv ? " · 📡 " + withTv + " with real TV listings" : "") + "</span>" +
-          escapeHtml(" · updated " + formatClock(new Date()));
+            (withTv ? " · 📡 " + withTv + " " + t("withTv") : "") + "</span>" +
+          escapeHtml(" · " + t("updated") + " " + formatClock(new Date()));
         render();
         updateLeaguePanel();
         prefetchListings(token); // fill in real channels without a click
@@ -584,7 +743,7 @@
   function channelChip(name) {
     var paid = window.isPaidChannel(name);
     return '<span class="channel ' + (paid ? "paid" : "free") + '" title="' +
-      (paid ? "Paid cable / subscription" : "Free-to-air") + '">' +
+      (paid ? t("paidSub") : t("freeAir")) + '">' +
       (paid ? '<span class="lock" aria-hidden="true">🔒</span>' : "") +
       escapeHtml(name) + "</span>";
   }
@@ -609,10 +768,11 @@
     var chips = byCountry[lead].map(channelChip).join("");
     var others = ordered.filter(function (c) { return c !== lead; }).length;
     var more = others
-      ? '<span class="more-countries">+' + others +
-        (others === 1 ? " country" : " countries") + " in details ›</span>"
+      ? '<span class="more-countries">+' + others + " " +
+        (others === 1 ? t("moreOne") : t("moreMany")) + "</span>"
       : "";
-    return '<span class="src-tag real" title="Real broadcast listings">📡 Listings</span>' +
+    return '<span class="src-tag real" title="' + escapeHtml(t("realListings")) + '">' +
+      t("listings") + "</span>" +
       '<span class="country-group" title="' + escapeHtml(lead) + '">' +
       '<span class="flag">' + countryFlag(lead) + "</span>" + chips + "</span>" + more;
   }
@@ -621,7 +781,7 @@
   // listing simply show "No TV listing yet".
   function channelsHtml(fx) {
     if (fx && fx.tv && fx.tv.length) return realChannelsHtml(fx.tv);
-    return '<span class="channel none">No TV listing yet</span>';
+    return '<span class="channel none">' + t("noListing") + "</span>";
   }
 
   function matchHtml(fx) {
@@ -639,7 +799,7 @@
           scoreHtml(fx, "away") + "</div>" +
       "</div>" +
       '<div class="channels">' + channelsHtml(fx) + "</div>" +
-      '<span class="details-hint">Click for details ›</span>' +
+      '<span class="details-hint">' + t("clickDetails") + "</span>" +
     "</article>";
   }
 
@@ -663,8 +823,7 @@
 
     if (!fixtures.length) {
       var msg = state.fixtures.length && hiddenSome && !state.search
-        ? "All leagues are filtered out — open <strong>Leagues</strong> and re-enable some, or hit Reset filters."
-        : "No games match your search for this date.";
+        ? t("allFiltered") : t("noSearch");
       el.games.innerHTML = '<div class="empty"><div class="big">⚽</div><p>' + msg + "</p></div>";
       return;
     }
@@ -681,31 +840,43 @@
     // Sort competitions alphabetically; matches within a group by kickoff.
     order.sort(function (a, b) { return a.localeCompare(b); });
 
+    // Insert an ad after every Nth card, counted across all competitions.
+    var ads = adsEnabled();
+    var everyN = ADS.everyN || 6;
+    var cardCount = 0;
+
     var html = order.map(function (comp) {
       var games = groups[comp].sort(function (a, b) {
         return new Date(a.kickoff) - new Date(b.kickoff);
       });
       var badged = games.filter(function (g) { return g.leagueBadgeUrl; })[0];
       var badgeUrl = badged ? badged.leagueBadgeUrl : "";
+      var cards = games.map(function (g) {
+        var out = matchHtml(g);
+        cardCount++;
+        if (ads && cardCount % everyN === 0) out += adSlotHtml();
+        return out;
+      }).join("");
       return '<section class="competition">' +
         '<h2 class="competition-head">' +
           leagueLogoHtml(badgeUrl, comp) +
           '<span class="competition-name">' + escapeHtml(comp) + "</span>" +
           '<span class="count">' + games.length + "</span></h2>" +
-        games.map(matchHtml).join("") +
+        cards +
       "</section>";
     }).join("");
 
     el.games.innerHTML = html;
+    if (ads) mountAds();
   }
 
   function renderDateLabel() {
     var today = new Date();
     var label;
     if (isSameDay(state.date, today)) {
-      label = "Today";
+      label = t("today");
     } else {
-      label = state.date.toLocaleDateString([], {
+      label = state.date.toLocaleDateString(locale() || [], {
         weekday: "long", day: "numeric", month: "long",
       });
     }
@@ -808,26 +979,26 @@
         if (!byCountry[c]) byCountry[c] = [];
         if (byCountry[c].indexOf(t.channel) === -1) byCountry[c].push(t.channel);
       });
-      return '<p class="src-note real">📡 Real broadcast listings</p>' +
+      return '<p class="src-note real">' + t("realListings") + "</p>" +
         orderCountries(Object.keys(byCountry)).map(function (c) {
           return detailChannelRow(countryFlag(c), c, byCountry[c].map(channelChip).join(""));
         }).join("");
     }
     return checking
-      ? '<p class="src-note checking">⏳ Checking live listings…</p>'
-      : '<p class="src-note guide">No broadcast listing found for this match yet.</p>';
+      ? '<p class="src-note checking">' + t("checking") + "</p>"
+      : '<p class="src-note guide">' + t("noListingDetail") + "</p>";
   }
 
   function buildDetailBody(fx, checking) {
     var st = statusOf(fx);
     var kickoff = new Date(fx.kickoff);
-    var dateStr = kickoff.toLocaleDateString([], {
+    var dateStr = kickoff.toLocaleDateString(locale() || [], {
       weekday: "long", day: "numeric", month: "long", year: "numeric",
     });
-    var timeStr = kickoff.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    var timeStr = kickoff.toLocaleTimeString(locale() || [], { hour: "2-digit", minute: "2-digit" });
     var score = hasScore(fx) && st.state !== "upcoming"
       ? '<div class="detail-score">' + escapeHtml(fx.homeScore) + " – " + escapeHtml(fx.awayScore) + "</div>"
-      : '<div class="detail-vs">vs</div>';
+      : '<div class="detail-vs">' + t("vs") + "</div>";
     var statusBadge = st.state === "live"
       ? '<span class="detail-status live">' + escapeHtml(st.label || "LIVE") + "</span>"
       : st.state === "finished"
@@ -847,10 +1018,10 @@
         "<span>📅 " + escapeHtml(dateStr) + " · " + escapeHtml(timeStr) + "</span>" +
         (fx.venue ? "<span>📍 " + escapeHtml(fx.venue) + "</span>" : "") +
       "</div>" +
-      '<h3 class="detail-h">Where to watch</h3>' +
+      '<h3 class="detail-h">' + t("whereToWatch") + "</h3>" +
       '<div class="detail-legend">' +
-        '<span class="channel free">Free-to-air</span>' +
-        '<span class="channel paid"><span class="lock">🔒</span>Paid cable / subscription</span>' +
+        '<span class="channel free">' + t("freeAir") + "</span>" +
+        '<span class="channel paid"><span class="lock">🔒</span>' + t("paidSub") + "</span>" +
       "</div>" +
       detailChannelsHtml(fx, checking);
   }
@@ -921,8 +1092,10 @@
       if (persist && name) { try { localStorage.setItem(STORAGE_COUNTRY, name); } catch (e) {} }
       return;
     }
+    var langBefore = lang();
     state.primaryCountry = name;
     if (persist) { try { localStorage.setItem(STORAGE_COUNTRY, name); } catch (e) {} }
+    if (lang() !== langBefore) applyStaticText(); // switched to/from Portuguese
     populateCountrySelect();
     render();
     if (!el.detailOverlay.hidden && state.detailId) {
@@ -952,6 +1125,12 @@
     if (el.countrySelect) {
       el.countrySelect.addEventListener("change", function () {
         setPrimaryCountry(el.countrySelect.value, true);
+      });
+    }
+    if (el.adPrefs) {
+      el.adPrefs.addEventListener("click", function (e) {
+        e.preventDefault();
+        showConsentBanner();
       });
     }
     el.prev.addEventListener("click", function () { shiftDay(-1); });
@@ -1015,8 +1194,10 @@
   function init() {
     loadFilters();
     initCountry();
+    applyStaticText();
     renderDateLabel();
     bindEvents();
+    initConsent();
     loadFixtures();
     // When viewing today, silently refresh live scores/status every 60s.
     // On other days just re-render to keep time-based badges accurate.

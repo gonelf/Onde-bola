@@ -1,4 +1,4 @@
-# Onde Bola ⚽
+# Hoje Há Bola ⚽
 
 A web app that shows the football games being played around the world right now
 and **which TV channels and streaming services are broadcasting them** in your

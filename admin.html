@@ -152,7 +152,8 @@
             " · stats " + ((d.stats || []).length) +
             " · form " + (d.form ? "✅" : "—") +
             " · h2h " + (d.h2h ? "✅" : "—") +
-            " · motm " + (d.motm ? "✅" : "—");
+            " · motm " + (d.motm ? "✅" : "—") +
+            " · highlights " + (d.highlights ? "✅" : "—");
         } },
       { id: "sofatv", label: "SofaScore (api/sofatv)", needs: ["date", "home", "away"],
         url: function (p) { return "/api/sofatv?date=" + p.date + "&home=" + encodeURIComponent(p.home) +

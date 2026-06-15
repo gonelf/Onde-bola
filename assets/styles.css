@@ -763,6 +763,24 @@ body {
 }
 .detail-h2h strong { display: block; color: var(--text); font-size: 1.3rem; font-variant-numeric: tabular-nums; }
 
+.detail-highlights { display: flex; flex-wrap: wrap; gap: 8px; }
+.hl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+.hl-btn:hover { border-color: var(--accent); color: var(--accent); }
+.hl-btn.yt { background: #c4302b; border-color: #c4302b; color: #fff; }
+.hl-btn.yt:hover { filter: brightness(1.08); color: #fff; }
+
 @media (max-width: 560px) {
   .container { width: min(960px, 100% - 24px); }
   .header-inner { height: 54px; }

@@ -192,6 +192,7 @@
       mdReferee: "Referee", mdAttendance: "Attendance", mdMotm: "Player of the match",
       mdForm: "Recent form", mdH2h: "Head-to-head", mdTimeline: "Timeline",
       mdStats: "Match stats", mdLoading: "Loading match details…",
+      mdHighlights: "Highlights", mdWatch: "▶ Watch highlights", mdYouTube: "🔎 Search on YouTube",
       mdW: "W", mdD: "D", mdL: "L",
       stPossession: "Possession", stShots: "Shots", stSot: "On target",
       stXg: "Expected goals (xG)", stCorners: "Corners", stFouls: "Fouls",
@@ -226,6 +227,7 @@
       mdReferee: "Árbitro", mdAttendance: "Assistência", mdMotm: "Homem do jogo",
       mdForm: "Forma recente", mdH2h: "Confrontos diretos", mdTimeline: "Cronologia",
       mdStats: "Estatísticas", mdLoading: "A carregar detalhes do jogo…",
+      mdHighlights: "Resumo", mdWatch: "▶ Ver resumo", mdYouTube: "🔎 Procurar no YouTube",
       mdW: "V", mdD: "E", mdL: "D",
       stPossession: "Posse de bola", stShots: "Remates", stSot: "À baliza",
       stXg: "Golos esperados (xG)", stCorners: "Cantos", stFouls: "Faltas",
@@ -1108,6 +1110,24 @@
     var d = fx._details;
     if (!d) return "";
     var out = "";
+
+    // Highlights: link FotMob's own clip when present, and always offer a
+    // YouTube search for finished matches (keyless — opens YouTube's results).
+    var finished = statusOf(fx).state === "finished";
+    if (d.highlights && d.highlights.url || finished) {
+      var ytq = encodeURIComponent(fx.home + " vs " + fx.away + " " +
+        (fx.competition || "") + " highlights");
+      var ytUrl = "https://www.youtube.com/results?search_query=" + ytq;
+      out += '<h3 class="detail-h">' + t("mdHighlights") + "</h3>" +
+        '<div class="detail-highlights">' +
+          (d.highlights && d.highlights.url
+            ? '<a class="hl-btn" href="' + escapeHtml(d.highlights.url) +
+                '" target="_blank" rel="noopener">' + t("mdWatch") + "</a>"
+            : "") +
+          '<a class="hl-btn yt" href="' + ytUrl + '" target="_blank" rel="noopener">' +
+            t("mdYouTube") + "</a>" +
+        "</div>";
+    }
 
     if (d.events && d.events.length) {
       var hs = 0, as = 0;

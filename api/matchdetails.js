@@ -199,6 +199,16 @@ function normalize(data) {
     return (home.length || away.length) ? { home: home, away: away } : null;
   }, null);
 
+  // FotMob sometimes carries an official highlights clip (often a YouTube or
+  // social link). Surface its URL so the client can link straight to it.
+  var highlights = safe(function () {
+    var h = matchFacts.highlights || content.highlights ||
+      (matchFacts.matchInfo && matchFacts.matchInfo.highlights);
+    var url = str(h && (h.url || h.source || h.videoUrl || h.link));
+    if (!url && typeof h === "string") url = str(h);
+    return /^https?:\/\//.test(url) ? { url: url, source: str(h && (h.source || h.provider)) } : null;
+  }, null);
+
   return {
     venue: venue || "",
     referee: safe(function () { return textOf(info.Referee || info.Referees); }, ""),
@@ -207,6 +217,7 @@ function normalize(data) {
     motm: motm,
     form: form,
     h2h: h2h,
+    highlights: highlights,
     events: safe(function () { return eventsFrom(matchFacts); }, []),
     stats: safe(function () { return statsFrom(content.stats || {}); }, []),
   };

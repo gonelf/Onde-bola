@@ -18,8 +18,8 @@
  */
 
 const KEY = process.env.SPORTMONKS_KEY;
-const KV_URL = process.env.KV_REST_API_URL;
-const KV_TOKEN = process.env.KV_REST_API_TOKEN;
+const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 const BASE = "https://api.sportmonks.com/v3/football";
 const MAX_PAGES = 5; // bound runtime; ~250 fixtures/day at per_page=50
 

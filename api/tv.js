@@ -16,8 +16,8 @@
  */
 
 const SDB_KEY = process.env.THESPORTSDB_KEY || "123";
-const KV_URL = process.env.KV_REST_API_URL;
-const KV_TOKEN = process.env.KV_REST_API_TOKEN;
+const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 
 async function kv(command) {
   if (!KV_URL || !KV_TOKEN) return null;

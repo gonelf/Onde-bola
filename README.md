@@ -132,9 +132,13 @@ visitors don't re-hit the upstream API. It works with no DB (pass-through), and
 the client falls back to calling TheSportsDB directly if the function isn't
 deployed — but to enable caching on Vercel:
 
-1. In your Vercel project, create a **KV** store (Storage → Create → KV) and
-   connect it to the project. This injects `KV_REST_API_URL` and
-   `KV_REST_API_TOKEN` automatically.
+1. In your Vercel project, open **Storage → Create Database → Upstash for Redis**
+   (Vercel's first-party "KV" is now provisioned via the Upstash marketplace),
+   pick a region near your users, and **Connect** it to the project. This injects
+   the REST credentials automatically. The proxies read `KV_REST_API_URL` /
+   `KV_REST_API_TOKEN`, falling back to `UPSTASH_REDIS_REST_URL` /
+   `UPSTASH_REDIS_REST_TOKEN`, so either naming the integration injects will work.
+   Verify on `/admin.html` (Health → `KV ✅ PONG`) or an `X-Cache: HIT` header.
 2. *(Optional)* set `THESPORTSDB_KEY` if you have a premium key — otherwise it
    defaults to the free `123` key.
 3. *(Optional)* set `SPORTMONKS_KEY` to enable the SportMonks broadcaster source

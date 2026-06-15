@@ -14,8 +14,8 @@
  *   SOFASCORE_DISABLED=1 to turn this source off entirely.
  */
 
-const KV_URL = process.env.KV_REST_API_URL;
-const KV_TOKEN = process.env.KV_REST_API_TOKEN;
+const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 const DISABLED = process.env.SOFASCORE_DISABLED === "1";
 const BASE = "https://api.sofascore.com/api/v1";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +

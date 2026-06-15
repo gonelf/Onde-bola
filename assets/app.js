@@ -685,11 +685,15 @@
   // Card view: show the primary country's channels (or the top available country
   // if the primary has none for this match), with the rest summarised as
   // "+N more in details" — the full per-country breakdown lives in the modal.
+  var MAX_CARD_CHIPS = 3; // keep cards compact on mobile; rest live in the modal
   function realChannelsHtml(tv) {
     var byCountry = groupByCountry(tv);
     var ordered = orderCountries(Object.keys(byCountry));
     var lead = byCountry[state.primaryCountry] ? state.primaryCountry : ordered[0];
-    var chips = byCountry[lead].map(channelChip).join("");
+    var leadChannels = byCountry[lead];
+    var chips = leadChannels.slice(0, MAX_CARD_CHIPS).map(channelChip).join("");
+    var hiddenChips = leadChannels.length - MAX_CARD_CHIPS;
+    if (hiddenChips > 0) chips += '<span class="channel more-inline">+' + hiddenChips + "</span>";
     var others = ordered.filter(function (c) { return c !== lead; }).length;
     var more = others
       ? '<span class="more-countries">+' + others + " " +

@@ -111,8 +111,7 @@
           }
           return "KV " + (j.kv && j.kv.ping ? "✅ " + j.kv.ping : (j.kv && j.kv.configured ? "⚠️ configured, no ping" + (j.kv.status ? " (HTTP " + j.kv.status + ")" : "") : "❌ off" + kvSeen)) +
             " · SofaScore " + (j.sofascore && j.sofascore.enabled ? "on" : "off") +
-            " · FotMob " + (j.fotmob && j.fotmob.enabled ? "on" : "off") +
-            " · SportMonks " + (j.sportmonks && j.sportmonks.keyConfigured ? "key set" : "no key");
+            " · FotMob " + (j.fotmob && j.fotmob.enabled ? "on" : "off");
         } },
       { id: "tsdb_tv", label: "TheSportsDB · TV day (api/tv)", needs: ["date"],
         url: function (p) { return "/api/tv?date=" + p.date; },
@@ -139,13 +138,6 @@
           return tv + " channels · event " + (d.matchedEventId || "—") +
             " · resolved " + (d.resolved || 0) + "/" + (d.totalPairs || 0) +
             (pt != null ? " · PT raw " + pt : " · no PT");
-        } },
-      { id: "smtv", label: "SportMonks (api/smtv)", needs: ["date"],
-        url: function (p) { return "/api/smtv?date=" + p.date; },
-        summary: function (j) {
-          if (!j) return "no response";
-          if (j.disabled) return "disabled (no SPORTMONKS_KEY)";
-          return (j.matches || []).length + " matches with stations";
         } }
     ];
 

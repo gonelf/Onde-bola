@@ -3,10 +3,9 @@
  *
  * Fixtures are fetched client-side from TheSportsDB's free API. Real TV
  * channels come from TheSportsDB's TV feeds, plus FotMob (api/fmtv) and
- * SofaScore (api/sofatv) as unofficial broadcaster sources, and SportMonks
- * (api/smtv) when a paid key is set. Only real listings are ever shown — when
- * no source has data the match shows "No TV listing yet", and when there are no
- * fixtures the page shows an empty state.
+ * SofaScore (api/sofatv) as unofficial broadcaster sources. Only real listings
+ * are ever shown — when no source has data the match shows "No TV listing yet",
+ * and when there are no fixtures the page shows an empty state.
  */
 
 (function () {
@@ -332,8 +331,8 @@
     };
   }
 
-  // Build fixtures out of the day-bulk broadcaster maps (FotMob / SportMonks).
-  // Used as a fallback when TheSportsDB's day feed returns nothing (e.g. its free
+  // Build fixtures out of the FotMob day-bulk broadcaster map. Used as a
+  // fallback when TheSportsDB's day feed returns nothing (e.g. its free
   // key is rate-limited): those feeds already carry every match's team names,
   // kickoff and channels, so we can still show the day's games — just without the
   // richer TheSportsDB extras (league name, badges, live scores). De-duplicated
@@ -465,18 +464,8 @@
       .catch(function () { return []; });
   }
 
-  // Day-bulk SportMonks broadcaster source (official paid API). One request
-  // returns every match's TV stations for the day; disabled server-side (empty)
-  // unless a SPORTMONKS_KEY is configured, so it's harmless when not set up.
-  function fetchSportMonksDay(day) {
-    return fetch("/api/smtv?date=" + day, { headers: { Accept: "application/json" } })
-      .then(function (r) { if (!r.ok) throw new Error("smtv " + r.status); return r.json(); })
-      .then(function (d) { return (d && d.matches) || []; })
-      .catch(function () { return []; });
-  }
-
-  // FotMob day-bulk broadcaster source (free, Portugal-first). Same shape as the
-  // SportMonks day map, so it merges through the exact same path.
+  // FotMob day-bulk broadcaster source (free, Portugal-first). One request per
+  // country returns every match's TV stations for the day, keyed by match.
   function fetchFotMobDay(day) {
     return fetch("/api/fmtv?date=" + day, { headers: { Accept: "application/json" } })
       .then(function (r) { if (!r.ok) throw new Error("fmtv " + r.status); return r.json(); })
@@ -595,12 +584,12 @@
     var feedReachable = true;
     requests[0] = requests[0].catch(function () { feedReachable = false; return []; });
 
-    return Promise.all([Promise.all(requests), fetchTv(day), fetchSportMonksDay(day), fetchFotMobDay(day)])
+    return Promise.all([Promise.all(requests), fetchTv(day), fetchFotMobDay(day)])
       .then(function (res) {
         var lists = res[0];
         var tv = res[1];
-        // Day-bulk broadcaster sources, merged through one path below.
-        var dayMaps = (res[2] || []).concat(res[3] || []);
+        // FotMob day-bulk broadcaster map, merged through one path below.
+        var dayMaps = res[2] || [];
         // Merge all sources and de-duplicate by event id.
         var seen = {};
         var fixtures = [];
@@ -613,9 +602,8 @@
         });
         attachTv(fixtures, tv);
 
-        // Merge the day-bulk broadcaster maps (FotMob, and SportMonks when its
-        // key is set). This gives every match its broadcasters up front, with no
-        // per-match call.
+        // Merge the FotMob day-bulk broadcaster map. This gives every match its
+        // broadcasters up front, with no per-match call.
         if (dayMaps.length) {
           fixtures.forEach(function (fx) {
             var h = normName(fx.home), a = normName(fx.away);
@@ -635,8 +623,8 @@
         });
 
         // Fallback: if TheSportsDB gave us no games (down or rate-limited), build
-        // the day's fixtures from the FotMob/SportMonks day maps, which already
-        // carry team names, kickoff and channels.
+        // the day's fixtures from the FotMob day map, which already carries team
+        // names, kickoff and channels.
         if (!fixtures.length && dayMaps.length) {
           fixtures = fixturesFromDayMaps(dayMaps);
           fixtures.forEach(function (fx) {

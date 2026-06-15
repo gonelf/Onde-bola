@@ -63,7 +63,6 @@ assets/data/broadcasters.js      Free-to-air channel classifier (green vs amber)
 api/tv.js                        Cached serverless proxy for TV listings
 api/sofatv.js                    Unofficial SofaScore TV proxy (on-demand fallback)
 api/fmtv.js                      Unofficial FotMob TV proxy (free day-bulk, Portugal-first)
-api/smtv.js                      SportMonks TV proxy (optional, paid; needs SPORTMONKS_KEY)
 api/geo.js                       Visitor country (Vercel edge header) for the default listings country
 api/health.js                    Read-only config/KV diagnostics for the admin page
 admin.html                       Connections debugger (live-tests every source)
@@ -105,18 +104,10 @@ for every visible match, so they appear on the cards without a click.
    listings keyed by matchId, each carrying the team names and channel, so one
    call per country yields a full day's broadcasters with no matchId mapping.
    The proxy queries a Portugal-first set of countries (`FOTMOB_COUNTRIES`,
-   default `PT,GB,ES,BR,US,FR,DE,IT,NL`), merges by match, and returns the same
-   shape as SportMonks so the client merges it identically. Like SofaScore it's
+   default `PT,GB,ES,BR,US,FR,DE,IT,NL`), merges by match, and returns a
+   per-match map the client merges into every fixture. Like SofaScore it's
    unofficial and best-effort; disable with `FOTMOB_DISABLED=1`. Append
    `&debug=1` to inspect what FotMob returned (per-country counts + a sample).
-5. **SportMonks** (official, paid) via `api/smtv.js` — *optional*, off unless a
-   key is set. SportMonks returns a whole day's fixtures with their TV stations
-   in **one call** (`GET /v3/football/fixtures/date/{date}?include=participants;
-   tvStations.tvStation;tvStations.country`), so the client fetches it once per
-   day and merges broadcasters into every match — no per-match call. Requires a
-   SportMonks plan whose subscription includes the `tvStations` entity. Enable
-   by setting `SPORTMONKS_KEY`; with no key the endpoint returns an empty map
-   and nothing changes.
 
 There is no curated/guessed fallback — if no source has a listing, the match
 shows *“No TV listing yet”*.
@@ -125,15 +116,15 @@ shows *“No TV listing yet”*.
 
 The day's **fixtures** normally come from TheSportsDB (`eventsday.php`). Its free
 key is rate-limited, so when that feed is unreachable or throttled and returns
-no games, the app falls back to building the fixture list from the FotMob (and
-SportMonks, when enabled) day-bulk feeds — they already carry every match's team
-names, kickoff and channels. The fallback view is intentionally lighter (no
-league names, badges or live scores), but it keeps the day's games visible
-instead of showing an empty state.
+no games, the app falls back to building the fixture list from the FotMob
+day-bulk feed — it already carries every match's team names, kickoff and
+channels. The fallback view is intentionally lighter (no league names, badges or
+live scores), but it keeps the day's games visible instead of showing an empty
+state.
 
 > Note: **API-Football** (api-sports.io) was evaluated but has **no
 > broadcaster/TV data** (fixtures, scores, odds, stats only), so it can't add
-> channel listings. SportMonks is the API that exposes `tvStations`.
+> channel listings.
 
 ## Caching (Vercel KV)
 
@@ -151,9 +142,7 @@ deployed — but to enable caching on Vercel:
    Verify on `/admin.html` (Health → `KV ✅ PONG`) or an `X-Cache: HIT` header.
 2. *(Optional)* set `THESPORTSDB_KEY` if you have a premium key — otherwise it
    defaults to the free `123` key.
-3. *(Optional)* set `SPORTMONKS_KEY` to enable the SportMonks broadcaster source
-   (`api/smtv.js`). Leave unset to keep it disabled.
-4. Redeploy. Responses include an `X-Cache: HIT|MISS` header so you can verify
+3. Redeploy. Responses include an `X-Cache: HIT|MISS` header so you can verify
    caching is working.
 
 > **Before launch — enable KV.** FotMob is fetched once per page load, one

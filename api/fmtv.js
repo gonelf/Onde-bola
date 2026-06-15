@@ -5,8 +5,8 @@
  * whole region's broadcast listings keyed by matchId, with each listing already
  * carrying the team names (program) and the channel (station). So one call per
  * country yields a full day's listings with no matchId mapping needed — we query
- * a Portugal-first set of countries, merge by match, and return the same shape
- * as /api/smtv so the client merges it identically.
+ * a Portugal-first set of countries, merge by match, and return a per-match map
+ * the client merges into every fixture.
  *
  * Unofficial (no documented auth, but still SofaScore-style ToS risk): every
  * failure degrades to an empty result and never breaks the page. Disable with

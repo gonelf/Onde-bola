@@ -56,6 +56,5 @@ module.exports = async (req, res) => {
       countries: (process.env.FOTMOB_COUNTRIES || "PT,GB,ES,BR,US,FR,DE,IT,NL")
         .split(",").map((c) => c.trim().toUpperCase()).filter(Boolean),
     },
-    sportmonks: { keyConfigured: !!process.env.SPORTMONKS_KEY },
   });
 };

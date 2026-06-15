@@ -1,0 +1,49 @@
+# External cron for /api/cron-highlights.
+#
+# Vercel's free (Hobby) plan only allows a *daily* cron, which is too coarse for
+# highlights that appear minutes after full time. GitHub Actions schedules are
+# free, so we use one to poke the endpoint every ~30 minutes instead.
+#
+# Setup (repo Settings -> Secrets and variables -> Actions):
+#   SITE_URL    = https://your-deployment.vercel.app   (no trailing slash)
+#   CRON_SECRET = the same value set as CRON_SECRET in your Vercel env vars
+#
+# You can also run it by hand from the Actions tab (workflow_dispatch).
+# Note: GitHub's scheduled runs can be delayed under load and are paused on
+# repos with no activity for 60 days — if you need rock-solid timing, point an
+# external scheduler (cron-job.org, EasyCron) at the same URL instead.
+
+name: highlights-cron
+
+on:
+  schedule:
+    - cron: "*/30 * * * *" # every 30 minutes (UTC)
+  workflow_dispatch:
+
+# Don't pile up overlapping runs if one is slow.
+concurrency:
+  group: highlights-cron
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger highlights sweep
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$SITE_URL" ]; then
+            echo "SITE_URL secret is not set — add it in repo settings."; exit 1
+          fi
+          echo "Calling ${SITE_URL}/api/cron-highlights ..."
+          code=$(curl -s -S -o /tmp/out.json -w "%{http_code}" \
+            --max-time 90 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${SITE_URL}/api/cron-highlights")
+          echo "HTTP ${code}"
+          cat /tmp/out.json
+          echo
+          # Fail the run on a non-2xx so problems surface in the Actions log.
+          case "$code" in 2*) exit 0 ;; *) exit 1 ;; esac

@@ -4,5 +4,8 @@
     { "source": "/og/:id", "destination": "/api/og?id=:id" },
     { "source": "/g", "destination": "/api/share" },
     { "source": "/og", "destination": "/api/og" }
-  ]
+  ],
+  "functions": {
+    "api/cron-highlights.js": { "maxDuration": 60 }
+  }
 }

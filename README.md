@@ -25,6 +25,17 @@ country — inspired by [ondebola.com](https://ondebola.com/).
 - **Click for details** — click (or keyboard-activate) any match to open a
   detail view with the score/status, full date, time and venue, and the
   complete free-vs-paid where-to-watch breakdown per country.
+- **Share any game** — every card (and the detail modal) has a share button.
+  It uses the native share sheet on mobile / modern desktop and falls back to
+  copying the link. The link is short — **`/g/<match-id>`** (e.g.
+  `/g/4667790`) — a server-rendered page that carries **that game's own social
+  preview**: a custom 1200×630 image generated on the fly (`/og/<match-id>`, via
+  `@vercel/og`) showing the two teams, crests, competition, score/kickoff and
+  date — so pasting it into WhatsApp, X/Twitter, Facebook, iMessage, Slack or
+  Discord unfurls a per-match card. The game's data is rebuilt **server-side
+  from the id alone** (`api/cardinfo`, FotMob + Vercel KV cache `card:<id>`), so
+  nothing is crammed into the URL. Opening the link drops real visitors straight
+  into the app with that match open (`/?match=fm:<id>&date=<YYYY-MM-DD>`).
 - **Date navigation** — jump to previous/next day or back to today.
 - **Live scores & status** — in-play matches show the current score, the
   minute (e.g. `67'`) or `HT`, and a pulsing live badge; finished games show
@@ -65,6 +76,9 @@ assets/styles.css                Styling
 assets/app.js                    Fetching, matching, rendering
 assets/data/broadcasters.js      Free-to-air channel classifier (green vs amber)
 api/fixtures.js                  Cached FotMob fixtures-by-date proxy (long-term/DB-backed)
+api/share.js                     Per-game share page (/g/<id>) — Open Graph card + deep link into the app
+api/og.js                        Per-game preview image (/og/<id>) generated on the fly (1200×630 PNG, @vercel/og)
+api/cardinfo.js                  Rebuilds a game's share-card data from its match id (FotMob + KV cache)
 api/tv.js                        Cached serverless proxy for TV listings
 api/sofatv.js                    Unofficial SofaScore TV proxy (on-demand fallback)
 api/fmtv.js                      Unofficial FotMob TV proxy (free day-bulk, Portugal-first)
@@ -75,7 +89,17 @@ assets/og-image.svg              Social share / Open Graph card
 robots.txt                       Crawl rules (allows the site, disallows admin.html + /api)
 sitemap.xml                      Sitemap (homepage only; admin.html excluded)
 llms.txt                         Site summary for LLM/AI crawlers
+vercel.json                      Rewrites the public /g/<id> and /og/<id> paths to the share/image functions
+package.json                     Declares the @vercel/og dependency (for the on-the-fly preview image)
 ```
+
+> **Share previews need the Node/Vercel runtime.** `/og` runs on Vercel's edge
+> runtime and `@vercel/og` is installed from `package.json` at deploy — so the
+> custom per-game images only render on a Vercel deployment (or `vercel dev`),
+> not on a plain static server. Each game's preview is also cached hard at the
+> CDN. Note FotMob's image CDN can 403 server-side crest fetches; when a crest
+> can't be loaded the card falls back to a team-initial monogram, so the image
+> always renders.
 
 The card shows the **primary country**'s channels first; the rest fold into the
 match-details modal. The primary country defaults to the visitor's country via

@@ -1,0 +1,9 @@
+# Dependencies (Vercel installs from package.json at build time)
+node_modules/
+
+# Vercel
+.vercel/
+
+# Logs / OS cruft
+*.log
+.DS_Store

@@ -1,0 +1,9 @@
+{
+  "name": "onde-bola",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hoje Há Bola — football on TV worldwide & where to watch it.",
+  "dependencies": {
+    "@vercel/og": "^0.6.8"
+  }
+}

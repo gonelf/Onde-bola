@@ -216,10 +216,21 @@ module.exports = async (req, res) => {
   if (isoDate) appParams.set("date", isoDate);
   const appUrl = "/" + (appParams.toString() ? "?" + appParams.toString() : "");
 
-  // Canonical: the pretty /g/<date>/<home>-vs-<away> URL. Old /g/<id> and
-  // ?home=&away= links still render, but point search engines here.
+  // League slug for the URL hierarchy. Derive it from the resolved fixture's
+  // competition first: that's the same value the card links and the league hub
+  // slugify, so the canonical always matches the URLs that point at it. Fall
+  // back to the card's competition, then the league segment from the URL.
+  const leagueComp = (resolvedFx && resolvedFx.competition) || comp || "";
+  const leagueSlug = leagueComp ? slugify(leagueComp) : get("league") || "";
+  const leagueUrl = leagueSlug ? `${origin}/g/${leagueSlug}` : "";
+
+  // Canonical: the pretty /g/<league>/<date>/<home>-vs-<away> URL (drops the
+  // league segment if the competition is unknown). Old /g/<id> and ?home=&away=
+  // links still render, but point search engines here.
   const shareUrl = isoDate
-    ? `${origin}/g/${isoDate}/${matchSlug(home, away)}`
+    ? (leagueSlug
+        ? `${origin}/g/${leagueSlug}/${isoDate}/${matchSlug(home, away)}`
+        : `${origin}/g/${isoDate}/${matchSlug(home, away)}`)
     : hasId
       ? `${origin}/g/${fmid}`
       : `${origin}/g?${new URLSearchParams(
@@ -260,7 +271,12 @@ module.exports = async (req, res) => {
     image: imageUrl,
   };
   if (kickoff) sportsEvent.startDate = kickoff;
-  if (comp) sportsEvent.superEvent = { "@type": "SportsEvent", name: comp };
+  if (comp) {
+    sportsEvent.superEvent = Object.assign(
+      { "@type": "SportsEvent", name: comp },
+      leagueUrl ? { url: leagueUrl } : {}
+    );
+  }
   if (details && details.venue) {
     sportsEvent.location = { "@type": "Place", name: details.venue };
   }
@@ -268,7 +284,18 @@ module.exports = async (req, res) => {
     : /cancel/i.test(status) ? "https://schema.org/EventCancelled"
     : "https://schema.org/EventScheduled";
 
-  const graph = [sportsEvent];
+  // Breadcrumb: Home › League › Match — reinforces the URL hierarchy.
+  const crumbs = [{ name: "Hoje Há Bola", item: origin + "/" }];
+  if (comp && leagueUrl) crumbs.push({ name: comp, item: leagueUrl });
+  crumbs.push({ name: vs, item: shareUrl });
+  const breadcrumb = {
+    "@type": "BreadcrumbList",
+    itemListElement: crumbs.map((c, i) => ({
+      "@type": "ListItem", position: i + 1, name: c.name, item: c.item,
+    })),
+  };
+
+  const graph = [sportsEvent, breadcrumb];
   broadcasts.slice(0, 4).forEach((grp) => {
     grp.channels.slice(0, 4).forEach((ch) => {
       graph.push({
@@ -390,11 +417,18 @@ module.exports = async (req, res) => {
     font-size:.7rem;font-weight:800;color:#fff}
   .form-w{background:#16a34a}.form-d{background:#6b7280}.form-l{background:#dc2626}
   footer{color:var(--muted);font-size:.85rem;text-align:center;margin-top:24px}
+  .crumbs{font-size:.85rem;color:var(--muted);margin-bottom:8px}
+  .crumbs a{color:var(--muted)}
+  .crumbs span{color:var(--txt)}
 </style>
 </head>
 <body>
   <div class="wrap">
     <header class="site"><span>⚽</span> <a href="/">Hoje Há Bola</a></header>
+
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a href="/">Home</a>${comp && leagueUrl ? ` › <a href="${esc(leagueUrl)}">${esc(comp)}</a>` : ""} › <span>${esc(vs)}</span>
+    </nav>
 
     <h1>${esc(heading)}</h1>
     <div class="teams">

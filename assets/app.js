@@ -376,13 +376,16 @@
   function teamSlug(name) { return normName(name).replace(/ /g, "-"); }
 
   // Build the public share / detail URL for a match: a descriptive, crawlable
-  // /g/<date>/<home>-vs-<away> page. The server resolves it back to the day's
-  // fixture to render the Open Graph card, broadcasts and match facts, then
-  // deep-links real visitors into the app with the match open.
+  // /g/<league>/<date>/<home>-vs-<away> page that nests under the league hub
+  // (/g/<league>). The server resolves it back to the day's fixture to render
+  // the Open Graph card, broadcasts and match facts, then deep-links real
+  // visitors into the app with the match open.
   function shareLink(fx) {
     var d = new Date(fx.kickoff);
     var date = isNaN(d.getTime()) ? lisbonYmd(new Date()) : lisbonYmd(d);
-    return location.origin + "/g/" + date + "/" + teamSlug(fx.home) + "-vs-" + teamSlug(fx.away);
+    var league = teamSlug(fx.competition || "football");
+    return location.origin + "/g/" + league + "/" + date + "/" +
+      teamSlug(fx.home) + "-vs-" + teamSlug(fx.away);
   }
 
   function legacyCopy(text) {

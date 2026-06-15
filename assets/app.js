@@ -48,6 +48,7 @@
     rememberFilters: document.getElementById("remember-filters"),
     detailOverlay: document.getElementById("detail-overlay"),
     detailClose: document.getElementById("detail-close"),
+    detailShare: document.getElementById("detail-share"),
     detailBody: document.getElementById("detail-body"),
     countrySelect: document.getElementById("country-select"),
     adPrefs: document.getElementById("ad-prefs"),
@@ -179,6 +180,7 @@
       footerData: "Today's football from around the world and where to watch it — live on TV and streaming, wherever you are.",
       footerCopy: "© {year} Hoje Há Bola · All rights reserved.",
       close: "Close",
+      shareGame: "Share game", copied: "Link copied!",
       noListing: "No TV listing yet", clickDetails: "Click for details ›",
       listings: "📡 Listings", moreOne: "more country in details ›",
       moreMany: "more countries in details ›",
@@ -214,6 +216,7 @@
       footerData: "O futebol de todo o mundo de hoje e onde o ver — em direto na TV e em streaming, estejas onde estiveres.",
       footerCopy: "© {year} Hoje Há Bola · Todos os direitos reservados.",
       close: "Fechar",
+      shareGame: "Partilhar jogo", copied: "Link copiado!",
       noListing: "Sem emissão conhecida", clickDetails: "Clica para detalhes ›",
       listings: "📡 Emissões", moreOne: "mais país nos detalhes ›",
       moreMany: "mais países nos detalhes ›",
@@ -266,6 +269,8 @@
     set("#footer-site-title", "textContent", t("footerSite"));
     set("#footer-copy", "textContent", t("footerCopy").replace("{year}", new Date().getFullYear()));
     set("#detail-close", "ariaLabel", t("close"));
+    set("#detail-share", "ariaLabel", t("shareGame"));
+    set("#detail-share", "title", t("shareGame"));
   }
 
   // ---- Helpers ------------------------------------------------------------
@@ -333,6 +338,108 @@
     return String(s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
     });
+  }
+
+  function fixtureById(id) {
+    return state.fixtures.filter(function (f) { return String(f.id) === String(id); })[0];
+  }
+
+  function parseYmd(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || "");
+    if (!m) return null;
+    var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // ---- Share --------------------------------------------------------------
+
+  // Three-dot "share" glyph (inherits currentColor).
+  var SHARE_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" ' +
+    'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
+    'stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/>' +
+    '<circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/>' +
+    '<line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>';
+
+  // Build the public share link for a match: a server-rendered /g page that
+  // carries this game's Open Graph card (custom preview image via /og) and then
+  // deep-links real visitors into the app with the match open. Display fields
+  // are forwarded so the preview image can be drawn without any data fetch.
+  function shareLink(fx) {
+    var st = statusOf(fx);
+    var kickoff = new Date(fx.kickoff);
+    var score = (hasScore(fx) && st.state !== "upcoming")
+      ? (fx.homeScore + " - " + fx.awayScore) : "";
+    var status = st.state === "finished" ? t("ft")
+      : st.state === "live" ? (st.label || t("live"))
+      : kickoff.toLocaleTimeString(locale() || [], { hour: "2-digit", minute: "2-digit" });
+    var dLabel = kickoff.toLocaleDateString(locale() || [], {
+      weekday: "short", day: "numeric", month: "short", year: "numeric",
+    });
+    var comp = fx.competition + (fx.group ? " " + t("group") + " " + fx.group : "");
+
+    var p = new URLSearchParams();
+    p.set("id", fx.id);
+    p.set("date", ymd(kickoff));
+    p.set("home", fx.home);
+    p.set("away", fx.away);
+    if (fx.homeBadge) p.set("hb", fx.homeBadge);
+    if (fx.awayBadge) p.set("ab", fx.awayBadge);
+    if (comp) p.set("comp", comp);
+    if (fx.leagueBadgeUrl) p.set("cb", fx.leagueBadgeUrl);
+    if (score) p.set("score", score);
+    if (status) p.set("status", status);
+    if (dLabel) p.set("d", dLabel);
+    return location.origin + "/g?" + p.toString();
+  }
+
+  function legacyCopy(text) {
+    try {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  // Briefly flag a share button as "copied".
+  function flashCopied(btn) {
+    if (!btn) return;
+    btn.classList.add("copied");
+    btn.setAttribute("title", t("copied"));
+    btn.setAttribute("aria-label", t("copied"));
+    clearTimeout(btn._copyT);
+    btn._copyT = setTimeout(function () {
+      btn.classList.remove("copied");
+      btn.setAttribute("title", t("shareGame"));
+      btn.setAttribute("aria-label", t("shareGame"));
+    }, 1800);
+  }
+
+  // Native share sheet where available (mobile, modern desktop), otherwise copy
+  // the link to the clipboard and confirm on the button.
+  function shareMatch(fx, btn) {
+    if (!fx) return;
+    var url = shareLink(fx);
+    var title = fx.home + " vs " + fx.away;
+    var text = title + (fx.competition ? " — " + fx.competition : "");
+    if (navigator.share) {
+      navigator.share({ title: title, text: text, url: url })["catch"](function () {});
+      return;
+    }
+    var confirm = function () { flashCopied(btn); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(confirm, function () {
+        if (legacyCopy(url)) confirm();
+      });
+    } else if (legacyCopy(url)) {
+      confirm();
+    }
   }
 
   // ---- Data fetching ------------------------------------------------------
@@ -646,7 +753,27 @@
         render();
         updateLeaguePanel();
         prefetchListings(token); // fill in real channels without a click
+        maybeOpenShared(); // a ?match= deep link from a shared card
       });
+  }
+
+  // Parse a share deep link (/?match=<id>&date=<YYYY-MM-DD>): jump to that day
+  // and remember the match to open once its fixtures have loaded.
+  function readDeepLink() {
+    try {
+      var params = new URLSearchParams(location.search);
+      var d = parseYmd(params.get("date"));
+      if (d) state.date = d;
+      var m = params.get("match");
+      if (m) state.pendingMatch = m;
+    } catch (e) { /* malformed query — ignore */ }
+  }
+
+  function maybeOpenShared() {
+    if (!state.pendingMatch) return;
+    var id = state.pendingMatch;
+    state.pendingMatch = null;
+    if (fixtureById(id)) openDetails(id);
   }
 
   function showEmpty(message) {
@@ -819,6 +946,9 @@
     var cls = "match" + (st.state === "live" ? " is-live" : "");
     return '<article class="' + cls + '" data-id="' + escapeHtml(fx.id) +
         '" tabindex="0" role="button" aria-label="Match details">' +
+      '<button class="share-btn" type="button" data-share aria-label="' +
+        escapeHtml(t("shareGame")) + '" title="' + escapeHtml(t("shareGame")) + '">' +
+        SHARE_ICON + "</button>" +
       '<div class="match-time">' + timeCellHtml(fx) + "</div>" +
       '<div class="teams">' +
         '<div class="team">' + badgeHtml(fx.homeBadge, fx.home) +
@@ -1371,17 +1501,31 @@
       saveFilters();
     });
 
-    // Open match details on click or keyboard activation.
+    // Open match details on click or keyboard activation. A click on the card's
+    // share button shares instead of opening the modal.
     el.games.addEventListener("click", function (e) {
+      var shareBtn = e.target.closest(".share-btn");
+      if (shareBtn) {
+        e.stopPropagation();
+        var sc = shareBtn.closest(".match[data-id]");
+        if (sc) shareMatch(fixtureById(sc.getAttribute("data-id")), shareBtn);
+        return;
+      }
       var card = e.target.closest(".match[data-id]");
       if (card) openDetails(card.getAttribute("data-id"));
     });
     el.games.addEventListener("keydown", function (e) {
       if (e.key !== "Enter" && e.key !== " ") return;
+      if (e.target.closest(".share-btn")) return; // let the share button act itself
       var card = e.target.closest(".match[data-id]");
       if (card) { e.preventDefault(); openDetails(card.getAttribute("data-id")); }
     });
     el.detailClose.addEventListener("click", closeDetails);
+    if (el.detailShare) {
+      el.detailShare.addEventListener("click", function () {
+        if (state.detailId) shareMatch(fixtureById(state.detailId), el.detailShare);
+      });
+    }
     el.detailOverlay.addEventListener("click", function (e) {
       if (e.target === el.detailOverlay) closeDetails();
     });
@@ -1399,6 +1543,7 @@
     loadFilters();
     initCountry();
     applyStaticText();
+    readDeepLink(); // open a shared match (and its day) if the URL asks for one
     renderDateLabel();
     bindEvents();
     initConsent();

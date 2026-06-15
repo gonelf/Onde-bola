@@ -175,7 +175,9 @@
       leagues: "Leagues", showLeagues: "Show leagues", reset: "Reset filters",
       remember: "Remember this next time", yourCountry: "📍 Your country",
       connDebug: "Connections debug →", adPrefs: "Ad preferences",
-      footerData: 'Fixtures via <a href="https://www.fotmob.com" target="_blank" rel="noopener">FotMob</a> and real per-match TV listings via <a href="https://www.thesportsdb.com" target="_blank" rel="noopener">TheSportsDB</a>, cached to avoid repeat calls. Channel data is crowd-sourced, so coverage is partial — matches without a listing show <em>“No TV listing yet”</em> rather than a guess.',
+      footerSite: "Site",
+      footerData: "Today's football from around the world and where to watch it — live on TV and streaming, wherever you are.",
+      footerCopy: "© {year} Hoje Há Bola · All rights reserved.",
       close: "Close",
       noListing: "No TV listing yet", clickDetails: "Click for details ›",
       listings: "📡 Listings", moreOne: "more country in details ›",
@@ -201,7 +203,9 @@
       leagues: "Ligas", showLeagues: "Mostrar ligas", reset: "Repor filtros",
       remember: "Lembrar para a próxima", yourCountry: "📍 O teu país",
       connDebug: "Diagnóstico de ligações →", adPrefs: "Preferências de anúncios",
-      footerData: 'Jogos por <a href="https://www.fotmob.com" target="_blank" rel="noopener">FotMob</a> e emissões de TV por <a href="https://www.thesportsdb.com" target="_blank" rel="noopener">TheSportsDB</a>, em cache para evitar chamadas repetidas. Os dados de canais são colaborativos, por isso a cobertura é parcial — jogos sem emissão mostram <em>“Sem emissão conhecida”</em> em vez de adivinhar.',
+      footerSite: "Site",
+      footerData: "O futebol de todo o mundo de hoje e onde o ver — em direto na TV e em streaming, estejas onde estiveres.",
+      footerCopy: "© {year} Hoje Há Bola · Todos os direitos reservados.",
       close: "Fechar",
       noListing: "Sem emissão conhecida", clickDetails: "Clica para detalhes ›",
       listings: "📡 Emissões", moreOne: "mais país nos detalhes ›",
@@ -244,7 +248,9 @@
     set(".country-label", "textContent", t("yourCountry"));
     set("#conn-debug", "textContent", t("connDebug"));
     set("#ad-prefs", "textContent", t("adPrefs"));
-    set("#footer-data", "innerHTML", t("footerData"));
+    set("#footer-data", "textContent", t("footerData"));
+    set("#footer-site-title", "textContent", t("footerSite"));
+    set("#footer-copy", "textContent", t("footerCopy").replace("{year}", new Date().getFullYear()));
     set("#detail-close", "ariaLabel", t("close"));
   }
 

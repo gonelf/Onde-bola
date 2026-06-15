@@ -1,0 +1,9 @@
+# https://hojehabola.com/ — football on TV worldwide
+# Crawlers are welcome. The admin/debug page and the API proxies are not content.
+
+User-agent: *
+Allow: /
+Disallow: /admin.html
+Disallow: /api/
+
+Sitemap: https://hojehabola.com/sitemap.xml

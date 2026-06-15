@@ -72,18 +72,30 @@
   </div>
 
   <footer class="site-footer">
-    <div class="container">
-      <p id="footer-data">
-        Fixtures via <a href="https://www.fotmob.com" target="_blank" rel="noopener">FotMob</a> and real
-        per-match TV listings via <a href="https://www.thesportsdb.com" target="_blank" rel="noopener">TheSportsDB</a>,
-        cached to avoid repeat calls. Channel data is crowd-sourced, so coverage is partial —
-        matches without a listing show <em>“No TV listing yet”</em> rather than a guess.
-      </p>
-      <p>
-        <a href="/admin.html" id="conn-debug">Connections debug →</a>
-        <span aria-hidden="true"> · </span>
-        <a href="#" id="ad-prefs">Ad preferences</a>
-      </p>
+    <div class="container footer-grid">
+      <div class="footer-about">
+        <a class="footer-brand" href="./">
+          <span class="brand-ball">⚽</span>
+          <span class="brand-name">Hoje Há <span>Bola</span></span>
+        </a>
+        <p id="footer-data" class="footer-data">
+          Today's football from around the world and where to watch it — live on TV
+          and streaming, wherever you are.
+        </p>
+      </div>
+
+      <nav class="footer-col" aria-labelledby="footer-site-title">
+        <h2 id="footer-site-title" class="footer-heading">Site</h2>
+        <ul class="footer-links">
+          <li><a href="#" id="ad-prefs">Ad preferences</a></li>
+        </ul>
+      </nav>
+    </div>
+
+    <div class="footer-bottom">
+      <div class="container">
+        <p id="footer-copy">© 2026 Hoje Há Bola · All rights reserved.</p>
+      </div>
     </div>
   </footer>
 

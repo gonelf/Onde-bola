@@ -27,15 +27,17 @@ country — inspired by [ondebola.com](https://ondebola.com/).
   complete free-vs-paid where-to-watch breakdown per country.
 - **Share any game** — every card (and the detail modal) has a share button.
   It uses the native share sheet on mobile / modern desktop and falls back to
-  copying the link. The link is short — **`/g/<match-id>`** (e.g.
-  `/g/4667790`) — a server-rendered page that carries **that game's own social
-  preview**: a custom 1200×630 image generated on the fly (`/og/<match-id>`, via
+  copying the link. The link is a clean, SEO-friendly slug —
+  **`/g/<date>/<home>-vs-<away>`** (e.g. `/g/2026-06-15/belgium-vs-egypt`) — a
+  server-rendered page that carries **that game's own social preview**: a custom
+  1200×630 image generated on the fly (`/og/<date>/<home>-vs-<away>`, via
   `@vercel/og`) showing the two teams, crests, competition, score/kickoff and
   date — so pasting it into WhatsApp, X/Twitter, Facebook, iMessage, Slack or
   Discord unfurls a per-match card. The game's data is rebuilt **server-side
-  from the id alone** (`api/cardinfo`, FotMob + Vercel KV cache `card:<id>`), so
-  nothing is crammed into the URL. Opening the link drops real visitors straight
-  into the app with that match open (`/?match=fm:<id>&date=<YYYY-MM-DD>`).
+  from the slug** (`api/cardinfo` resolves the day's fixtures, cached in Vercel
+  KV), so nothing is crammed into the URL. Opening the link drops real visitors
+  straight into the app with that match open (`/?match=fm:<id>&date=<date>`). A
+  legacy `/g/<fotmob-id>` form is still honoured for links shared earlier.
 - **Date navigation** — jump to previous/next day or back to today.
 - **Live scores & status** — in-play matches show the current score, the
   minute (e.g. `67'`) or `HT`, and a pulsing live badge; finished games show
@@ -76,9 +78,9 @@ assets/styles.css                Styling
 assets/app.js                    Fetching, matching, rendering
 assets/data/broadcasters.js      Free-to-air channel classifier (green vs amber)
 api/fixtures.js                  Cached FotMob fixtures-by-date proxy (long-term/DB-backed)
-api/share.js                     Per-game share page (/g/<id>) — Open Graph card + deep link into the app
-api/og.js                        Per-game preview image (/og/<id>) generated on the fly (1200×630 PNG, @vercel/og)
-api/cardinfo.js                  Rebuilds a game's share-card data from its match id (FotMob + KV cache)
+api/share.js                     Per-game share page (/g/<date>/<slug>) — Open Graph card + deep link into the app
+api/og.js                        Per-game preview image (/og/<date>/<slug>) generated on the fly (1200×630 PNG, @vercel/og)
+api/cardinfo.js                  Rebuilds a game's share-card data from its date+team slug (fixtures + KV cache)
 api/tv.js                        Cached serverless proxy for TV listings
 api/sofatv.js                    Unofficial SofaScore TV proxy (on-demand fallback)
 api/fmtv.js                      Unofficial FotMob TV proxy (free day-bulk, Portugal-first)
@@ -89,7 +91,7 @@ assets/og-image.svg              Social share / Open Graph card
 robots.txt                       Crawl rules (allows the site, disallows admin.html + /api)
 sitemap.xml                      Sitemap (homepage only; admin.html excluded)
 llms.txt                         Site summary for LLM/AI crawlers
-vercel.json                      Rewrites the public /g/<id> and /og/<id> paths to the share/image functions
+vercel.json                      Rewrites the public /g/<date>/<slug> and /og/<date>/<slug> paths to the share/image functions
 package.json                     Declares the @vercel/og dependency (for the on-the-fly preview image)
 ```
 

@@ -1,5 +1,7 @@
 {
   "rewrites": [
+    { "source": "/g/:date/:slug", "destination": "/api/share?date=:date&slug=:slug" },
+    { "source": "/og/:date/:slug", "destination": "/api/og?date=:date&slug=:slug" },
     { "source": "/g/:id", "destination": "/api/share?id=:id" },
     { "source": "/og/:id", "destination": "/api/og?id=:id" },
     { "source": "/g", "destination": "/api/share" },

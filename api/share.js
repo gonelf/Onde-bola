@@ -1,17 +1,16 @@
 /*
- * /api/share  (public path: /g/<id>) — per-game share landing page.
+ * /api/share  (public path: /g/<date>/<home>-vs-<away>) — share landing page.
  *
  * Social crawlers (WhatsApp, Twitter/X, Facebook, iMessage, Slack, Discord)
  * don't run JavaScript, so they can't see the app's client-rendered match view.
  * This tiny server-rendered page gives each game its own Open Graph / Twitter
- * card — title, description and a custom preview image (/og/<id>) — then
- * redirects real visitors into the app with the match open
- * (`/?match=fm:<id>&date=<YYYY-MM-DD>`).
+ * card — title, description and a custom preview image (/og/...) — then
+ * redirects real visitors into the app with the match open.
  *
- * The game's display (teams, competition, score, date) is rebuilt server-side
- * from the match id alone via api/cardinfo (FotMob + KV cache), so the shared
- * link is short: /g/4667790. A legacy query form (?home=&away=&…) is still
- * honoured for back-compat and for the rare match that has no FotMob id.
+ * The link is a human, SEO-friendly slug — /g/2026-06-15/belgium-vs-egypt — and
+ * the game's display is rebuilt server-side from it via api/cardinfo (the day's
+ * fixtures + KV cache). Legacy forms (?id=<fotmob-id>, or the old ?home=&away=…
+ * query) are still honoured for back-compat.
  */
 
 const { getCard } = require("./cardinfo.js");
@@ -30,13 +29,19 @@ module.exports = async (req, res) => {
   const host = req.headers["x-forwarded-host"] || req.headers.host || "hojehabola.com";
   const origin = `${proto}://${host}`;
 
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(get("date")) ? get("date") : "";
+  const slug = get("slug");
   const fmid = get("id").replace(/^fm:/, "").trim();
+  const hasSlug = !!(date && slug);
   const hasId = /^\d+$/.test(fmid);
 
-  // Prefer rebuilding from the id; fall back to any display fields in the query.
+  // Rebuild the card from the slug (preferred) or the legacy id.
   let card = null;
-  if (hasId) {
-    const r = await getCard(fmid).catch(() => null);
+  if (hasSlug) {
+    const r = await getCard({ origin, date, slug }).catch(() => null);
+    if (r && r.ok) card = r.card;
+  } else if (hasId) {
+    const r = await getCard({ origin, id: fmid }).catch(() => null);
     if (r && r.ok) card = r.card;
   }
 
@@ -46,12 +51,18 @@ module.exports = async (req, res) => {
   const score = (card && card.score) || get("score");
   const status = (card && card.status) || get("status");
   const dLabel = (card && card.date) || get("d");
-  const isoDate = (card && card.isoDate) || (/^\d{4}-\d{2}-\d{2}$/.test(get("date")) ? get("date") : "");
+  // Deep-link day: the slug's own date, else whatever the card/legacy gives.
+  const isoDate = date || (card && card.isoDate) || (/^\d{4}-\d{2}-\d{2}$/.test(get("date")) ? get("date") : "");
+  const openId = (card && card.fmid) || (hasId ? fmid : "");
 
-  // Preview image: short /og/<id> when we have one, else legacy query form.
-  let imageUrl;
-  if (hasId) {
+  // Preview image + canonical share URL.
+  let imageUrl, shareUrl;
+  if (hasSlug) {
+    imageUrl = `${origin}/og/${date}/${slug}`;
+    shareUrl = `${origin}/g/${date}/${slug}`;
+  } else if (hasId) {
     imageUrl = `${origin}/og/${fmid}`;
+    shareUrl = `${origin}/g/${fmid}`;
   } else {
     const p = new URLSearchParams();
     ["home", "away", "hb", "ab", "comp", "cb", "score", "status"].forEach((k) => {
@@ -59,18 +70,17 @@ module.exports = async (req, res) => {
     });
     if (dLabel) p.set("date", dLabel);
     imageUrl = `${origin}/og?${p.toString()}`;
+    shareUrl = `${origin}/g?${new URLSearchParams(
+      Object.keys(q).reduce((o, k) => ((o[k] = get(k)), o), {})
+    ).toString()}`;
   }
 
   // Where a real visitor lands: the app, with this match open on its day.
   const appParams = new URLSearchParams();
-  if (hasId) appParams.set("match", "fm:" + fmid);
-  else if (get("id")) appParams.set("match", get("id"));
+  if (openId) appParams.set("match", "fm:" + openId);
+  else if (!hasSlug && get("id")) appParams.set("match", get("id"));
   if (isoDate) appParams.set("date", isoDate);
   const appUrl = "/" + (appParams.toString() ? "?" + appParams.toString() : "");
-
-  const shareUrl = hasId ? `${origin}/g/${fmid}` : `${origin}/g?${new URLSearchParams(
-    Object.keys(q).reduce((o, k) => ((o[k] = get(k)), o), {})
-  ).toString()}`;
 
   const vs = `${home} vs ${away}`;
   const headline = vs + (comp ? " — " + comp : "");

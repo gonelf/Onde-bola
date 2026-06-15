@@ -146,14 +146,22 @@ export default async function handler(req) {
   const searchParams = url.searchParams;
   const g = (k) => searchParams.get(k) || "";
 
-  // Short form: /og/<id> (rewritten to ?id=<id>). Rebuild the game's display
-  // from the match id via /api/cardinfo (FotMob + KV cache); fall back to any
-  // display fields passed directly in the query (legacy/no-id case).
+  // Short forms: /og/<date>/<slug> or legacy /og/<id> (rewritten to query
+  // params). Rebuild the game's display via /api/cardinfo; fall back to any
+  // display fields passed directly in the query.
+  const date = g("date");
+  const slug = g("slug");
   const fmid = g("id").replace(/^fm:/, "").trim();
+  let cardQuery = "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date) && slug) {
+    cardQuery = `date=${encodeURIComponent(date)}&slug=${encodeURIComponent(slug)}`;
+  } else if (/^\d+$/.test(fmid)) {
+    cardQuery = `id=${fmid}`;
+  }
   let card = null;
-  if (/^\d+$/.test(fmid)) {
+  if (cardQuery) {
     try {
-      const r = await fetch(`${url.origin}/api/cardinfo?id=${fmid}`, {
+      const r = await fetch(`${url.origin}/api/cardinfo?${cardQuery}`, {
         headers: { Accept: "application/json" },
       });
       if (r.ok) {
@@ -169,7 +177,7 @@ export default async function handler(req) {
   const comp = clamp(f("comp"), 42);
   const score = clamp(f("score"), 9);
   const status = clamp(f("status"), 10);
-  const date = clamp((card && card.date) || g("date"), 40);
+  const dateLabel = clamp((card && card.date) || g("date"), 40);
 
   const [homeBadge, awayBadge, compBadge] = await Promise.all([
     toDataUri((card && card.homeBadge) || g("hb")),
@@ -311,8 +319,8 @@ export default async function handler(req) {
             { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between" } },
             [
               h("div", { style: { display: "flex", fontSize: 30, fontWeight: 700, color: COLOR.accent } }, "Football on TV · where to watch"),
-              date
-                ? h("div", { style: { display: "flex", fontSize: 28, color: COLOR.muted } }, date)
+              dateLabel
+                ? h("div", { style: { display: "flex", fontSize: 28, color: COLOR.muted } }, dateLabel)
                 : h("div", { style: { display: "flex" } }, ""),
             ]
           ),

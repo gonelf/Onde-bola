@@ -360,16 +360,32 @@
     '<circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/>' +
     '<line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>';
 
+  // Team name -> URL slug. MUST match slugify() in api/cardinfo.js so a shared
+  // /g/<date>/<slug> resolves back to this match server-side.
+  function slugify(s) {
+    return String(s == null ? "" : s)
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/&/g, " and ")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
   // Build the public share link for a match: a server-rendered /g page that
   // carries this game's Open Graph card (custom preview image via /og) and then
   // deep-links real visitors into the app with the match open.
   //
-  // When the match has a FotMob id the link is short — /g/<id> — and the share
-  // page rebuilds every display field server-side from that id (api/cardinfo).
-  // The rare match without an id falls back to carrying its fields in the query.
+  // The link is a human, SEO-friendly slug — /g/<date>/<home>-vs-<away> — and
+  // the share page rebuilds every display field server-side from it (the day's
+  // fixtures, via api/cardinfo). A match missing team names falls back to
+  // carrying its fields in the query.
   function shareLink(fx) {
-    if (fx.fmid && /^\d+$/.test(fx.fmid)) {
-      return location.origin + "/g/" + fx.fmid;
+    // The match belongs to the day currently being viewed (the day whose feed
+    // it came from), so key the slug on that date for a reliable lookup.
+    var date = ymd(state.date);
+    var home = slugify(fx.home), away = slugify(fx.away);
+    if (date && home && away) {
+      return location.origin + "/g/" + date + "/" + home + "-vs-" + away;
     }
 
     var st = statusOf(fx);

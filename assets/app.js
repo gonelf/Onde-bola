@@ -51,6 +51,8 @@
     detailBody: document.getElementById("detail-body"),
     countrySelect: document.getElementById("country-select"),
     adPrefs: document.getElementById("ad-prefs"),
+    adTop: document.getElementById("ad-top"),
+    adBottom: document.getElementById("ad-bottom"),
   };
 
   // ---- Display ads + consent ----------------------------------------------
@@ -62,23 +64,47 @@
     try { return localStorage.getItem(STORAGE_CONSENT); } catch (e) { return null; }
   }
   function adsAllowed() { return consentStatus() === "granted"; }
-  function adsConfigured() { return !!(ADS.client && ADS.slot); }
-  // Whether to emit ad slots into the feed (real once configured, otherwise a
-  // labelled placeholder) — only after the visitor has accepted.
-  function adsEnabled() { return adsAllowed() && (adsConfigured() || ADS.showPlaceholder); }
+  function hasPublisher() { return !!ADS.client; }
+  function slotConfigured(slot) { return !!(ADS.client && slot); }
+  // Whether to emit an ad unit for a slot (a real banner once its slot id is
+  // set, otherwise a labelled placeholder) — only after the visitor accepts.
+  function slotEnabled(slot) {
+    return adsAllowed() && (slotConfigured(slot) || ADS.showPlaceholder);
+  }
+  // Whether to emit in-feed ad slots between match cards.
+  function adsEnabled() { return slotEnabled(ADS.slot); }
 
-  function adSlotHtml() {
-    if (adsConfigured()) {
-      return '<div class="ad-slot" aria-label="Advertisement">' +
-        '<span class="ad-label">Publicidade</span>' +
+  // Build one ad unit. `extraClass` lets banners differ visually from in-feed
+  // slots; a configured slot renders a real AdSense unit, otherwise a labelled
+  // placeholder so the placement stays visible during setup.
+  function adSlotHtml(slot, extraClass) {
+    var cls = "ad-slot" + (extraClass ? " " + extraClass : "");
+    var label = '<span class="ad-label">Publicidade</span>';
+    if (slotConfigured(slot)) {
+      return '<div class="' + cls + '" aria-label="Advertisement">' + label +
         '<ins class="adsbygoogle" style="display:block" data-ad-client="' +
-          escapeHtml(ADS.client) + '" data-ad-slot="' + escapeHtml(ADS.slot) +
+          escapeHtml(ADS.client) + '" data-ad-slot="' + escapeHtml(slot) +
           '" data-ad-format="auto" data-full-width-responsive="true"' +
           (ADS.test ? ' data-adtest="on"' : "") + "></ins></div>";
     }
-    return '<div class="ad-slot ad-placeholder" aria-label="Advertisement">' +
-      '<span class="ad-label">Publicidade</span>' +
+    return '<div class="' + cls + ' ad-placeholder" aria-label="Advertisement">' + label +
       '<span class="ad-ph-text">Ad space — set IDs in assets/data/ads.js</span></div>';
+  }
+
+  // Fill (or clear) the fixed top/bottom banner containers based on consent.
+  function renderBanners() {
+    fillBanner(el.adTop, ADS.topSlot);
+    fillBanner(el.adBottom, ADS.bottomSlot);
+  }
+  function fillBanner(node, slot) {
+    if (!node) return;
+    if (slotEnabled(slot)) {
+      node.innerHTML = adSlotHtml(slot, "ad-banner-unit");
+      node.hidden = false;
+    } else {
+      node.innerHTML = "";
+      node.hidden = true;
+    }
   }
 
   function loadAdSenseScript() {
@@ -92,11 +118,17 @@
     document.head.appendChild(s);
   }
 
+  function anySlotConfigured() {
+    return slotConfigured(ADS.topSlot) || slotConfigured(ADS.slot) ||
+      slotConfigured(ADS.bottomSlot);
+  }
+
   function mountAds() {
-    if (!adsAllowed() || !adsConfigured()) return;
+    if (!adsAllowed() || !hasPublisher() || !anySlotConfigured()) return;
     loadAdSenseScript();
     try {
-      var slots = el.games.querySelectorAll("ins.adsbygoogle:not([data-ad-status])");
+      // Activate every unmounted unit on the page (feed slots + banners).
+      var slots = document.querySelectorAll("ins.adsbygoogle:not([data-ad-status])");
       for (var i = 0; i < slots.length; i++) {
         (window.adsbygoogle = window.adsbygoogle || []).push({});
       }
@@ -124,8 +156,9 @@
     try { localStorage.setItem(STORAGE_CONSENT, v); } catch (e) {}
     var b = document.getElementById("consent-banner");
     if (b && b.parentNode) b.parentNode.removeChild(b);
-    if (v === "granted") { render(); mountAds(); }
-    else { render(); } // remove any slots that were showing
+    render();          // add/remove in-feed slots
+    renderBanners();   // add/remove top & bottom banners
+    if (v === "granted") mountAds();
   }
 
   function initConsent() {
@@ -824,7 +857,7 @@
     function cardFor(g) {
       var out = matchHtml(g);
       cardCount++;
-      if (ads && cardCount % everyN === 0) out += adSlotHtml();
+      if (ads && cardCount % everyN === 0) out += adSlotHtml(ADS.slot);
       return out;
     }
 
@@ -1196,6 +1229,7 @@
     renderDateLabel();
     bindEvents();
     initConsent();
+    renderBanners();
     loadFixtures();
     // When viewing today, silently refresh live scores/status every 60s.
     // On other days just re-render to keep time-based badges accurate.

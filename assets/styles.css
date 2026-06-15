@@ -672,6 +672,17 @@ body {
 }
 .ad-slot .adsbygoogle { width: 100%; display: block; }
 
+/* Top & bottom leaderboard banners (full-width of the content column). */
+.ad-banner { margin: 14px 0; }
+.ad-banner[hidden] { display: none; }
+.ad-banner .ad-slot.ad-banner-unit {
+  margin: 0;
+  min-height: 100px;
+}
+@media (min-width: 760px) {
+  .ad-banner .ad-slot.ad-banner-unit { min-height: 120px; }
+}
+
 /* ---- Consent banner ----------------------------------------------------- */
 .consent-banner {
   position: fixed;

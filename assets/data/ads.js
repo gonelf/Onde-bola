@@ -1,15 +1,18 @@
 /*
  * Display-ad configuration for Hoje Há Bola.
  *
- * Fill in your Google AdSense IDs to serve real ads. While they're blank the
- * app shows a labelled placeholder where ads would appear (so you can see the
- * placement), and never loads any ad script. Ads only render after the visitor
- * accepts the consent banner.
+ * The publisher id below ties the page to its Google AdSense account. Fill in
+ * the per-unit slot ids to serve real banners; while a slot is blank the app
+ * shows a labelled placeholder where that ad would appear (so you can see the
+ * placement) and never loads a real unit for it. Ads only render after the
+ * visitor accepts the consent banner.
  */
 window.ADS_CONFIG = {
-  client: "",            // AdSense publisher id, e.g. "ca-pub-1234567890123456"
-  slot: "",              // a display ad-unit id, e.g. "1234567890"
-  everyN: 6,             // insert an ad after every N match cards
-  showPlaceholder: true, // show a labelled placeholder when not configured
+  client: "ca-pub-2180847694344203", // AdSense publisher id (matches the page meta tag)
+  topSlot: "",           // leaderboard banner shown above the games feed
+  slot: "",              // in-feed banner inserted between match cards
+  bottomSlot: "",        // banner shown below the games feed
+  everyN: 6,             // insert an in-feed ad after every N match cards
+  showPlaceholder: true, // show a labelled placeholder when a slot is not configured
   test: false,           // true -> request AdSense test ads (data-adtest="on")
 };

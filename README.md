@@ -82,6 +82,8 @@ api/cardinfo.js                  Rebuilds a game's share-card data from its matc
 api/tv.js                        Cached serverless proxy for TV listings
 api/sofatv.js                    Unofficial SofaScore TV proxy (on-demand fallback)
 api/fmtv.js                      Unofficial FotMob TV proxy (free day-bulk, Portugal-first)
+api/cron-highlights.js           Background sweep: collects highlights for finished games into KV (external cron)
+api/highlights.js                Reads the collected highlights back as a feed (/api/highlights)
 api/geo.js                       Visitor country (Vercel edge header) for the default listings country
 api/health.js                    Read-only config/KV diagnostics for the admin page
 admin.html                       Connections debugger (live-tests every source, noindex)
@@ -89,8 +91,9 @@ assets/og-image.svg              Social share / Open Graph card
 robots.txt                       Crawl rules (allows the site, disallows admin.html + /api)
 sitemap.xml                      Sitemap (homepage only; admin.html excluded)
 llms.txt                         Site summary for LLM/AI crawlers
-vercel.json                      Rewrites the public /g/<id> and /og/<id> paths to the share/image functions
+vercel.json                      Rewrites the public /g/<id> and /og/<id> paths; raises the cron function's time budget
 package.json                     Declares the @vercel/og dependency (for the on-the-fly preview image)
+.github/workflows/highlights-cron.yml  Free external cron that pings /api/cron-highlights every ~30 min
 ```
 
 > **Share previews need the Node/Vercel runtime.** `/og` runs on Vercel's edge
@@ -173,6 +176,55 @@ shows *“No TV listing yet”*.
 > Note: **API-Football** (api-sports.io) was evaluated but has **no
 > broadcaster/TV data** (fixtures, scores, odds, stats only), so it can't add
 > channel listings.
+
+## Highlights of finished games (background cron)
+
+Highlights used to be resolved **only on demand** — you opened a finished match
+and the detail modal fetched FotMob for a clip link (or fell back to a YouTube
+search). `api/cron-highlights.js` adds a **background sweep** that collects them
+ahead of time and stores them in KV, so they're ready instantly and can be
+served as a feed (`/api/highlights`).
+
+Each run it:
+
+1. Scans FotMob's day feed for **today + yesterday** (UTC) — yesterday is kept so
+   late-night finishes get picked up on the next run.
+2. Keeps **finished** matches in the major competitions (same `MAJOR_LEAGUE_IDS`
+   set as fixtures).
+3. Resolves a highlights link per match — FotMob's own clip URL when present,
+   plus a keyless **YouTube search** fallback that's always attached.
+4. Writes `hl:<fmid>` (per match) and `hl:day:<date>` (the day's map) to KV with a
+   90-day TTL. It only re-fetches match details for games that don't yet have a
+   real clip URL, so repeat runs are cheap; detail fetches per run are capped by
+   `HL_DETAIL_LIMIT` (default 40).
+
+The match-details modal automatically uses a stored clip when FotMob's live
+payload doesn't include one yet (`api/matchdetails.js` falls back to `hl:<fmid>`),
+and `GET /api/highlights` returns the collected list (most-recent first;
+`?date=YYYY-MM-DD`, `?days=N`, or `?withUrl=1` for only real clips).
+
+**Triggering it — use an external cron.** Vercel's free (Hobby) plan only allows
+a **daily** cron, which is too coarse for clips that appear minutes after full
+time. So `api/cron-highlights.js` is a normal endpoint meant to be poked by an
+external scheduler every ~30 min:
+
+```
+GET /api/cron-highlights            # today + yesterday
+GET /api/cron-highlights?date=2026-06-15
+GET /api/cron-highlights?days=3&debug=1
+```
+
+- **Protect it:** set `CRON_SECRET` in the Vercel env, and send it as
+  `Authorization: Bearer <secret>` (or `?key=<secret>`). With no secret set the
+  endpoint is open.
+- **Included scheduler:** `.github/workflows/highlights-cron.yml` runs every 30
+  minutes on GitHub Actions (free). Add repo secrets `SITE_URL` (your deployment
+  URL) and `CRON_SECRET`, and it `curl`s the endpoint for you. You can also run
+  it from the Actions tab. *(GitHub schedules can be delayed under load and pause
+  after 60 days of repo inactivity — for strict timing point [cron-job.org](https://cron-job.org)
+  or EasyCron at the same URL instead.)*
+- Storing anything **requires KV** (see below); without it the endpoint returns
+  `{ ok: false }` and does nothing.
 
 ## Caching (Vercel KV)
 

@@ -278,6 +278,15 @@ module.exports = async (req, res) => {
   }
 
   const details = normalize(data);
+  // If FotMob's live payload didn't carry a highlights clip yet, fall back to one
+  // the cron sweep (/api/cron-highlights) may already have collected and stored.
+  if (!details.highlights) {
+    const rec = await kv(["GET", `hl:${id}`]);
+    const hl = safe(function () { return JSON.parse(rec); }, null);
+    if (hl && /^https?:\/\//.test(str(hl.url))) {
+      details.highlights = { url: hl.url, source: str(hl.source) };
+    }
+  }
   // In debug mode, expose the upstream structure around h2h / player-of-the-match
   // so we can see where FotMob actually puts them without dumping the whole blob.
   const shape = debug ? safe(function () {

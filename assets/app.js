@@ -332,6 +332,43 @@
     };
   }
 
+  // Build fixtures out of the day-bulk broadcaster maps (FotMob / SportMonks).
+  // Used as a fallback when TheSportsDB's day feed returns nothing (e.g. its free
+  // key is rate-limited): those feeds already carry every match's team names,
+  // kickoff and channels, so we can still show the day's games — just without the
+  // richer TheSportsDB extras (league name, badges, live scores). De-duplicated
+  // by normalised "home|away".
+  function fixturesFromDayMaps(dayMaps) {
+    var seen = {}, out = [];
+    (dayMaps || []).forEach(function (e) {
+      if (!e || !e.home || !e.away) return;
+      var key = normName(e.home) + "|" + normName(e.away);
+      if (seen[key]) return;
+      seen[key] = true;
+      var kickoff = e.kickoff;
+      if (!kickoff || isNaN(new Date(kickoff).getTime())) {
+        kickoff = new Date(ymd(state.date) + "T12:00:00Z").toISOString();
+      }
+      out.push({
+        id: "fm:" + key,
+        competition: e.league || "Football",
+        home: e.home,
+        away: e.away,
+        homeBadge: "",
+        awayBadge: "",
+        kickoff: kickoff,
+        venue: "",
+        leagueBadgeUrl: "",
+        homeScore: null,
+        awayScore: null,
+        status: "",
+        tv: (e.rows || []).slice(),
+        _tvLoaded: true, // listings already came with the match; skip per-event calls
+      });
+    });
+    return out;
+  }
+
   // Fetch one endpoint and return its normalised fixtures (never rejects).
   function fetchEvents(url) {
     return fetch(url, { headers: { Accept: "application/json" } })
@@ -596,6 +633,17 @@
         fixtures.forEach(function (fx) {
           if (loadedTv[fx.id]) { fx.tv = mergeTv(fx.tv, loadedTv[fx.id]); fx._tvLoaded = true; }
         });
+
+        // Fallback: if TheSportsDB gave us no games (down or rate-limited), build
+        // the day's fixtures from the FotMob/SportMonks day maps, which already
+        // carry team names, kickoff and channels.
+        if (!fixtures.length && dayMaps.length) {
+          fixtures = fixturesFromDayMaps(dayMaps);
+          fixtures.forEach(function (fx) {
+            if (loadedTv[fx.id]) { fx.tv = mergeTv(fx.tv, loadedTv[fx.id]); }
+            loadedTv[fx.id] = fx.tv;
+          });
+        }
 
         if (!fixtures.length) {
           if (silent) return; // keep current view on an empty silent refresh

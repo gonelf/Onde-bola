@@ -11,7 +11,9 @@
  * must come from a SportMonks plan that includes the `tvStations` entity.
  *
  * Query: ?date=YYYY-MM-DD
- * Returns: { matches: [ { h, a, rows: [{channel, country}] } ] }  (h/a normalized)
+ * Returns: { matches: [ { h, a, home, away, kickoff, rows: [{channel, country}] } ] }
+ *   h/a are normalized (for merging); home/away keep display casing and kickoff is
+ *   an ISO timestamp, so the client can also use this as a fixtures source.
  *
  * Env: SPORTMONKS_KEY (required to enable), KV_REST_API_URL / KV_REST_API_TOKEN
  *      (optional caching).
@@ -62,6 +64,19 @@ function teams(fx) {
     else if (loc === "away") away = p.name || away;
   });
   return [home, away];
+}
+
+// Kickoff as an ISO string from SportMonks' timestamp / "YYYY-MM-DD HH:MM:SS" UTC.
+function kickoffOf(fx) {
+  if (fx.starting_at_timestamp) {
+    const d = new Date(Number(fx.starting_at_timestamp) * 1000);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  if (fx.starting_at) {
+    const d = new Date(String(fx.starting_at).replace(" ", "T") + "Z");
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  return null;
 }
 
 // Pull broadcaster rows out of the (defensively-shaped) tvStations include.
@@ -116,7 +131,10 @@ module.exports = async (req, res) => {
         if (!rows.length) return;
         const [h, a] = teams(fx);
         if (!h || !a) return;
-        matches.push({ h: norm(h), a: norm(a), rows: rows });
+        matches.push({
+          h: norm(h), a: norm(a), home: h, away: a,
+          kickoff: kickoffOf(fx), rows: rows,
+        });
       });
       const pg = data && data.pagination;
       if (!pg || !pg.has_more) break;

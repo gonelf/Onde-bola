@@ -13,7 +13,10 @@
  * FOTMOB_DISABLED=1.
  *
  * Query: ?date=YYYY-MM-DD [&debug=1]
- * Returns: { matches: [ { h, a, rows: [{channel, country}] } ] }  (h/a normalized)
+ * Returns: { matches: [ { h, a, home, away, kickoff, rows: [{channel, country}] } ] }
+ *   h/a are normalized (for merging); home/away keep FotMob's display casing and
+ *   kickoff is an ISO timestamp, so the client can also use this feed as a
+ *   fixtures source when TheSportsDB's day feed is unavailable.
  *
  * Env: FOTMOB_COUNTRIES (CSV, default "PT,GB,ES,BR,US,FR,DE,IT,NL"),
  *      FOTMOB_DISABLED=1, KV_REST_API_URL / KV_REST_API_TOKEN (optional cache).
@@ -188,7 +191,11 @@ module.exports = async (req, res) => {
       if (debug) dbg.kept++;
 
       const key = norm(h) + "|" + norm(a);
-      if (!byMatch[key]) byMatch[key] = { h: norm(h), a: norm(a), names: {} };
+      if (!byMatch[key]) {
+        byMatch[key] = { h: norm(h), a: norm(a), home: h, away: a, when: when || 0, names: {} };
+      } else if (when && !byMatch[key].when) {
+        byMatch[key].when = when; // fill kickoff from whichever country carried it
+      }
       const bucket = byMatch[key].names;
       if (!bucket[country]) bucket[country] = {};
       for (const l of listings) {
@@ -203,7 +210,11 @@ module.exports = async (req, res) => {
     for (const country of Object.keys(m.names)) {
       for (const channel of Object.keys(m.names[country])) rows.push({ channel, country });
     }
-    return { h: m.h, a: m.a, rows };
+    return {
+      h: m.h, a: m.a, home: m.home, away: m.away,
+      kickoff: m.when ? new Date(m.when).toISOString() : null,
+      rows,
+    };
   }).filter((m) => m.rows.length);
 
   const payload = debug ? { matches, _debug: dbg } : { matches };

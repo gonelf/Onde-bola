@@ -121,6 +121,16 @@ for every visible match, so they appear on the cards without a click.
 There is no curated/guessed fallback — if no source has a listing, the match
 shows *“No TV listing yet”*.
 
+### Fixtures fallback
+
+The day's **fixtures** normally come from TheSportsDB (`eventsday.php`). Its free
+key is rate-limited, so when that feed is unreachable or throttled and returns
+no games, the app falls back to building the fixture list from the FotMob (and
+SportMonks, when enabled) day-bulk feeds — they already carry every match's team
+names, kickoff and channels. The fallback view is intentionally lighter (no
+league names, badges or live scores), but it keeps the day's games visible
+instead of showing an empty state.
+
 > Note: **API-Football** (api-sports.io) was evaluated but has **no
 > broadcaster/TV data** (fixtures, scores, odds, stats only), so it can't add
 > channel listings. SportMonks is the API that exposes `tvStations`.

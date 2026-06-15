@@ -783,7 +783,14 @@
     if (!state.pendingMatch) return;
     var id = state.pendingMatch;
     state.pendingMatch = null;
-    if (fixtureById(id)) openDetails(id);
+    var fx = fixtureById(id);
+    if (!fx) return;
+    // Normalize a ?match= deep link to the canonical /g/<id> URL without adding
+    // a history entry, then open the match (the entry we replace is the deep link).
+    if (window.history && history.replaceState) {
+      try { history.replaceState({ hhbMatch: String(fx.id) }, "", shareLink(fx)); } catch (e) {}
+    }
+    openDetails(fx.id, { push: false });
   }
 
   function showEmpty(message) {
@@ -1028,20 +1035,27 @@
   function matchHtml(fx) {
     var st = statusOf(fx);
     var cls = "match" + (st.state === "live" ? " is-live" : "");
-    return '<article class="' + cls + '" data-id="' + escapeHtml(fx.id) +
-        '" tabindex="0" role="button" aria-label="Match details">' +
+    // The card's title (time + teams) is a real link to the game's /g/<id>
+    // page so crawlers can discover it and the URL is shareable; JS intercepts
+    // the click to open the in-app detail modal instead of navigating
+    // (progressive enhancement). The share button and the highlights link stay
+    // siblings of the link — never interactive elements nested inside an <a>.
+    return '<article class="' + cls + '" data-id="' + escapeHtml(fx.id) + '">' +
       '<button class="share-btn" type="button" data-share aria-label="' +
         escapeHtml(t("shareGame")) + '" title="' + escapeHtml(t("shareGame")) + '">' +
         SHARE_ICON + "</button>" +
-      '<div class="match-time">' + timeCellHtml(fx) + "</div>" +
-      '<div class="teams">' +
-        '<div class="team">' + badgeHtml(fx.homeBadge, fx.home) +
-          '<span class="team-name">' + escapeHtml(fx.home) + "</span>" +
-          scoreHtml(fx, "home") + "</div>" +
-        '<div class="team">' + badgeHtml(fx.awayBadge, fx.away) +
-          '<span class="team-name">' + escapeHtml(fx.away) + "</span>" +
-          scoreHtml(fx, "away") + "</div>" +
-      "</div>" +
+      '<a class="match-link" href="' + escapeHtml(shareLink(fx)) +
+        '" aria-label="' + escapeHtml(fx.home + " vs " + fx.away) + '">' +
+        '<div class="match-time">' + timeCellHtml(fx) + "</div>" +
+        '<div class="teams">' +
+          '<div class="team">' + badgeHtml(fx.homeBadge, fx.home) +
+            '<span class="team-name">' + escapeHtml(fx.home) + "</span>" +
+            scoreHtml(fx, "home") + "</div>" +
+          '<div class="team">' + badgeHtml(fx.awayBadge, fx.away) +
+            '<span class="team-name">' + escapeHtml(fx.away) + "</span>" +
+            scoreHtml(fx, "away") + "</div>" +
+        "</div>" +
+      "</a>" +
       '<div class="channels">' + highlightBtnHtml(fx) + channelsHtml(fx) + "</div>" +
       '<span class="details-hint">' + t("clickDetails") + "</span>" +
     "</article>";
@@ -1441,10 +1455,18 @@
       detailExtrasHtml(fx);
   }
 
-  function openDetails(id) {
+  function openDetails(id, opts) {
+    opts = opts || {};
     var fx = state.fixtures.filter(function (f) { return String(f.id) === String(id); })[0];
     if (!fx) return;
     state.detailId = String(id);
+
+    // Reflect the open match in the URL (the same /g/<id> page that's server-
+    // rendered for crawlers), so it's shareable and the back button closes it.
+    // Skipped when we're reacting to a popstate/deep-link (opts.push === false).
+    if (opts.push !== false && window.history && history.pushState) {
+      try { history.pushState({ hhbMatch: String(id) }, "", shareLink(fx)); } catch (e) {}
+    }
 
     // Listings usually arrive via the background prefetch; if this match hasn't
     // resolved yet, show a "checking" state and load it on demand.
@@ -1471,9 +1493,17 @@
     }
   }
 
-  function closeDetails() {
+  function closeDetails(opts) {
+    opts = opts || {};
+    if (el.detailOverlay.hidden) return;
     el.detailOverlay.hidden = true;
     document.body.style.overflow = "";
+    state.detailId = null;
+    // Pop the history entry we pushed on open so the URL returns to the list
+    // (unless we're already handling a popstate, where the URL has moved itself).
+    if (opts.pop !== false && window.history && history.state && history.state.hhbMatch) {
+      try { history.back(); } catch (e) {}
+    }
   }
 
   // ---- Events -------------------------------------------------------------
@@ -1600,13 +1630,25 @@
       }
       if (e.target.closest(".hl-card-btn")) { e.stopPropagation(); return; } // the link navigates itself
       var card = e.target.closest(".match[data-id]");
-      if (card) openDetails(card.getAttribute("data-id"));
+      if (!card) return;
+      // Let modified clicks (new tab/window) follow the real /g/<id> link.
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1) return;
+      e.preventDefault(); // stay in the app: open the modal instead of navigating
+      openDetails(card.getAttribute("data-id"));
     });
     el.games.addEventListener("keydown", function (e) {
-      if (e.key !== "Enter" && e.key !== " ") return;
-      if (e.target.closest(".share-btn") || e.target.closest(".hl-card-btn")) return; // let the button act itself
-      var card = e.target.closest(".match[data-id]");
+      // The card link handles Enter natively (it's an <a>); only Space needs us.
+      // The highlights link sits outside .match-link, so it's excluded already.
+      if (e.key !== " " && e.key !== "Spacebar") return;
+      if (e.target.closest(".share-btn")) return; // let the share button act itself
+      var card = e.target.closest(".match-link") && e.target.closest(".match[data-id]");
       if (card) { e.preventDefault(); openDetails(card.getAttribute("data-id")); }
+    });
+    // Back/forward between the list and an open match.
+    window.addEventListener("popstate", function (e) {
+      var s = e.state;
+      if (s && s.hhbMatch && fixtureById(s.hhbMatch)) openDetails(s.hhbMatch, { push: false });
+      else closeDetails({ pop: false });
     });
     el.detailClose.addEventListener("click", closeDetails);
     if (el.detailShare) {

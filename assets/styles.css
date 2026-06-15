@@ -320,7 +320,15 @@ body {
 }
 .match:hover { border-color: var(--accent); }
 .match:active { transform: scale(0.997); }
-.match:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.match:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The card content is wrapped in an <a> to /g/<id> for crawl discovery and
+   shareable URLs; display:contents keeps the card's grid layout unchanged. */
+.match-link {
+  display: contents;
+  color: inherit;
+  text-decoration: none;
+}
+.match-link:focus { outline: none; } /* the ring is drawn on .match (focus-within) */
 .details-hint {
   position: absolute;
   top: 14px;
@@ -330,7 +338,7 @@ body {
   opacity: 0;
   transition: opacity 0.15s;
 }
-.match:hover .details-hint, .match:focus-visible .details-hint { opacity: 1; }
+.match:hover .details-hint, .match:focus-within .details-hint { opacity: 1; }
 .match-time {
   text-align: center;
   font-variant-numeric: tabular-nums;

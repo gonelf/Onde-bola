@@ -30,6 +30,9 @@
     hidden: {},       // competition name -> true when hidden from the list
     remember: false,  // persist the filter selection across visits
     primaryCountry: "Portugal", // country shown first on cards; default by IP
+    view: "fixtures", // "fixtures" (the day's games) | "highlights" (recent clips)
+    highlights: [],   // collected highlights from /api/highlights
+    highlightsLoaded: false,
   };
 
   var el = {
@@ -54,6 +57,7 @@
     adPrefs: document.getElementById("ad-prefs"),
     adTop: document.getElementById("ad-top"),
     adBottom: document.getElementById("ad-bottom"),
+    viewHighlights: document.getElementById("view-highlights"),
   };
 
   // ---- Display ads + consent ----------------------------------------------
@@ -202,6 +206,11 @@
       noSearch: "No games match your search for this date.",
       noFixtures: "No fixtures found for this date.",
       feedDown: "Couldn’t reach the live data feed. Please try again in a moment.",
+      hlTab: "🎬 Highlights", hlBack: "‹ Games",
+      hlTitle: "Match highlights", hlSub: "Recently finished games — tap a card to watch.",
+      hlLoading: "Loading highlights…",
+      hlEmpty: "No highlights yet. Finished games appear here once their clips are ready.",
+      hlError: "Couldn’t load highlights. Please try again in a moment.",
       consent: "Hoje Há Bola is free thanks to ads. We’d like to use cookies to show ads and measure traffic. You can change this anytime via “Ad preferences” in the footer.",
       accept: "Accept", reject: "Reject",
     },
@@ -238,6 +247,11 @@
       noSearch: "Nenhum jogo corresponde à tua pesquisa nesta data.",
       noFixtures: "Sem jogos para esta data.",
       feedDown: "Não foi possível contactar o feed de dados. Tenta novamente daqui a momentos.",
+      hlTab: "🎬 Resumos", hlBack: "‹ Jogos",
+      hlTitle: "Resumos dos jogos", hlSub: "Jogos terminados recentemente — toca num cartão para ver.",
+      hlLoading: "A carregar resumos…",
+      hlEmpty: "Ainda sem resumos. Os jogos terminados aparecem aqui assim que os vídeos estiverem prontos.",
+      hlError: "Não foi possível carregar os resumos. Tenta novamente daqui a momentos.",
       consent: "O Hoje Há Bola é grátis graças aos anúncios. Gostaríamos de usar cookies para mostrar anúncios e medir o tráfego. Podes alterar isto a qualquer momento em “Preferências de anúncios” no rodapé.",
       accept: "Aceitar", reject: "Rejeitar",
     },
@@ -271,6 +285,9 @@
     set("#detail-close", "ariaLabel", t("close"));
     set("#detail-share", "ariaLabel", t("shareGame"));
     set("#detail-share", "title", t("shareGame"));
+    if (el.viewHighlights) {
+      el.viewHighlights.textContent = state.view === "highlights" ? t("hlBack") : t("hlTab");
+    }
   }
 
   // ---- Helpers ------------------------------------------------------------
@@ -790,6 +807,115 @@
     updateLeaguePanel();
   }
 
+  // ---- Highlights view ----------------------------------------------------
+
+  // Switch between the day's fixtures and the recent-highlights feed. The toggle
+  // hides the date pager + league filter (which don't apply to highlights) via a
+  // body class, and routes render() to the right builder.
+  function setView(view) {
+    state.view = view;
+    document.body.classList.toggle("view-highlights", view === "highlights");
+    if (el.viewHighlights) {
+      el.viewHighlights.classList.toggle("active", view === "highlights");
+      el.viewHighlights.setAttribute("aria-pressed", view === "highlights" ? "true" : "false");
+      el.viewHighlights.textContent = view === "highlights" ? t("hlBack") : t("hlTab");
+    }
+    if (view === "highlights") {
+      el.status.hidden = true;
+      if (!state.highlightsLoaded) loadHighlights();
+      else renderHighlights();
+    } else {
+      el.status.hidden = !state.fixtures.length;
+      render();
+    }
+  }
+
+  // Fetch the highlights collected by the cron sweep (/api/highlights). Best
+  // effort: any failure shows an empty/error state rather than throwing.
+  function loadHighlights() {
+    renderSkeletons();
+    el.status.hidden = true;
+    fetch("/api/highlights", { headers: { Accept: "application/json" } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        state.highlights = (d && d.highlights) || [];
+        state.highlightsLoaded = true;
+        if (state.view === "highlights") renderHighlights();
+      })
+      .catch(function () {
+        state.highlights = [];
+        state.highlightsLoaded = true;
+        if (state.view === "highlights") {
+          el.games.innerHTML = '<div class="empty"><div class="big">🎬</div><p>' +
+            escapeHtml(t("hlError")) + "</p></div>";
+        }
+      });
+  }
+
+  // FotMob stores the final score as "h-a"; split it for the two team rows.
+  function parseHlScore(s) {
+    var m = String(s == null ? "" : s).match(/(\d+)\s*-\s*(\d+)/);
+    return m ? { home: m[1], away: m[2] } : null;
+  }
+
+  function formatHlDate(v) {
+    var d = new Date(v);
+    if (isNaN(d.getTime())) return "";
+    try {
+      return d.toLocaleDateString(locale() || [], { weekday: "short", day: "numeric", month: "short" }) +
+        " · " + formatClock(d);
+    } catch (e) { return ""; }
+  }
+
+  // One highlight card: the whole card is a link to the clip (FotMob's own when
+  // present, otherwise a YouTube search). Reuses the .teams/.team match styling.
+  function highlightCardHtml(h) {
+    var hasClip = h.url && /^https?:\/\//.test(h.url);
+    var href = hasClip ? h.url : (h.youtube || "");
+    var cta = hasClip ? t("mdWatch") : t("mdYouTube");
+    var sc = parseHlScore(h.score);
+    var scoreFor = function (side) {
+      return sc ? '<span class="score">' + escapeHtml(sc[side]) + "</span>" : "";
+    };
+    var when = formatHlDate(h.kickoff || h.date);
+    return '<a class="hl-card' + (hasClip ? "" : " no-clip") + '" href="' + escapeHtml(href) +
+        '" target="_blank" rel="noopener">' +
+      '<div class="hl-comp">' + leagueLogoHtml(h.leagueBadgeUrl, h.competition) +
+        '<span class="comp-name">' + escapeHtml(h.competition || "") + "</span>" +
+        (when ? '<span class="hl-when">' + escapeHtml(when) + "</span>" : "") + "</div>" +
+      '<div class="teams">' +
+        '<div class="team">' + badgeHtml(h.homeBadge, h.home) +
+          '<span class="team-name">' + escapeHtml(h.home) + "</span>" + scoreFor("home") + "</div>" +
+        '<div class="team">' + badgeHtml(h.awayBadge, h.away) +
+          '<span class="team-name">' + escapeHtml(h.away) + "</span>" + scoreFor("away") + "</div>" +
+      "</div>" +
+      '<span class="hl-cta">' + escapeHtml(cta) + "</span>" +
+    "</a>";
+  }
+
+  function renderHighlights() {
+    var head = '<div class="hl-head"><h2 class="hl-title">' + escapeHtml(t("hlTitle")) +
+      '</h2><p class="hl-sub">' + escapeHtml(t("hlSub")) + "</p></div>";
+
+    var list = state.highlights || [];
+    var q = state.search.trim().toLowerCase();
+    if (q) {
+      list = list.filter(function (h) {
+        return (h.home + " " + h.away + " " + (h.competition || "")).toLowerCase().indexOf(q) > -1;
+      });
+    }
+
+    if (!list.length) {
+      var msg = !state.highlightsLoaded ? t("hlLoading")
+        : (q ? t("noSearch") : t("hlEmpty"));
+      el.games.innerHTML = head + '<div class="empty"><div class="big">🎬</div><p>' +
+        escapeHtml(msg) + "</p></div>";
+      return;
+    }
+    el.games.innerHTML = head + '<div class="hl-grid">' +
+      list.map(highlightCardHtml).join("") + "</div>";
+  }
+
   // ---- Rendering ----------------------------------------------------------
 
   function showStatus(kind, badge, text) {
@@ -1002,6 +1128,7 @@
   }
 
   function render() {
+    if (state.view === "highlights") { renderHighlights(); return; }
     // Drop leagues the user has filtered out, then apply the search.
     var shown = state.fixtures.filter(function (fx) { return !isHidden(fx.competition); });
     var hiddenSome = shown.length !== state.fixtures.length;
@@ -1481,6 +1608,11 @@
       renderDateLabel();
       loadFixtures();
     });
+    if (el.viewHighlights) {
+      el.viewHighlights.addEventListener("click", function () {
+        setView(state.view === "highlights" ? "fixtures" : "highlights");
+      });
+    }
     var t;
     el.search.addEventListener("input", function () {
       clearTimeout(t);
@@ -1559,6 +1691,7 @@
     // When viewing today, silently refresh live scores/status every 60s.
     // On other days just re-render to keep time-based badges accurate.
     setInterval(function () {
+      if (state.view !== "fixtures") return; // don't clobber the highlights view
       if (isSameDay(state.date, new Date())) {
         loadFixtures(true);
       } else if (!state.search) {

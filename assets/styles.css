@@ -351,7 +351,9 @@ body {
 .match-time .ft { font-size: 0.7rem; color: var(--text-dim); font-weight: 700; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
 
-.teams { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+/* Reserve a lane on the right for the share button so right-aligned scores
+   never sit under it. */
+.teams { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding-right: 34px; }
 .team {
   display: flex;
   align-items: center;

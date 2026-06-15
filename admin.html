@@ -301,11 +301,13 @@
       $("fmid").value = parts[2] || "";
     });
     $("loadFixtures").addEventListener("click", loadFixtures);
+    $("date").addEventListener("change", loadFixtures); // reload picker when date changes
     $("runAll").addEventListener("click", runAll);
     $("copyReport").addEventListener("click", function () { copyText(buildReport(), $("copyReport")); });
 
     render();
     runTest(TESTS[0]); // health on open
+    loadFixtures();    // populate the match picker on open
   })();
   </script>
 </body>

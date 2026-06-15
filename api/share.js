@@ -99,10 +99,37 @@ const formDots = (list) =>
     .map((r) => `<span class="form form-${esc(r).toLowerCase()}">${esc(r)}</span>`)
     .join("");
 
-// --- pretty URLs: /g/<date>/<home>-vs-<away> ------------------------------
+// --- pretty URLs: /g/<league>/<date>/<home>-vs-<away> ---------------------
 // A team's URL slug (same normalization the client uses), and the matchup slug.
 const slugify = (name) => norm(name).replace(/ /g, "-");
 const matchSlug = (home, away) => `${slugify(home)}-vs-${slugify(away)}`;
+
+// Competitions that carry an edition year (periodic tournaments + European
+// continental club cups); the SEASON subset is shown as 2026/27 vs a plain year.
+const EDITION_RE = /world cup|copa am[eé]rica|nations league|european championship|\beuro\b|africa cup of nations|afcon|asian cup|gold cup|champions league|europa league|conference league|super cup/i;
+const SEASON_RE = /champions league|europa league|conference league|nations league|super cup/i;
+function editionYear(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  const y = d.getUTCFullYear(), m = d.getUTCMonth() + 1;
+  return m >= 8 ? y + 1 : y; // a season is named by the year it ends
+}
+// League slug with the edition appended where it matters (else evergreen).
+function leagueSlugFor(comp, iso) {
+  const base = slugify(comp || "");
+  if (comp && EDITION_RE.test(comp)) {
+    const y = editionYear(iso);
+    if (y) return `${base}-${y}`;
+  }
+  return base;
+}
+// Human edition label: "2026" for one-off tournaments, "2026/27" for seasons.
+function editionLabel(comp, iso) {
+  if (!comp || !EDITION_RE.test(comp)) return "";
+  const y = editionYear(iso);
+  if (!y) return "";
+  return SEASON_RE.test(comp) ? `${y - 1}/${String(y).slice(2)}` : String(y);
+}
 // Split "home-vs-away" at the first "-vs-" (team names don't contain a bare "vs").
 function parseSlug(slug) {
   const m = /^(.+?)-vs-(.+)$/.exec(String(slug || ""));
@@ -219,10 +246,14 @@ module.exports = async (req, res) => {
   // League slug for the URL hierarchy. Derive it from the resolved fixture's
   // competition first: that's the same value the card links and the league hub
   // slugify, so the canonical always matches the URLs that point at it. Fall
-  // back to the card's competition, then the league segment from the URL.
+  // back to the card's competition, then the league segment from the URL. The
+  // edition year is appended for tournaments/continental cups (see EDITION_RE).
   const leagueComp = (resolvedFx && resolvedFx.competition) || comp || "";
-  const leagueSlug = leagueComp ? slugify(leagueComp) : get("league") || "";
+  const leagueSlug = leagueComp ? leagueSlugFor(leagueComp, kickoff) : get("league") || "";
   const leagueUrl = leagueSlug ? `${origin}/g/${leagueSlug}` : "";
+  // Competition name with its edition for display, e.g. "Champions League 2026/27".
+  const edLabel = editionLabel(leagueComp, kickoff);
+  const compDisplay = comp ? (edLabel ? `${comp} ${edLabel}` : comp) : "";
 
   // Canonical: the pretty /g/<league>/<date>/<home>-vs-<away> URL (drops the
   // league segment if the competition is unknown). Old /g/<id> and ?home=&away=
@@ -239,12 +270,12 @@ module.exports = async (req, res) => {
 
   const vs = `${home} vs ${away}`;
   const heading = `Where to watch ${vs}`;
-  const headline = vs + (comp ? " — " + comp : "");
-  const title = `Where to watch ${vs}${comp ? " — " + comp : ""} on TV · Hoje Há Bola`;
+  const headline = vs + (compDisplay ? " — " + compDisplay : "");
+  const title = `Where to watch ${vs}${compDisplay ? " — " + compDisplay : ""} on TV · Hoje Há Bola`;
   const result = score ? `${score} (${status || "FT"})` : status ? status : "";
   const when = [dLabel, result].filter(Boolean).join(" · ");
   const description =
-    `${vs}${comp ? " · " + comp : ""}${when ? " · " + when : ""}. ` +
+    `${vs}${compDisplay ? " · " + compDisplay : ""}${when ? " · " + when : ""}. ` +
     "See which TV channels and streaming services are broadcasting it — free or paid.";
 
   // Selective indexing: only notable competitions compete in search.
@@ -273,7 +304,7 @@ module.exports = async (req, res) => {
   if (kickoff) sportsEvent.startDate = kickoff;
   if (comp) {
     sportsEvent.superEvent = Object.assign(
-      { "@type": "SportsEvent", name: comp },
+      { "@type": "SportsEvent", name: compDisplay },
       leagueUrl ? { url: leagueUrl } : {}
     );
   }
@@ -286,7 +317,7 @@ module.exports = async (req, res) => {
 
   // Breadcrumb: Home › League › Match — reinforces the URL hierarchy.
   const crumbs = [{ name: "Hoje Há Bola", item: origin + "/" }];
-  if (comp && leagueUrl) crumbs.push({ name: comp, item: leagueUrl });
+  if (comp && leagueUrl) crumbs.push({ name: compDisplay, item: leagueUrl });
   crumbs.push({ name: vs, item: shareUrl });
   const breadcrumb = {
     "@type": "BreadcrumbList",
@@ -427,7 +458,7 @@ module.exports = async (req, res) => {
     <header class="site"><span>⚽</span> <a href="/">Hoje Há Bola</a></header>
 
     <nav class="crumbs" aria-label="Breadcrumb">
-      <a href="/">Home</a>${comp && leagueUrl ? ` › <a href="${esc(leagueUrl)}">${esc(comp)}</a>` : ""} › <span>${esc(vs)}</span>
+      <a href="/">Home</a>${comp && leagueUrl ? ` › <a href="${esc(leagueUrl)}">${esc(compDisplay)}</a>` : ""} › <span>${esc(vs)}</span>
     </nav>
 
     <h1>${esc(heading)}</h1>
@@ -437,7 +468,7 @@ module.exports = async (req, res) => {
       <span class="t">${badge(awayBadge, away)}${esc(away)}</span>
     </div>
     ${score ? `<div class="score">${esc(score)}</div>` : ""}
-    <p class="meta">${esc([comp, when].filter(Boolean).join(" · "))}</p>
+    <p class="meta">${esc([compDisplay, when].filter(Boolean).join(" · "))}</p>
 
     <a class="cta" href="${esc(appUrl)}">Open ${esc(vs)} in the live app →</a>
 

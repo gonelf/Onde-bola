@@ -26,6 +26,31 @@ const slugify = (name) => norm(name).replace(/ /g, "-");
 const matchSlug = (home, away) => `${slugify(home)}-vs-${slugify(away)}`;
 const titleize = (s) => String(s || "").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
+// Competitions whose hub carries an edition year (periodic tournaments +
+// European continental club cups); the SEASON subset is shown as 2026/27.
+const EDITION_RE = /world cup|copa am[eé]rica|nations league|european championship|\beuro\b|africa cup of nations|afcon|asian cup|gold cup|champions league|europa league|conference league|super cup/i;
+const SEASON_RE = /champions league|europa league|conference league|nations league|super cup/i;
+function editionYear(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  const y = d.getUTCFullYear(), m = d.getUTCMonth() + 1;
+  return m >= 8 ? y + 1 : y; // a season is named by the year it ends
+}
+function leagueSlugFor(comp, iso) {
+  const base = slugify(comp || "");
+  if (comp && EDITION_RE.test(comp)) {
+    const y = editionYear(iso);
+    if (y) return `${base}-${y}`;
+  }
+  return base;
+}
+function editionLabel(comp, iso) {
+  if (!comp || !EDITION_RE.test(comp)) return "";
+  const y = editionYear(iso);
+  if (!y) return "";
+  return SEASON_RE.test(comp) ? `${y - 1}/${String(y).slice(2)}` : String(y);
+}
+
 // Same notability gate as the match page — keeps the long tail of obscure
 // competitions out of the index.
 const NOTABLE = new RegExp([
@@ -96,23 +121,45 @@ module.exports = async (req, res) => {
     dates.map((d) => getJson(`${origin}/api/fixtures?date=${d}&all=1`, 5000))
   );
 
+  // De-duplicate the week's fixtures, then split into exact edition matches and
+  // (for redirect) bare-slug matches of an edition competition.
   const seen = {};
-  let games = [];
+  const all = [];
   feeds.forEach((feed) => {
     const list = feed && Array.isArray(feed.fixtures) ? feed.fixtures : [];
     list.forEach((f) => {
-      if (!f || slugify(f.competition) !== leagueSlug) return;
+      if (!f || !f.home || !f.away) return;
       const key = f.id || f.fmid || matchSlug(f.home, f.away) + f.kickoff;
       if (seen[key]) return;
       seen[key] = true;
-      games.push(f);
+      all.push(f);
     });
   });
+
+  let games = all.filter((f) => leagueSlugFor(f.competition, f.kickoff) === leagueSlug);
+
+  // Bare /g/<league> for an edition competition (e.g. /g/world-cup) → redirect
+  // to the current edition's hub (/g/world-cup-2026), so it never sits empty.
+  if (!games.length) {
+    const baseMatch = all
+      .filter((f) => slugify(f.competition) === leagueSlug && EDITION_RE.test(f.competition || ""))
+      .sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff))[0];
+    if (baseMatch) {
+      const target = `${origin}/g/${leagueSlugFor(baseMatch.competition, baseMatch.kickoff)}`;
+      res.setHeader("Cache-Control", "public, s-maxage=600, stale-while-revalidate=86400");
+      res.setHeader("Location", target);
+      res.status(301).end();
+      return;
+    }
+  }
+
   games.sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff));
   games = games.slice(0, 80);
 
-  // Display name: authoritative from a fixture, else a readable slug.
-  const leagueName = (games[0] && games[0].competition) || titleize(leagueSlug);
+  // Display name: authoritative from a fixture (with its edition), else slug.
+  const baseName = (games[0] && games[0].competition) || titleize(leagueSlug);
+  const edLabel = games[0] ? editionLabel(games[0].competition, games[0].kickoff) : "";
+  const leagueName = edLabel ? `${baseName} ${edLabel}` : baseName;
   const indexable = isNotable(leagueName) && games.length > 0;
   const robots = indexable ? "index, follow, max-image-preview:large" : "noindex, follow";
 

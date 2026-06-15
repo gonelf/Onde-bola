@@ -375,6 +375,28 @@
   // A team's URL slug (matches the server's slugify): accent-folded, a-z0-9, "-".
   function teamSlug(name) { return normName(name).replace(/ /g, "-"); }
 
+  // Competitions that carry an edition year in the URL: periodic tournaments
+  // (World Cup, Euro…) plus the European continental club cups. Everything else
+  // is an annual, continuous competition and stays evergreen (no year).
+  var EDITION_RE = /world cup|copa am[eé]rica|nations league|european championship|\beuro\b|africa cup of nations|afcon|asian cup|gold cup|champions league|europa league|conference league|super cup/i;
+  // A football season is named by the year it ends (Aug–Dec belong to the next
+  // year's season), so World Cup 2026 → 2026 and Champions League 26/27 → 2027.
+  function editionYear(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return null;
+    var y = d.getUTCFullYear(), m = d.getUTCMonth() + 1;
+    return m >= 8 ? y + 1 : y;
+  }
+  // League slug for the URL hierarchy, with the edition appended where it matters.
+  function leagueSlugFor(comp, iso) {
+    var base = teamSlug(comp || "football");
+    if (EDITION_RE.test(comp || "")) {
+      var y = editionYear(iso);
+      if (y) return base + "-" + y;
+    }
+    return base;
+  }
+
   // Build the public share / detail URL for a match: a descriptive, crawlable
   // /g/<league>/<date>/<home>-vs-<away> page that nests under the league hub
   // (/g/<league>). The server resolves it back to the day's fixture to render
@@ -383,7 +405,7 @@
   function shareLink(fx) {
     var d = new Date(fx.kickoff);
     var date = isNaN(d.getTime()) ? lisbonYmd(new Date()) : lisbonYmd(d);
-    var league = teamSlug(fx.competition || "football");
+    var league = leagueSlugFor(fx.competition, fx.kickoff);
     return location.origin + "/g/" + league + "/" + date + "/" +
       teamSlug(fx.home) + "-vs-" + teamSlug(fx.away);
   }

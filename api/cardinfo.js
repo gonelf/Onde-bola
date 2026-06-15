@@ -110,6 +110,8 @@ function extractCard(fmid, data) {
     comp, leagueBadge,
     score, status: statusLabel,
     date, isoDate,
+    // Raw ISO kickoff (UTC) — lets the share page emit SportsEvent.startDate.
+    kickoff: kickoffUTC || "",
     finished,
   };
 }

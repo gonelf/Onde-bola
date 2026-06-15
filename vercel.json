@@ -1,6 +1,9 @@
 {
   "rewrites": [
-    { "source": "/g/:id", "destination": "/api/share?id=:id" },
+    { "source": "/g/:league/:date(\\d{4}-\\d{2}-\\d{2})/:slug", "destination": "/api/share?league=:league&date=:date&slug=:slug" },
+    { "source": "/g/:date(\\d{4}-\\d{2}-\\d{2})/:slug", "destination": "/api/share?date=:date&slug=:slug" },
+    { "source": "/g/:id(\\d+)", "destination": "/api/share?id=:id" },
+    { "source": "/g/:league", "destination": "/api/league?league=:league" },
     { "source": "/og/:id", "destination": "/api/og?id=:id" },
     { "source": "/g", "destination": "/api/share" },
     { "source": "/og", "destination": "/api/og" }

@@ -147,7 +147,8 @@
       noListing: "No TV listing yet", clickDetails: "Click for details ›",
       listings: "📡 Listings", moreOne: "more country in details ›",
       moreMany: "more countries in details ›",
-      games: "games", competitions: "competitions", liveNow: "live now",
+      game: "game", games: "games", competition: "competition",
+      competitions: "competitions", liveNow: "live now", group: "Group",
       withTv: "with real TV listings", updated: "updated", live: "LIVE", ft: "FT",
       freeAir: "Free-to-air", paidSub: "Paid cable / subscription",
       whereToWatch: "Where to watch", realListings: "📡 Real broadcast listings",
@@ -172,7 +173,8 @@
       noListing: "Sem emissão conhecida", clickDetails: "Clica para detalhes ›",
       listings: "📡 Emissões", moreOne: "mais país nos detalhes ›",
       moreMany: "mais países nos detalhes ›",
-      games: "jogos", competitions: "competições", liveNow: "ao vivo",
+      game: "jogo", games: "jogos", competition: "competição",
+      competitions: "competições", liveNow: "ao vivo", group: "Grupo",
       withTv: "com emissão de TV", updated: "atualizado", live: "AO VIVO", ft: "FIM",
       freeAir: "Sinal aberto", paidSub: "Cabo / subscrição",
       whereToWatch: "Onde ver", realListings: "📡 Emissões de TV reais",
@@ -292,9 +294,25 @@
       .then(function (d) {
         return ((d && d.fixtures) || []).map(function (fx) {
           fx.tv = fx.tv || [];
+          // FotMob lists each World Cup / continental group as its own
+          // "competition" (e.g. "World Cup Grp F"). Collapse them into the one
+          // tournament so the count and the list group correctly, keeping the
+          // group letter for a per-match label.
+          var parts = splitCompetition(fx.competition);
+          fx.competition = parts.base;
+          fx.group = parts.group;
           return fx;
         });
       });
+  }
+
+  // Split a feed competition name into its tournament and (optional) group,
+  // e.g. "World Cup Grp F" -> { base: "World Cup", group: "F" }. Names without
+  // a "Grp"/"Group" marker (incl. tiers like "Nations League A") are left whole.
+  function splitCompetition(name) {
+    var m = /^(.+?)\s+(?:Grp|Group)\.?\s+([A-Z0-9]+)$/i.exec((name || "").trim());
+    if (m) return { base: m[1].trim(), group: m[2].toUpperCase() };
+    return { base: name || "Football", group: "" };
   }
 
   // Real broadcast listings for the day (TheSportsDB TV feed, free key).
@@ -532,8 +550,10 @@
         fixtures.forEach(function (f) { comps[f.competition] = true; });
         var live = fixtures.filter(function (f) { return statusOf(f).state === "live"; }).length;
         var withTv = fixtures.filter(function (f) { return f.tv && f.tv.length; }).length;
-        var base = fixtures.length + " " + t("games") + " · " + Object.keys(comps).length +
-          " " + t("competitions") + (live ? " · " + live + " " + t("liveNow") : "");
+        var nGames = fixtures.length, nComps = Object.keys(comps).length;
+        var base = nGames + " " + t(nGames === 1 ? "game" : "games") + " · " +
+          nComps + " " + t(nComps === 1 ? "competition" : "competitions") +
+          (live ? " · " + live + " " + t("liveNow") : "");
         el.status.hidden = false;
         el.status.className = "status";
         el.status.innerHTML = '<span class="badge">' + (live ? t("live") : "OK") + "</span>" +
@@ -801,24 +821,45 @@
     var everyN = ADS.everyN || 6;
     var cardCount = 0;
 
+    function cardFor(g) {
+      var out = matchHtml(g);
+      cardCount++;
+      if (ads && cardCount % everyN === 0) out += adSlotHtml();
+      return out;
+    }
+
     var html = order.map(function (comp) {
+      // Sort by group first (so a tournament reads A, B, C…), then by kickoff.
       var games = groups[comp].sort(function (a, b) {
-        return new Date(a.kickoff) - new Date(b.kickoff);
+        return (a.group || "").localeCompare(b.group || "") ||
+          new Date(a.kickoff) - new Date(b.kickoff);
       });
       var badged = games.filter(function (g) { return g.leagueBadgeUrl; })[0];
       var badgeUrl = badged ? badged.leagueBadgeUrl : "";
-      var cards = games.map(function (g) {
-        var out = matchHtml(g);
-        cardCount++;
-        if (ads && cardCount % everyN === 0) out += adSlotHtml();
-        return out;
+
+      // When a tournament spans several groups (World Cup, continental cups),
+      // split its section into one labelled block per group.
+      var buckets = {}, groupOrder = [];
+      games.forEach(function (g) {
+        var k = g.group || "";
+        if (!buckets[k]) { buckets[k] = []; groupOrder.push(k); }
+        buckets[k].push(g);
+      });
+      var multiGroup = groupOrder.length > 1 || (groupOrder.length === 1 && groupOrder[0]);
+
+      var body = groupOrder.map(function (k) {
+        var head = (multiGroup && k)
+          ? '<h3 class="group-head">' + escapeHtml(t("group") + " " + k) + "</h3>"
+          : "";
+        return head + buckets[k].map(cardFor).join("");
       }).join("");
+
       return '<section class="competition">' +
         '<h2 class="competition-head">' +
           leagueLogoHtml(badgeUrl, comp) +
           '<span class="competition-name">' + escapeHtml(comp) + "</span>" +
           '<span class="count">' + games.length + "</span></h2>" +
-        cards +
+        body +
       "</section>";
     }).join("");
 
@@ -961,8 +1002,9 @@
         ? '<span class="detail-status ft">' + escapeHtml(st.label || "FT") + "</span>"
         : '<span class="detail-status">' + escapeHtml(timeStr) + "</span>";
 
+    var compLabel = fx.competition + (fx.group ? " · " + t("group") + " " + fx.group : "");
     return '<div class="detail-comp">' + leagueLogoHtml(fx.leagueBadgeUrl, fx.competition) +
-        '<span id="detail-title">' + escapeHtml(fx.competition) + "</span></div>" +
+        '<span id="detail-title">' + escapeHtml(compLabel) + "</span></div>" +
       '<div class="detail-teams">' +
         '<div class="detail-team">' + badgeHtml(fx.homeBadge, fx.home) +
           "<span>" + escapeHtml(fx.home) + "</span></div>" +

@@ -149,6 +149,8 @@ function normalize(data, date, majorOnly) {
         awayBadge: away.id != null ? TEAM_LOGO(away.id) : "",
         kickoff: isoTime(status.utcTime) || isoTime(m.timeTS) || noon,
         venue: "",
+        leagueId: leagueId != null ? leagueId : null,
+        ccode: lg.ccode || "",
         leagueBadgeUrl: leagueId != null ? LEAGUE_LOGO(leagueId) : "",
         homeScore: hs,
         awayScore: as,

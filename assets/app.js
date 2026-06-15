@@ -739,6 +739,25 @@
     return !!state.hidden[competition || "Football"];
   }
 
+  // Competition ordering: the biggest tournaments first (by FotMob league id),
+  // then the selected country's competitions, then everything else A–Z.
+  var COMP_PRIORITY = [77, 76, 50, 44, 9134, 42, 73, 10216, 45];
+  var COUNTRY_CCODES = {
+    "Portugal": ["POR"], "Spain": ["ESP"], "England": ["ENG"],
+    "United Kingdom": ["ENG", "SCO", "WAL", "NIR"], "France": ["FRA"],
+    "Germany": ["GER"], "Italy": ["ITA"], "Netherlands": ["NED"],
+    "Brazil": ["BRA"], "United States": ["USA"], "Argentina": ["ARG"],
+    "Mexico": ["MEX"],
+  };
+
+  function compRank(meta) {
+    var pri = meta.leagueId != null ? COMP_PRIORITY.indexOf(Number(meta.leagueId)) : -1;
+    if (pri >= 0) return [0, pri, ""];
+    var mine = COUNTRY_CCODES[state.primaryCountry] || [];
+    if (meta.ccode && mine.indexOf(meta.ccode) >= 0) return [1, 0, meta.name];
+    return [2, 0, meta.name];
+  }
+
   function render() {
     // Drop leagues the user has filtered out, then apply the search.
     var shown = state.fixtures.filter(function (fx) { return !isHidden(fx.competition); });
@@ -752,17 +771,26 @@
       return;
     }
 
-    // Group by competition.
+    // Group by competition, capturing each group's league id + country code.
     var groups = {};
+    var meta = {};
     var order = [];
     fixtures.forEach(function (fx) {
       var key = fx.competition || "Football";
-      if (!groups[key]) { groups[key] = []; order.push(key); }
+      if (!groups[key]) {
+        groups[key] = [];
+        meta[key] = { name: key, leagueId: fx.leagueId, ccode: fx.ccode };
+        order.push(key);
+      }
       groups[key].push(fx);
     });
 
-    // Sort competitions alphabetically; matches within a group by kickoff.
-    order.sort(function (a, b) { return a.localeCompare(b); });
+    // Order by importance (big tournaments) → selected country → rest A–Z;
+    // matches within a group by kickoff.
+    order.sort(function (a, b) {
+      var ra = compRank(meta[a]), rb = compRank(meta[b]);
+      return ra[0] - rb[0] || ra[1] - rb[1] || ra[2].localeCompare(rb[2]);
+    });
 
     // Insert an ad after every Nth card, counted across all competitions.
     var ads = adsEnabled();

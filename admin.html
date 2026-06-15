@@ -78,6 +78,10 @@
         <label for="away">Away team</label>
         <input id="away" type="text" placeholder="e.g. Cape Verde" />
       </div>
+      <div>
+        <label for="fmid">FotMob match id</label>
+        <input id="fmid" type="text" placeholder="auto-filled by picker" />
+      </div>
     </div>
     <div class="toolbar">
       <button class="secondary" id="loadFixtures">Load fixtures</button>
@@ -135,6 +139,21 @@
           var parts = Object.keys(cs).map(function (c) { return c + ":" + (cs[c].matchKeys || 0); });
           return m + " matches merged · per-country " + (parts.join(" ") || "—");
         } },
+      { id: "matchdetails", label: "FotMob · match details (api/matchdetails)", needs: ["fmid"],
+        url: function (p) { return "/api/matchdetails?id=" + encodeURIComponent(p.fmid) + "&debug=1"; },
+        summary: function (j) {
+          if (!j) return "no response";
+          if (!j.ok) return "no details (ok=false)";
+          var d = j.details || {};
+          return "venue " + (d.venue ? "✅" : "—") +
+            " · ref " + (d.referee ? "✅" : "—") +
+            " · att " + (d.attendance || "—") +
+            " · events " + ((d.events || []).length) +
+            " · stats " + ((d.stats || []).length) +
+            " · form " + (d.form ? "✅" : "—") +
+            " · h2h " + (d.h2h ? "✅" : "—") +
+            " · motm " + (d.motm ? "✅" : "—");
+        } },
       { id: "sofatv", label: "SofaScore (api/sofatv)", needs: ["date", "home", "away"],
         url: function (p) { return "/api/sofatv?date=" + p.date + "&home=" + encodeURIComponent(p.home) +
           "&away=" + encodeURIComponent(p.away) + "&debug=1"; },
@@ -151,7 +170,8 @@
     var results = {}; // id -> { label, url, status, line }
 
     function params() {
-      return { date: $("date").value || todayUTC(), home: $("home").value.trim(), away: $("away").value.trim() };
+      return { date: $("date").value || todayUTC(), home: $("home").value.trim(),
+        away: $("away").value.trim(), fmid: $("fmid").value.trim() };
     }
 
     function render() {
@@ -266,7 +286,7 @@
           sel.innerHTML = '<option value="">— ' + ev.length + ' matches —</option>';
           ev.forEach(function (e) {
             var o = document.createElement("option");
-            o.value = (e.home || "") + "|" + (e.away || "");
+            o.value = (e.home || "") + "|" + (e.away || "") + "|" + (e.fmid || "");
             o.textContent = (e.home || "?") + " vs " + (e.away || "?") +
               (e.competition ? "  ·  " + e.competition : "");
             sel.appendChild(o);
@@ -278,6 +298,7 @@
     $("match").addEventListener("change", function () {
       var v = this.value; if (!v) return;
       var parts = v.split("|"); $("home").value = parts[0] || ""; $("away").value = parts[1] || "";
+      $("fmid").value = parts[2] || "";
     });
     $("loadFixtures").addEventListener("click", loadFixtures);
     $("runAll").addEventListener("click", runAll);

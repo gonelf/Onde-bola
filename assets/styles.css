@@ -391,6 +391,9 @@ body {
   align-items: center;
   gap: 6px 10px;
   padding-top: 10px;
+  /* Reserve a gutter on the right so channel chips never run under the
+     bottom-right share button. */
+  padding-right: 40px;
   border-top: 1px dashed var(--line);
   min-width: 0;
   max-width: 100%;
@@ -900,7 +903,7 @@ body {
 /* ---- Share ------------------------------------------------------------- */
 .share-btn {
   position: absolute;
-  top: 8px;
+  bottom: 10px;
   right: 10px;
   z-index: 2;
   display: inline-flex;
@@ -928,7 +931,7 @@ body {
 .share-btn.copied::after {
   content: attr(aria-label);
   position: absolute;
-  top: 112%;
+  bottom: 112%;
   right: 0;
   white-space: nowrap;
   background: var(--accent);
@@ -983,3 +986,74 @@ body {
   border-radius: 6px;
   pointer-events: none;
 }
+
+/* ---- Highlights button on the card ------------------------------------- */
+.hl-card-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: rgba(22, 210, 122, 0.12);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.hl-card-btn:hover, .hl-card-btn:focus-visible {
+  background: var(--accent);
+  color: #06281a;
+  outline: none;
+}
+
+/* ---- Highlight video embed (click-to-load) ----------------------------- */
+.hl-embed {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  margin: 0 0 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+  cursor: pointer;
+}
+.hl-embed .hl-thumb {
+  width: 100%;
+  height: 100%;
+  /* hqdefault is 4:3 with letterbox bars; cover crops them to the 16:9 frame. */
+  object-fit: cover;
+  display: block;
+}
+.hl-embed iframe { width: 100%; height: 100%; border: 0; display: block; }
+.hl-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 4px;
+  pointer-events: none;
+  transition: background 0.15s, color 0.15s;
+}
+.hl-embed:hover .hl-play, .hl-embed:focus-visible .hl-play {
+  background: var(--accent);
+  color: #06281a;
+}
+.hl-embed:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.detail-embed { margin: 4px 0 10px; max-width: 520px; }

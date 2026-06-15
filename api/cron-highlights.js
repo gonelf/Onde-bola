@@ -9,8 +9,10 @@
  *      for today and yesterday (UTC).
  *   2. Keep finished matches in the major competitions.
  *   3. For each, resolve a highlights link from FotMob's match details — its own
- *      clip URL when present (often a YouTube / social link) — and always attach
- *      a keyless YouTube search link as a fallback.
+ *      clip URL when present (often a YouTube / social link). It also resolves an
+ *      embeddable YouTube video id (from that clip when it's YouTube, otherwise
+ *      via the YouTube Data API when YOUTUBE_API_KEY is set) so the client can
+ *      embed the video inline, and always attaches a keyless search link too.
  *   4. Store the result in KV:
  *        hl:<fmid>      -> one match's highlight object   (90d TTL)
  *        hl:day:<date>  -> { fmid: obj } map for the feed  (90d TTL)
@@ -27,6 +29,8 @@
  *
  * Env: CRON_SECRET (optional), FOTMOB_DISABLED=1, MAJOR_LEAGUE_IDS (optional),
  *      HL_DETAIL_LIMIT (optional, default 40),
+ *      YOUTUBE_API_KEY (optional — enables embeddable-video resolution),
+ *      HL_YT_LIMIT (optional, default 25 — Data API searches per run),
  *      KV_REST_API_URL / KV_REST_API_TOKEN (required to store anything).
  */
 
@@ -44,6 +48,14 @@ const HL_TTL = "7776000";
 // Cap the number of FotMob match-detail fetches per run so a single invocation
 // stays well within the function time budget. Split work with ?date= if needed.
 const DETAIL_LIMIT = Math.max(1, Number(process.env.HL_DETAIL_LIMIT) || 40);
+
+// YouTube Data API: used to resolve a specific, embeddable video for matches
+// whose FotMob clip isn't a YouTube link (so the client can embed it inline
+// instead of only offering a search). Optional — without a key we just skip it
+// and keep the search fallback. A per-run cap guards the API's daily quota
+// (each search.list call costs 100 units of the default 10k/day).
+const YT_KEY = process.env.YOUTUBE_API_KEY || "";
+const YT_LIMIT = Math.max(0, Number(process.env.HL_YT_LIMIT) || 25);
 
 // Major competitions only (FotMob league ids) — same default set as /api/fixtures.
 // Override with MAJOR_LEAGUE_IDS (CSV); set it empty to sweep everything.
@@ -186,6 +198,36 @@ function youtubeSearch(m) {
   return "https://www.youtube.com/results?search_query=" + q;
 }
 
+// Pull the 11-char YouTube video id out of any common YouTube URL shape
+// (watch?v=, youtu.be/, embed/, shorts/). Returns "" when it isn't YouTube.
+function youtubeId(u) {
+  const s = str(u);
+  const m = s.match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : "";
+}
+
+// A short, human-readable provider label for a clip URL (youtube / x / streamable
+// / the bare host) so we can see the real source mix once it's collected.
+function providerOf(u, source) {
+  const s = str(u);
+  if (youtubeId(s)) return "youtube";
+  const host = safe(function () { return new URL(s).hostname.replace(/^www\./, ""); }, "");
+  if (/twitter\.com|x\.com|t\.co/.test(host)) return "x";
+  if (/streamable\.com/.test(host)) return "streamable";
+  return host || str(source) || "";
+}
+
+// Resolve a specific, embeddable YouTube video id via the Data API (top result).
+// Returns "" when no key is set, the quota call fails, or nothing matches.
+async function ytSearchId(query) {
+  if (!YT_KEY) return "";
+  const url = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video" +
+    "&maxResults=1&videoEmbeddable=true&safeSearch=none" +
+    "&q=" + encodeURIComponent(query) + "&key=" + YT_KEY;
+  const data = await getJson(url, 6000);
+  return safe(function () { return str(data.items[0].id.videoId); }, "");
+}
+
 // Build the stored highlight record for a match, fetching FotMob details only
 // when we don't already have a real clip URL (keeps upstream calls minimal).
 async function resolveHighlight(m, prev, budget) {
@@ -193,14 +235,25 @@ async function resolveHighlight(m, prev, budget) {
   let url = (prev && /^https?:\/\//.test(str(prev.url))) ? prev.url : "";
   let source = (prev && prev.source) || "";
 
-  if (!url && budget.left > 0) {
-    budget.left -= 1;
+  // 1) FotMob's own clip — fetched only when we don't already have one.
+  if (!url && budget.detail > 0) {
+    budget.detail -= 1;
     let data = await getJson(`${BASE}/data/matchDetails?matchId=${m.fmid}`);
     if (!data || (!data.content && !data.general)) {
       data = await getJson(`${BASE}/matchDetails?matchId=${m.fmid}`);
     }
     const hl = data ? highlightFrom(data) : null;
     if (hl) { url = hl.url; source = hl.source; }
+  }
+
+  // 2) Resolve an embeddable YouTube video id. Prefer the id inside FotMob's own
+  // clip (its highlights are usually YouTube); otherwise fall back to a Data API
+  // search. Reuse a previously-resolved id so re-runs don't spend quota.
+  let ytId = youtubeId(url) || (prev && str(prev.youtubeId)) || "";
+  if (!ytId && YT_KEY && budget.yt > 0) {
+    budget.yt -= 1;
+    ytId = await ytSearchId(m.home + " vs " + m.away + " " +
+      (m.competition || "") + " highlights");
   }
 
   return {
@@ -218,7 +271,9 @@ async function resolveHighlight(m, prev, budget) {
     status: "FT",
     url: url,
     source: source,
-    youtube: youtube,
+    provider: url ? providerOf(url, source) : "",
+    youtubeId: ytId,        // 11-char id when we have an embeddable video
+    youtube: youtube,       // keyless search fallback, always present
     updatedAt: new Date().toISOString(),
   };
 }
@@ -262,8 +317,9 @@ module.exports = async (req, res) => {
     }
   }
 
-  const budget = { left: DETAIL_LIMIT };
-  const summary = { ok: true, dates: dates, finished: 0, withUrl: 0, stored: 0, detailFetches: 0, days: {} };
+  const budget = { detail: DETAIL_LIMIT, yt: YT_LIMIT };
+  const summary = { ok: true, dates: dates, finished: 0, withUrl: 0, withVideo: 0,
+    stored: 0, detailFetches: 0, ytSearches: 0, days: {} };
 
   for (const date of dates) {
     let data = await getJson(`${BASE}/data/matches?date=${ymd(date)}&timezone=UTC`);
@@ -282,10 +338,13 @@ module.exports = async (req, res) => {
     const resolved = await mapPool(matches, 6, (m) =>
       resolveHighlight(m, dayMap[m.fmid], budget));
 
-    let dayWithUrl = 0;
+    let dayWithUrl = 0, dayWithVideo = 0;
+    const providers = {};
     for (const rec of resolved) {
       dayMap[rec.fmid] = rec;
       if (rec.url) dayWithUrl += 1;
+      if (rec.youtubeId) dayWithVideo += 1;
+      if (rec.provider) providers[rec.provider] = (providers[rec.provider] || 0) + 1;
       // Per-match record so /api/matchdetails can merge a clip FotMob's live
       // payload didn't include yet.
       await kv(["SET", `hl:${rec.fmid}`, JSON.stringify(rec), "EX", HL_TTL]);
@@ -294,10 +353,14 @@ module.exports = async (req, res) => {
 
     summary.stored += resolved.length;
     summary.withUrl += dayWithUrl;
-    summary.days[date] = { finished: matches.length, withUrl: dayWithUrl };
+    summary.withVideo += dayWithVideo;
+    summary.days[date] = { finished: matches.length, withUrl: dayWithUrl,
+      withVideo: dayWithVideo, providers: providers };
   }
 
-  summary.detailFetches = DETAIL_LIMIT - budget.left;
-  if (debug) summary._note = "withUrl counts matches with a real FotMob clip; the rest carry a YouTube fallback.";
+  summary.detailFetches = DETAIL_LIMIT - budget.detail;
+  summary.ytSearches = YT_LIMIT - budget.yt;
+  if (debug) summary._note = "withUrl = matches with a FotMob clip; withVideo = matches with an embeddable YouTube id " +
+    "(from the clip or a Data API search); the rest carry a keyless YouTube search link.";
   res.status(200).json(summary);
 };

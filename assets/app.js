@@ -30,6 +30,7 @@
     hidden: {},       // competition name -> true when hidden from the list
     remember: false,  // persist the filter selection across visits
     primaryCountry: "Portugal", // country shown first on cards; default by IP
+    highlightsById: {}, // fmid -> highlight record, for the per-card button
   };
 
   var el = {
@@ -202,6 +203,7 @@
       noSearch: "No games match your search for this date.",
       noFixtures: "No fixtures found for this date.",
       feedDown: "Couldn’t reach the live data feed. Please try again in a moment.",
+      hlCard: "Highlights", hlCardAria: "Watch highlights",
       consent: "Hoje Há Bola is free thanks to ads. We’d like to use cookies to show ads and measure traffic. You can change this anytime via “Ad preferences” in the footer.",
       accept: "Accept", reject: "Reject",
     },
@@ -238,6 +240,7 @@
       noSearch: "Nenhum jogo corresponde à tua pesquisa nesta data.",
       noFixtures: "Sem jogos para esta data.",
       feedDown: "Não foi possível contactar o feed de dados. Tenta novamente daqui a momentos.",
+      hlCard: "Resumo", hlCardAria: "Ver resumo",
       consent: "O Hoje Há Bola é grátis graças aos anúncios. Gostaríamos de usar cookies para mostrar anúncios e medir o tráfego. Podes alterar isto a qualquer momento em “Preferências de anúncios” no rodapé.",
       accept: "Aceitar", reject: "Rejeitar",
     },
@@ -790,6 +793,71 @@
     updateLeaguePanel();
   }
 
+  // ---- Highlights view ----------------------------------------------------
+
+  // Switch between the day's fixtures and the recent-highlights feed. Marks the
+  // active tab, hides the date pager + league filter (which don't apply to
+  // Fetch the highlights collected by the cron sweep (/api/highlights) and index
+  // them by FotMob match id, so each finished game's card can show a Highlights
+  // button. Best effort: any failure just leaves the map empty (no buttons).
+  function loadHighlights() {
+    fetch("/api/highlights", { headers: { Accept: "application/json" } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        var map = {};
+        ((d && d.highlights) || []).forEach(function (h) {
+          if (h && h.fmid) map[String(h.fmid)] = h;
+        });
+        state.highlightsById = map;
+        // Re-render only if games are already on screen (otherwise the fixtures
+        // load will render with the map in place, with no empty-state flash).
+        if (state.fixtures.length) render();
+      })
+      .catch(function () {});
+  }
+
+  // The watch link for a finished game's highlight, or "" when none is available.
+  // Prefers the embeddable YouTube video, then FotMob's own clip.
+  function highlightLink(fx) {
+    var h = fx && fx.fmid && state.highlightsById[String(fx.fmid)];
+    if (!h) return "";
+    var id = ytIdOf(h);
+    if (id) return "https://youtu.be/" + id;
+    if (h.url && /^https?:\/\//.test(h.url)) return h.url;
+    return "";
+  }
+
+  // Resolve an 11-char YouTube id from a highlight record — the cron's resolved
+  // youtubeId, or one parsed from the FotMob clip URL when it's a YouTube link.
+  function ytIdOf(h) {
+    var direct = h && h.youtubeId;
+    if (direct && /^[A-Za-z0-9_-]{11}$/.test(direct)) return direct;
+    var m = String((h && h.url) || "").match(
+      /(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+    return m ? m[1] : "";
+  }
+
+  // Click-to-load facade: a thumbnail + play button. The iframe is only created
+  // on click (lighter, and no YouTube cookies until the user opts in).
+  function ytFacadeHtml(id) {
+    return '<button class="hl-embed" type="button" data-yt="' + escapeHtml(id) +
+        '" aria-label="' + escapeHtml(t("mdWatch")) + '">' +
+      '<img class="hl-thumb" loading="lazy" alt="" src="https://i.ytimg.com/vi/' +
+        encodeURIComponent(id) + '/hqdefault.jpg" />' +
+      '<span class="hl-play" aria-hidden="true">▶</span>' +
+    "</button>";
+  }
+
+  function loadHlEmbed(box) {
+    var id = box.getAttribute("data-yt") || "";
+    if (!/^[A-Za-z0-9_-]{11}$/.test(id) || box.querySelector("iframe")) return;
+    box.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' +
+      encodeURIComponent(id) + '?autoplay=1&rel=0" title="' + escapeHtml(t("mdHighlights")) +
+      '" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture; web-share" ' +
+      "allowfullscreen></iframe>";
+    box.classList.add("playing");
+  }
+
   // ---- Rendering ----------------------------------------------------------
 
   function showStatus(kind, badge, text) {
@@ -948,6 +1016,15 @@
     return '<span class="channel none">' + t("noListing") + "</span>";
   }
 
+  // A "▶ Highlights" link on the card, shown only when the cron has collected a
+  // watchable highlight for this game (see highlightLink). Opens the video.
+  function highlightBtnHtml(fx) {
+    var link = highlightLink(fx);
+    if (!link) return "";
+    return '<a class="hl-card-btn" href="' + escapeHtml(link) + '" target="_blank" rel="noopener" ' +
+      'aria-label="' + escapeHtml(t("hlCardAria")) + '">▶ ' + escapeHtml(t("hlCard")) + "</a>";
+  }
+
   function matchHtml(fx) {
     var st = statusOf(fx);
     var cls = "match" + (st.state === "live" ? " is-live" : "");
@@ -965,7 +1042,7 @@
           '<span class="team-name">' + escapeHtml(fx.away) + "</span>" +
           scoreHtml(fx, "away") + "</div>" +
       "</div>" +
-      '<div class="channels">' + channelsHtml(fx) + "</div>" +
+      '<div class="channels">' + highlightBtnHtml(fx) + channelsHtml(fx) + "</div>" +
       '<span class="details-hint">' + t("clickDetails") + "</span>" +
     "</article>";
   }
@@ -1248,14 +1325,17 @@
     if (!d) return "";
     var out = "";
 
-    // Highlights: link FotMob's own clip when present, and always offer a
-    // YouTube search for finished matches (keyless — opens YouTube's results).
+    // Highlights: embed the video inline when we have an embeddable YouTube id
+    // (from FotMob's own clip or the cron's Data API lookup), link FotMob's clip
+    // when present, and always offer a keyless YouTube search for finished games.
     var finished = statusOf(fx).state === "finished";
-    if (d.highlights && d.highlights.url || finished) {
+    if (d.highlights && (d.highlights.url || d.highlights.youtubeId) || finished) {
+      var embedId = d.highlights ? ytIdOf(d.highlights) : "";
       var ytq = encodeURIComponent(fx.home + " vs " + fx.away + " " +
         (fx.competition || "") + " highlights");
       var ytUrl = "https://www.youtube.com/results?search_query=" + ytq;
       out += '<h3 class="detail-h">' + t("mdHighlights") + "</h3>" +
+        (embedId ? '<div class="detail-embed">' + ytFacadeHtml(embedId) + "</div>" : "") +
         '<div class="detail-highlights">' +
           (d.highlights && d.highlights.url
             ? '<a class="hl-btn" href="' + escapeHtml(d.highlights.url) +
@@ -1508,8 +1588,8 @@
       saveFilters();
     });
 
-    // Open match details on click or keyboard activation. A click on the card's
-    // share button shares instead of opening the modal.
+    // Open match details on click or keyboard activation. Clicks on the card's
+    // share button or highlights link act on their own, not opening the modal.
     el.games.addEventListener("click", function (e) {
       var shareBtn = e.target.closest(".share-btn");
       if (shareBtn) {
@@ -1518,12 +1598,13 @@
         if (sc) shareMatch(fixtureById(sc.getAttribute("data-id")), shareBtn);
         return;
       }
+      if (e.target.closest(".hl-card-btn")) { e.stopPropagation(); return; } // the link navigates itself
       var card = e.target.closest(".match[data-id]");
       if (card) openDetails(card.getAttribute("data-id"));
     });
     el.games.addEventListener("keydown", function (e) {
       if (e.key !== "Enter" && e.key !== " ") return;
-      if (e.target.closest(".share-btn")) return; // let the share button act itself
+      if (e.target.closest(".share-btn") || e.target.closest(".hl-card-btn")) return; // let the button act itself
       var card = e.target.closest(".match[data-id]");
       if (card) { e.preventDefault(); openDetails(card.getAttribute("data-id")); }
     });
@@ -1535,6 +1616,13 @@
     }
     el.detailOverlay.addEventListener("click", function (e) {
       if (e.target === el.detailOverlay) closeDetails();
+    });
+
+    // Click-to-load a highlight video in the match-detail modal: swap the
+    // thumbnail facade for the YouTube iframe.
+    document.addEventListener("click", function (e) {
+      var box = e.target.closest(".hl-embed[data-yt]");
+      if (box) { e.preventDefault(); loadHlEmbed(box); }
     });
 
     // Close the dropdown when clicking elsewhere or pressing Escape.
@@ -1556,11 +1644,13 @@
     initConsent();
     renderBanners();
     loadFixtures();
+    loadHighlights(); // index recent highlights so finished cards get a button
     // When viewing today, silently refresh live scores/status every 60s.
     // On other days just re-render to keep time-based badges accurate.
     setInterval(function () {
       if (isSameDay(state.date, new Date())) {
         loadFixtures(true);
+        loadHighlights(); // pick up clips for games that just finished
       } else if (!state.search) {
         render();
       }

@@ -70,7 +70,11 @@ api/sofatv.js                    Unofficial SofaScore TV proxy (on-demand fallba
 api/fmtv.js                      Unofficial FotMob TV proxy (free day-bulk, Portugal-first)
 api/geo.js                       Visitor country (Vercel edge header) for the default listings country
 api/health.js                    Read-only config/KV diagnostics for the admin page
-admin.html                       Connections debugger (live-tests every source)
+admin.html                       Connections debugger (live-tests every source, noindex)
+assets/og-image.svg              Social share / Open Graph card
+robots.txt                       Crawl rules (allows the site, disallows admin.html + /api)
+sitemap.xml                      Sitemap (homepage only; admin.html excluded)
+llms.txt                         Site summary for LLM/AI crawlers
 ```
 
 The card shows the **primary country**'s channels first; the rest fold into the

@@ -208,7 +208,7 @@
       feedDown: "Couldn’t reach the live data feed. Please try again in a moment.",
       hlTab: "🎬 Highlights", hlBack: "‹ Games",
       hlTitle: "Match highlights", hlSub: "Recently finished games — tap a card to watch.",
-      hlLoading: "Loading highlights…",
+      hlOpenYt: "Open on YouTube ↗", hlLoading: "Loading highlights…",
       hlEmpty: "No highlights yet. Finished games appear here once their clips are ready.",
       hlError: "Couldn’t load highlights. Please try again in a moment.",
       consent: "Hoje Há Bola is free thanks to ads. We’d like to use cookies to show ads and measure traffic. You can change this anytime via “Ad preferences” in the footer.",
@@ -249,7 +249,7 @@
       feedDown: "Não foi possível contactar o feed de dados. Tenta novamente daqui a momentos.",
       hlTab: "🎬 Resumos", hlBack: "‹ Jogos",
       hlTitle: "Resumos dos jogos", hlSub: "Jogos terminados recentemente — toca num cartão para ver.",
-      hlLoading: "A carregar resumos…",
+      hlOpenYt: "Abrir no YouTube ↗", hlLoading: "A carregar resumos…",
       hlEmpty: "Ainda sem resumos. Os jogos terminados aparecem aqui assim que os vídeos estiverem prontos.",
       hlError: "Não foi possível carregar os resumos. Tenta novamente daqui a momentos.",
       consent: "O Hoje Há Bola é grátis graças aos anúncios. Gostaríamos de usar cookies para mostrar anúncios e medir o tráfego. Podes alterar isto a qualquer momento em “Preferências de anúncios” no rodapé.",
@@ -867,19 +867,53 @@
     } catch (e) { return ""; }
   }
 
-  // One highlight card: the whole card is a link to the clip (FotMob's own when
-  // present, otherwise a YouTube search). Reuses the .teams/.team match styling.
+  // Resolve an 11-char YouTube id from a highlight record — the cron's resolved
+  // youtubeId, or one parsed from the FotMob clip URL when it's a YouTube link.
+  function ytIdOf(h) {
+    var direct = h && h.youtubeId;
+    if (direct && /^[A-Za-z0-9_-]{11}$/.test(direct)) return direct;
+    var m = String((h && h.url) || "").match(
+      /(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+    return m ? m[1] : "";
+  }
+
+  // Click-to-load facade: a thumbnail + play button. The iframe is only created
+  // on click (lighter, and no YouTube cookies until the user opts in).
+  function ytFacadeHtml(id) {
+    return '<button class="hl-embed" type="button" data-yt="' + escapeHtml(id) +
+        '" aria-label="' + escapeHtml(t("mdWatch")) + '">' +
+      '<img class="hl-thumb" loading="lazy" alt="" src="https://i.ytimg.com/vi/' +
+        encodeURIComponent(id) + '/hqdefault.jpg" />' +
+      '<span class="hl-play" aria-hidden="true">▶</span>' +
+    "</button>";
+  }
+
+  function loadHlEmbed(box) {
+    var id = box.getAttribute("data-yt") || "";
+    if (!/^[A-Za-z0-9_-]{11}$/.test(id) || box.querySelector("iframe")) return;
+    box.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' +
+      encodeURIComponent(id) + '?autoplay=1&rel=0" title="' + escapeHtml(t("hlTitle")) +
+      '" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture; web-share" ' +
+      "allowfullscreen></iframe>";
+    box.classList.add("playing");
+  }
+
+  // One highlight card. When we have an embeddable YouTube video the card plays
+  // inline (a <div> with the facade); otherwise it's a single link to the FotMob
+  // clip or a YouTube search. Reuses the .teams/.team match styling.
   function highlightCardHtml(h) {
+    var id = ytIdOf(h);
     var hasClip = h.url && /^https?:\/\//.test(h.url);
-    var href = hasClip ? h.url : (h.youtube || "");
-    var cta = hasClip ? t("mdWatch") : t("mdYouTube");
+    var primary = id ? ("https://youtu.be/" + id) : (hasClip ? h.url : (h.youtube || ""));
+    var cta = id ? t("hlOpenYt") : (hasClip ? t("mdWatch") : t("mdYouTube"));
     var sc = parseHlScore(h.score);
     var scoreFor = function (side) {
       return sc ? '<span class="score">' + escapeHtml(sc[side]) + "</span>" : "";
     };
     var when = formatHlDate(h.kickoff || h.date);
-    return '<a class="hl-card' + (hasClip ? "" : " no-clip") + '" href="' + escapeHtml(href) +
-        '" target="_blank" rel="noopener">' +
+
+    var meta =
+      (id ? ytFacadeHtml(id) : "") +
       '<div class="hl-comp">' + leagueLogoHtml(h.leagueBadgeUrl, h.competition) +
         '<span class="comp-name">' + escapeHtml(h.competition || "") + "</span>" +
         (when ? '<span class="hl-when">' + escapeHtml(when) + "</span>" : "") + "</div>" +
@@ -888,9 +922,18 @@
           '<span class="team-name">' + escapeHtml(h.home) + "</span>" + scoreFor("home") + "</div>" +
         '<div class="team">' + badgeHtml(h.awayBadge, h.away) +
           '<span class="team-name">' + escapeHtml(h.away) + "</span>" + scoreFor("away") + "</div>" +
-      "</div>" +
-      '<span class="hl-cta">' + escapeHtml(cta) + "</span>" +
-    "</a>";
+      "</div>";
+
+    if (id) {
+      // Inline-playable card: the CTA is a real link to the full video.
+      return '<div class="hl-card">' + meta +
+        '<a class="hl-cta" href="' + escapeHtml(primary) + '" target="_blank" rel="noopener">' +
+          escapeHtml(cta) + "</a></div>";
+    }
+    // Link-only card: the whole card opens the clip / search.
+    return '<a class="hl-card' + (hasClip ? "" : " no-clip") + '" href="' + escapeHtml(primary) +
+      '" target="_blank" rel="noopener">' + meta +
+      '<span class="hl-cta">' + escapeHtml(cta) + "</span></a>";
   }
 
   function renderHighlights() {
@@ -1375,14 +1418,17 @@
     if (!d) return "";
     var out = "";
 
-    // Highlights: link FotMob's own clip when present, and always offer a
-    // YouTube search for finished matches (keyless — opens YouTube's results).
+    // Highlights: embed the video inline when we have an embeddable YouTube id
+    // (from FotMob's own clip or the cron's Data API lookup), link FotMob's clip
+    // when present, and always offer a keyless YouTube search for finished games.
     var finished = statusOf(fx).state === "finished";
-    if (d.highlights && d.highlights.url || finished) {
+    if (d.highlights && (d.highlights.url || d.highlights.youtubeId) || finished) {
+      var embedId = d.highlights ? ytIdOf(d.highlights) : "";
       var ytq = encodeURIComponent(fx.home + " vs " + fx.away + " " +
         (fx.competition || "") + " highlights");
       var ytUrl = "https://www.youtube.com/results?search_query=" + ytq;
       out += '<h3 class="detail-h">' + t("mdHighlights") + "</h3>" +
+        (embedId ? '<div class="detail-embed">' + ytFacadeHtml(embedId) + "</div>" : "") +
         '<div class="detail-highlights">' +
           (d.highlights && d.highlights.url
             ? '<a class="hl-btn" href="' + escapeHtml(d.highlights.url) +
@@ -1667,6 +1713,13 @@
     }
     el.detailOverlay.addEventListener("click", function (e) {
       if (e.target === el.detailOverlay) closeDetails();
+    });
+
+    // Click-to-load a highlight video (works in both the Highlights grid and the
+    // match-detail modal). Swaps the thumbnail facade for the YouTube iframe.
+    document.addEventListener("click", function (e) {
+      var box = e.target.closest(".hl-embed[data-yt]");
+      if (box) { e.preventDefault(); loadHlEmbed(box); }
     });
 
     // Close the dropdown when clicking elsewhere or pressing Escape.

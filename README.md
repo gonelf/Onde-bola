@@ -193,15 +193,33 @@ Each run it:
    set as fixtures).
 3. Resolves a highlights link per match — FotMob's own clip URL when present,
    plus a keyless **YouTube search** fallback that's always attached.
-4. Writes `hl:<fmid>` (per match) and `hl:day:<date>` (the day's map) to KV with a
-   90-day TTL. It only re-fetches match details for games that don't yet have a
-   real clip URL, so repeat runs are cheap; detail fetches per run are capped by
-   `HL_DETAIL_LIMIT` (default 40).
+4. Resolves an **embeddable YouTube video id** so the client can play the clip
+   inline: it reads the id straight out of FotMob's clip when that's a YouTube
+   link (the common case, no API needed), and otherwise — if `YOUTUBE_API_KEY`
+   is set — asks the **YouTube Data API** for the top embeddable result. It also
+   records each clip's `provider` (youtube / x / streamable / host) so you can
+   see the real source mix in the run summary.
+5. Writes `hl:<fmid>` (per match) and `hl:day:<date>` (the day's map) to KV with a
+   90-day TTL. It only re-fetches match details / re-resolves a video for games
+   that don't already have one, so repeat runs are cheap and **don't burn YouTube
+   quota**. Detail fetches are capped by `HL_DETAIL_LIMIT` (default 40) and Data
+   API searches by `HL_YT_LIMIT` (default 25) per run.
 
-The match-details modal automatically uses a stored clip when FotMob's live
-payload doesn't include one yet (`api/matchdetails.js` falls back to `hl:<fmid>`),
-and `GET /api/highlights` returns the collected list (most-recent first;
-`?date=YYYY-MM-DD`, `?days=N`, or `?withUrl=1` for only real clips).
+The match-details modal and the Highlights view **embed the video inline**
+(click-to-load via `youtube-nocookie.com`, so no YouTube cookies until the user
+hits play); when there's no embeddable video they fall back to the FotMob clip
+link or a YouTube search. `api/matchdetails.js` also merges a stored clip/video
+when FotMob's live payload doesn't include one yet, and `GET /api/highlights`
+returns the collected list (most-recent first; `?date=YYYY-MM-DD`, `?days=N`, or
+`?withUrl=1` for only real clips).
+
+> **Embedding without a key:** most football highlights on FotMob are already
+> YouTube links, so inline playback works with **no `YOUTUBE_API_KEY`** for those
+> games. The key only adds coverage for matches whose FotMob clip is on another
+> host (or missing). Get a free key from the Google Cloud console (enable
+> *YouTube Data API v3*) and add it as `YOUTUBE_API_KEY` in the Vercel env — the
+> free tier's 10k units/day ≈ 100 searches, and the cap + reuse above keep usage
+> well under that.
 
 **Triggering it — use an external cron.** Vercel's free (Hobby) plan only allows
 a **daily** cron, which is too coarse for clips that appear minutes after full

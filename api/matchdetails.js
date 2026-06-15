@@ -70,6 +70,12 @@ const textOf = (x) => {
 // Run an extractor but never let one bad shape sink the whole response.
 const safe = (fn, fallback) => { try { const v = fn(); return v == null ? fallback : v; } catch (e) { return fallback; } };
 
+// Pull the 11-char YouTube video id out of a URL (so the client can embed it).
+const youtubeId = (u) => {
+  const m = str(u).match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : "";
+};
+
 function pickMinute(ev) {
   var m = ev.timeStr || ev.time || ev.min || ev.minute;
   if (m == null) return "";
@@ -221,7 +227,9 @@ function normalize(data) {
       (matchFacts.matchInfo && matchFacts.matchInfo.highlights);
     var url = str(h && (h.url || h.source || h.videoUrl || h.link));
     if (!url && typeof h === "string") url = str(h);
-    return /^https?:\/\//.test(url) ? { url: url, source: str(h && (h.source || h.provider)) } : null;
+    return /^https?:\/\//.test(url)
+      ? { url: url, source: str(h && (h.source || h.provider)), youtubeId: youtubeId(url) }
+      : null;
   }, null);
 
   return {
@@ -283,8 +291,9 @@ module.exports = async (req, res) => {
   if (!details.highlights) {
     const rec = await kv(["GET", `hl:${id}`]);
     const hl = safe(function () { return JSON.parse(rec); }, null);
-    if (hl && /^https?:\/\//.test(str(hl.url))) {
-      details.highlights = { url: hl.url, source: str(hl.source) };
+    const storedId = hl && str(hl.youtubeId).match(/^[A-Za-z0-9_-]{11}$/) ? str(hl.youtubeId) : "";
+    if (hl && (/^https?:\/\//.test(str(hl.url)) || storedId)) {
+      details.highlights = { url: str(hl.url), source: str(hl.source), youtubeId: storedId };
     }
   }
   // In debug mode, expose the upstream structure around h2h / player-of-the-match

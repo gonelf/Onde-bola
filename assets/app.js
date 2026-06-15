@@ -1,12 +1,12 @@
 /*
  * Hoje Há Bola — today's football games worldwide and where to watch them.
  *
- * Fixtures are fetched client-side from TheSportsDB's free API. Real TV
+ * Fixtures come from FotMob's day feed via the cached /api/fixtures proxy
+ * (long-term cached/DB-backed, so past days never re-hit upstream). Real TV
  * channels come from TheSportsDB's TV feeds, plus FotMob (api/fmtv) and
- * SofaScore (api/sofatv) as unofficial broadcaster sources, and SportMonks
- * (api/smtv) when a paid key is set. Only real listings are ever shown — when
- * no source has data the match shows "No TV listing yet", and when there are no
- * fixtures the page shows an empty state.
+ * SofaScore (api/sofatv) as unofficial broadcaster sources. Only real listings
+ * are ever shown — when no source has data the match shows "No TV listing yet",
+ * and when there are no fixtures the page shows an empty state.
  */
 
 (function () {
@@ -18,26 +18,6 @@
   // up front, so the per-match SofaScore call is off by default — it's kept as an
   // optional fallback (flip to true to consult it on match open).
   var USE_SOFASCORE = false;
-
-  // The worldwide "all soccer" feed for a day can be dominated by a single big
-  // tournament (e.g. the World Cup, when most domestic leagues pause). To keep
-  // coverage broad we also query a set of leagues that commonly run mid-year,
-  // by name, and merge in any games they have that day. Unknown names simply
-  // return nothing, so the list is safe to extend.
-  var ACTIVE_LEAGUES = [
-    "American Major League Soccer",
-    "Brazilian Serie A",
-    "Mexican Primera League",
-    "Argentine Primera Division",
-    "Swedish Allsvenskan",
-    "Norwegian Eliteserien",
-    "Finnish Veikkausliiga",
-    "Japanese J League",
-    "South Korean K League 1",
-    "Chinese Super League",
-    "Australian A-League",
-    "Indian Super League",
-  ];
 
   var STORAGE_HIDDEN = "ondebola.hiddenLeagues";
   var STORAGE_REMEMBER = "ondebola.rememberFilters";
@@ -162,7 +142,7 @@
       leagues: "Leagues", showLeagues: "Show leagues", reset: "Reset filters",
       remember: "Remember this next time", yourCountry: "📍 Your country",
       connDebug: "Connections debug →", adPrefs: "Ad preferences",
-      footerData: 'Real per-match TV listings & fixtures via <a href="https://www.thesportsdb.com" target="_blank" rel="noopener">TheSportsDB</a>, cached to avoid repeat calls. Channel data is crowd-sourced, so coverage is partial — matches without a listing show <em>“No TV listing yet”</em> rather than a guess.',
+      footerData: 'Fixtures via <a href="https://www.fotmob.com" target="_blank" rel="noopener">FotMob</a> and real per-match TV listings via <a href="https://www.thesportsdb.com" target="_blank" rel="noopener">TheSportsDB</a>, cached to avoid repeat calls. Channel data is crowd-sourced, so coverage is partial — matches without a listing show <em>“No TV listing yet”</em> rather than a guess.',
       close: "Close",
       noListing: "No TV listing yet", clickDetails: "Click for details ›",
       listings: "📡 Listings", moreOne: "more country in details ›",
@@ -187,7 +167,7 @@
       leagues: "Ligas", showLeagues: "Mostrar ligas", reset: "Repor filtros",
       remember: "Lembrar para a próxima", yourCountry: "📍 O teu país",
       connDebug: "Diagnóstico de ligações →", adPrefs: "Preferências de anúncios",
-      footerData: 'Emissões de TV e jogos por <a href="https://www.thesportsdb.com" target="_blank" rel="noopener">TheSportsDB</a>, em cache para evitar chamadas repetidas. Os dados de canais são colaborativos, por isso a cobertura é parcial — jogos sem emissão mostram <em>“Sem emissão conhecida”</em> em vez de adivinhar.',
+      footerData: 'Jogos por <a href="https://www.fotmob.com" target="_blank" rel="noopener">FotMob</a> e emissões de TV por <a href="https://www.thesportsdb.com" target="_blank" rel="noopener">TheSportsDB</a>, em cache para evitar chamadas repetidas. Os dados de canais são colaborativos, por isso a cobertura é parcial — jogos sem emissão mostram <em>“Sem emissão conhecida”</em> em vez de adivinhar.',
       close: "Fechar",
       noListing: "Sem emissão conhecida", clickDetails: "Clica para detalhes ›",
       listings: "📡 Emissões", moreOne: "mais país nos detalhes ›",
@@ -302,47 +282,19 @@
 
   // ---- Data fetching ------------------------------------------------------
 
-  function normaliseApiEvent(ev) {
-    var kickoff = null;
-    if (ev.strTimestamp) {
-      // strTimestamp is UTC, may be "YYYY-MM-DD HH:MM:SS".
-      kickoff = new Date(ev.strTimestamp.replace(" ", "T") + "Z");
-    } else if (ev.dateEvent && ev.strTime) {
-      kickoff = new Date(ev.dateEvent + "T" + ev.strTime + "Z");
-    } else if (ev.dateEvent) {
-      kickoff = new Date(ev.dateEvent + "T00:00:00Z");
-    }
-    if (!kickoff || isNaN(kickoff.getTime())) return null;
-
-    var hs = ev.intHomeScore;
-    var as = ev.intAwayScore;
-    return {
-      id: ev.idEvent || (ev.strHomeTeam + ev.strAwayTeam + ev.strTimestamp),
-      competition: ev.strLeague || "Football",
-      home: ev.strHomeTeam || "Home",
-      away: ev.strAwayTeam || "Away",
-      homeBadge: ev.strHomeTeamBadge || "",
-      awayBadge: ev.strAwayTeamBadge || "",
-      kickoff: kickoff.toISOString(),
-      venue: ev.strVenue || "",
-      leagueBadgeUrl: ev.strLeagueBadge || "",
-      homeScore: (hs === 0 || hs) ? String(hs) : null,
-      awayScore: (as === 0 || as) ? String(as) : null,
-      status: ev.strStatus || ev.strProgress || "",
-    };
-  }
-
-  // Fetch one endpoint and return its normalised fixtures (never rejects).
-  function fetchEvents(url) {
-    return fetch(url, { headers: { Accept: "application/json" } })
-      .then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
-      })
-      .then(function (data) {
-        return ((data && data.events) || []).map(normaliseApiEvent).filter(Boolean);
-      })
-      .catch(function () { return []; });
+  // The day's fixtures from FotMob via the cached /api/fixtures proxy, which
+  // already returns them fully normalised (id, competition, teams, badges,
+  // kickoff, scores, status). Rejects on a hard failure so the caller can tell
+  // "no games today" apart from "the feed is unreachable".
+  function fetchFotMobFixtures(day) {
+    return fetch("/api/fixtures?date=" + day, { headers: { Accept: "application/json" } })
+      .then(function (r) { if (!r.ok) throw new Error("fixtures " + r.status); return r.json(); })
+      .then(function (d) {
+        return ((d && d.fixtures) || []).map(function (fx) {
+          fx.tv = fx.tv || [];
+          return fx;
+        });
+      });
   }
 
   // Real broadcast listings for the day (TheSportsDB TV feed, free key).
@@ -428,18 +380,8 @@
       .catch(function () { return []; });
   }
 
-  // Day-bulk SportMonks broadcaster source (official paid API). One request
-  // returns every match's TV stations for the day; disabled server-side (empty)
-  // unless a SPORTMONKS_KEY is configured, so it's harmless when not set up.
-  function fetchSportMonksDay(day) {
-    return fetch("/api/smtv?date=" + day, { headers: { Accept: "application/json" } })
-      .then(function (r) { if (!r.ok) throw new Error("smtv " + r.status); return r.json(); })
-      .then(function (d) { return (d && d.matches) || []; })
-      .catch(function () { return []; });
-  }
-
-  // FotMob day-bulk broadcaster source (free, Portugal-first). Same shape as the
-  // SportMonks day map, so it merges through the exact same path.
+  // FotMob day-bulk broadcaster source (free, Portugal-first). One request per
+  // country returns every match's TV stations for the day, keyed by match.
   function fetchFotMobDay(day) {
     return fetch("/api/fmtv?date=" + day, { headers: { Accept: "application/json" } })
       .then(function (r) { if (!r.ok) throw new Error("fmtv " + r.status); return r.json(); })
@@ -544,41 +486,23 @@
     var token = state.loadToken;
 
     var day = ymd(state.date);
-    var requests = [
-      // The worldwide soccer feed for the day (catches the World Cup etc).
-      fetchEvents(API_BASE + "/eventsday.php?d=" + day + "&s=Soccer"),
-    ].concat(ACTIVE_LEAGUES.map(function (league) {
-      // Plus each commonly-active league explicitly, by name.
-      return fetchEvents(API_BASE + "/eventsday.php?d=" + day +
-        "&l=" + encodeURIComponent(league));
-    }));
 
-    // Track whether the primary worldwide call actually succeeded so we can
-    // tell "no games today" apart from "the feed is unreachable".
+    // Track whether the fixtures feed was reachable so we can tell "no games
+    // today" apart from "the feed is unreachable".
     var feedReachable = true;
-    requests[0] = requests[0].catch(function () { feedReachable = false; return []; });
+    var fixturesReq = fetchFotMobFixtures(day)
+      .catch(function () { feedReachable = false; return []; });
 
-    return Promise.all([Promise.all(requests), fetchTv(day), fetchSportMonksDay(day), fetchFotMobDay(day)])
+    return Promise.all([fixturesReq, fetchTv(day), fetchFotMobDay(day)])
       .then(function (res) {
-        var lists = res[0];
+        var fixtures = res[0] || [];
         var tv = res[1];
-        // Day-bulk broadcaster sources, merged through one path below.
-        var dayMaps = (res[2] || []).concat(res[3] || []);
-        // Merge all sources and de-duplicate by event id.
-        var seen = {};
-        var fixtures = [];
-        lists.forEach(function (list) {
-          list.forEach(function (fx) {
-            if (seen[fx.id]) return;
-            seen[fx.id] = true;
-            fixtures.push(fx);
-          });
-        });
+        // FotMob day-bulk broadcaster map, merged through one path below.
+        var dayMaps = res[2] || [];
         attachTv(fixtures, tv);
 
-        // Merge the day-bulk broadcaster maps (FotMob, and SportMonks when its
-        // key is set). This gives every match its broadcasters up front, with no
-        // per-match call.
+        // Merge the FotMob day-bulk broadcaster map. This gives every match its
+        // broadcasters up front, with no per-match call.
         if (dayMaps.length) {
           fixtures.forEach(function (fx) {
             var h = normName(fx.home), a = normName(fx.away);
@@ -761,11 +685,15 @@
   // Card view: show the primary country's channels (or the top available country
   // if the primary has none for this match), with the rest summarised as
   // "+N more in details" — the full per-country breakdown lives in the modal.
+  var MAX_CARD_CHIPS = 3; // keep cards compact on mobile; rest live in the modal
   function realChannelsHtml(tv) {
     var byCountry = groupByCountry(tv);
     var ordered = orderCountries(Object.keys(byCountry));
     var lead = byCountry[state.primaryCountry] ? state.primaryCountry : ordered[0];
-    var chips = byCountry[lead].map(channelChip).join("");
+    var leadChannels = byCountry[lead];
+    var chips = leadChannels.slice(0, MAX_CARD_CHIPS).map(channelChip).join("");
+    var hiddenChips = leadChannels.length - MAX_CARD_CHIPS;
+    if (hiddenChips > 0) chips += '<span class="channel more-inline">+' + hiddenChips + "</span>";
     var others = ordered.filter(function (c) { return c !== lead; }).length;
     var more = others
       ? '<span class="more-countries">+' + others + " " +
@@ -815,6 +743,25 @@
     return !!state.hidden[competition || "Football"];
   }
 
+  // Competition ordering: the biggest tournaments first (by FotMob league id),
+  // then the selected country's competitions, then everything else A–Z.
+  var COMP_PRIORITY = [77, 76, 50, 44, 9134, 42, 73, 10216, 45];
+  var COUNTRY_CCODES = {
+    "Portugal": ["POR"], "Spain": ["ESP"], "England": ["ENG"],
+    "United Kingdom": ["ENG", "SCO", "WAL", "NIR"], "France": ["FRA"],
+    "Germany": ["GER"], "Italy": ["ITA"], "Netherlands": ["NED"],
+    "Brazil": ["BRA"], "United States": ["USA"], "Argentina": ["ARG"],
+    "Mexico": ["MEX"],
+  };
+
+  function compRank(meta) {
+    var pri = meta.leagueId != null ? COMP_PRIORITY.indexOf(Number(meta.leagueId)) : -1;
+    if (pri >= 0) return [0, pri, ""];
+    var mine = COUNTRY_CCODES[state.primaryCountry] || [];
+    if (meta.ccode && mine.indexOf(meta.ccode) >= 0) return [1, 0, meta.name];
+    return [2, 0, meta.name];
+  }
+
   function render() {
     // Drop leagues the user has filtered out, then apply the search.
     var shown = state.fixtures.filter(function (fx) { return !isHidden(fx.competition); });
@@ -828,17 +775,26 @@
       return;
     }
 
-    // Group by competition.
+    // Group by competition, capturing each group's league id + country code.
     var groups = {};
+    var meta = {};
     var order = [];
     fixtures.forEach(function (fx) {
       var key = fx.competition || "Football";
-      if (!groups[key]) { groups[key] = []; order.push(key); }
+      if (!groups[key]) {
+        groups[key] = [];
+        meta[key] = { name: key, leagueId: fx.leagueId, ccode: fx.ccode };
+        order.push(key);
+      }
       groups[key].push(fx);
     });
 
-    // Sort competitions alphabetically; matches within a group by kickoff.
-    order.sort(function (a, b) { return a.localeCompare(b); });
+    // Order by importance (big tournaments) → selected country → rest A–Z;
+    // matches within a group by kickoff.
+    order.sort(function (a, b) {
+      var ra = compRank(meta[a]), rb = compRank(meta[b]);
+      return ra[0] - rb[0] || ra[1] - rb[1] || ra[2].localeCompare(rb[2]);
+    });
 
     // Insert an ad after every Nth card, counted across all competitions.
     var ads = adsEnabled();

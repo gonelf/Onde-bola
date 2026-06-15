@@ -7,9 +7,11 @@ country — inspired by [ondebola.com](https://ondebola.com/).
 ## Features
 
 - **Today's games worldwide** — every soccer fixture for the day from across
-  the globe is fetched live from the free [TheSportsDB](https://www.thesportsdb.com)
-  API and grouped by competition, each headed with the **championship's logo**
-  (falling back to a monogram when the feed has no artwork).
+  the globe comes from [FotMob](https://www.fotmob.com)'s day feed (one call,
+  via the cached `/api/fixtures` proxy) and is grouped by competition, each
+  headed with the **championship's logo** (falling back to a monogram when the
+  feed has no artwork). Past days are served from a long-term cache/DB backup,
+  so browsing history doesn't re-hit upstream.
 - **Where to watch (real data only)** — per-match broadcast channels, grouped
   by country, come from TheSportsDB's free TV feeds — the day schedule
   (`eventstv.php`) plus an on-demand per-event lookup (`lookuptv.php`) when you
@@ -27,10 +29,9 @@ country — inspired by [ondebola.com](https://ondebola.com/).
 - **Live scores & status** — in-play matches show the current score, the
   minute (e.g. `67'`) or `HT`, and a pulsing live badge; finished games show
   `FT`. Today's view auto-refreshes from the feed every 60s.
-- **Broad coverage** — alongside the worldwide feed, the app also queries a
-  set of leagues that commonly run mid-year (MLS, Brazil, Nordic, Asian
-  leagues, …) and merges their games, so coverage stays wide even when a big
-  tournament like the World Cup pauses the major domestic leagues.
+- **Broad coverage** — FotMob's day feed returns every competition for the
+  date in a single call, so coverage stays wide (domestic leagues, cups and
+  internationals) without per-league fan-out.
 - **League filter** — open **Leagues** to show/hide individual competitions.
   A **Reset filters** button clears the selection, and a **Remember this next
   time** checkbox persists your choices to `localStorage` across visits (leave
@@ -42,16 +43,19 @@ country — inspired by [ondebola.com](https://ondebola.com/).
 
 ## Running it
 
-It's a static site — no build step required.
+The front end is a static site — no build step — but the **fixtures and TV data
+come through the serverless functions in `api/`**, which FotMob requires (it
+blocks direct browser calls via CORS). So run it with the Vercel dev server,
+which serves both:
 
 ```bash
-# from the project root, any static server works:
-python3 -m http.server 8000
-# then open http://localhost:8000
+npx vercel dev
+# then open the printed http://localhost:3000
 ```
 
-Or just open `index.html` directly in a browser (live data fetching works best
-when served over `http://`).
+A plain static server (e.g. `python3 -m http.server`) will serve the page but
+won't have the `/api/*` functions, so fixtures won't load — use it only for
+front-end-only tweaks. On Vercel, connect KV (below) so the functions cache.
 
 ## Project structure
 
@@ -60,10 +64,10 @@ index.html                       Page shell
 assets/styles.css                Styling
 assets/app.js                    Fetching, matching, rendering
 assets/data/broadcasters.js      Free-to-air channel classifier (green vs amber)
+api/fixtures.js                  Cached FotMob fixtures-by-date proxy (long-term/DB-backed)
 api/tv.js                        Cached serverless proxy for TV listings
 api/sofatv.js                    Unofficial SofaScore TV proxy (on-demand fallback)
 api/fmtv.js                      Unofficial FotMob TV proxy (free day-bulk, Portugal-first)
-api/smtv.js                      SportMonks TV proxy (optional, paid; needs SPORTMONKS_KEY)
 api/geo.js                       Visitor country (Vercel edge header) for the default listings country
 api/health.js                    Read-only config/KV diagnostics for the admin page
 admin.html                       Connections debugger (live-tests every source)
@@ -74,6 +78,31 @@ match-details modal. The primary country defaults to the visitor's country via
 `api/geo` (Vercel's `x-vercel-ip-country` edge header — no geolocation prompt),
 falls back to Portugal, and can be changed with the country picker in the
 toolbar (the choice is remembered in `localStorage`).
+
+## Where the fixtures come from
+
+The day's games come from **FotMob** (unofficial, free) via the cached
+`/api/fixtures` proxy. FotMob's `GET /api/data/matches?date=YYYYMMDD` returns
+every match for a date grouped by league in a **single call**, each carrying
+team names + ids, league name + id, kickoff, score and live status — so the app
+gets the whole day's fixtures, logos and live scores without the per-league
+fan-out that used to get TheSportsDB's free key rate-limited (the original
+*“load fixtures failing”*). Like the other FotMob feeds it's best-effort and can
+be disabled with `FOTMOB_DISABLED=1`; append `&debug=1` to inspect what it
+returned.
+
+It's **long-term cached / DB-backed** (Vercel KV) so calls stay minimal:
+
+- **Past dates**, and **today once every match is finished**, are cached
+  permanently — results are final, so they never re-hit upstream.
+- **Future dates** cache for 1 hour; **today with unfinished games** caches for
+  90s so live scores stay fresh (only days that actually have live/upcoming
+  matches pay the refresh cost).
+- Every successful fetch also writes a permanent `fx:bak:DATE` **backup** that is
+  served if a later fetch fails or FotMob is blocked, so any date seen once keeps
+  rendering offline-from-upstream.
+
+TheSportsDB is no longer used for fixtures — only for TV listings (below).
 
 ## Where the TV data comes from
 
@@ -105,32 +134,26 @@ for every visible match, so they appear on the cards without a click.
    listings keyed by matchId, each carrying the team names and channel, so one
    call per country yields a full day's broadcasters with no matchId mapping.
    The proxy queries a Portugal-first set of countries (`FOTMOB_COUNTRIES`,
-   default `PT,GB,ES,BR,US,FR,DE,IT,NL`), merges by match, and returns the same
-   shape as SportMonks so the client merges it identically. Like SofaScore it's
+   default `PT,GB,ES,BR,US,FR,DE,IT,NL`), merges by match, and returns a
+   per-match map the client merges into every fixture. Like SofaScore it's
    unofficial and best-effort; disable with `FOTMOB_DISABLED=1`. Append
    `&debug=1` to inspect what FotMob returned (per-country counts + a sample).
-5. **SportMonks** (official, paid) via `api/smtv.js` — *optional*, off unless a
-   key is set. SportMonks returns a whole day's fixtures with their TV stations
-   in **one call** (`GET /v3/football/fixtures/date/{date}?include=participants;
-   tvStations.tvStation;tvStations.country`), so the client fetches it once per
-   day and merges broadcasters into every match — no per-match call. Requires a
-   SportMonks plan whose subscription includes the `tvStations` entity. Enable
-   by setting `SPORTMONKS_KEY`; with no key the endpoint returns an empty map
-   and nothing changes.
 
 There is no curated/guessed fallback — if no source has a listing, the match
 shows *“No TV listing yet”*.
 
 > Note: **API-Football** (api-sports.io) was evaluated but has **no
 > broadcaster/TV data** (fixtures, scores, odds, stats only), so it can't add
-> channel listings. SportMonks is the API that exposes `tvStations`.
+> channel listings.
 
 ## Caching (Vercel KV)
 
-`api/tv.js` proxies those calls and caches the responses so repeat loads and
-visitors don't re-hit the upstream API. It works with no DB (pass-through), and
-the client falls back to calling TheSportsDB directly if the function isn't
-deployed — but to enable caching on Vercel:
+`api/fixtures.js` (fixtures) and `api/tv.js` / `api/fmtv.js` (TV) proxy the
+upstream calls and cache the responses so repeat loads and visitors don't re-hit
+the upstream APIs. Fixtures are additionally **DB-backed** (a permanent backup
+per date) so past days are served entirely from KV. The proxies work with no DB
+(pass-through), and the client falls back to calling TheSportsDB directly for TV
+if the function isn't deployed — but to enable caching on Vercel:
 
 1. In your Vercel project, open **Storage → Create Database → Upstash for Redis**
    (Vercel's first-party "KV" is now provisioned via the Upstash marketplace),
@@ -141,9 +164,7 @@ deployed — but to enable caching on Vercel:
    Verify on `/admin.html` (Health → `KV ✅ PONG`) or an `X-Cache: HIT` header.
 2. *(Optional)* set `THESPORTSDB_KEY` if you have a premium key — otherwise it
    defaults to the free `123` key.
-3. *(Optional)* set `SPORTMONKS_KEY` to enable the SportMonks broadcaster source
-   (`api/smtv.js`). Leave unset to keep it disabled.
-4. Redeploy. Responses include an `X-Cache: HIT|MISS` header so you can verify
+3. Redeploy. Responses include an `X-Cache: HIT|MISS` header so you can verify
    caching is working.
 
 > **Before launch — enable KV.** FotMob is fetched once per page load, one
@@ -153,8 +174,10 @@ deployed — but to enable caching on Vercel:
 > cached fetch per ~30 min for everyone. The `/admin.html` health check shows
 > whether KV is reachable.
 
-Cache TTL adapts to the date: ~10 min for today (so live listings stay fresh),
-1 hour for future dates, and 24 hours for past dates.
+Cache TTL adapts to the date. For TV: ~10 min for today (so live listings stay
+fresh), 1 hour for future dates, and 24 hours for past dates. For fixtures: past
+days (and today once all games are finished) are cached permanently, future days
+1 hour, and today-with-live-games 90s — plus the permanent per-date backup.
 
 > TV listings are crowd-sourced and can vary by region, platform and individual
 > match. Always confirm with your provider.

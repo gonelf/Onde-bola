@@ -93,7 +93,6 @@
   (function () {
     "use strict";
     var $ = function (id) { return document.getElementById(id); };
-    var SDB = "https://www.thesportsdb.com/api/v1/json/123";
 
     function todayUTC() { return new Date().toISOString().slice(0, 10); }
     $("date").value = todayUTC();
@@ -111,8 +110,15 @@
           }
           return "KV " + (j.kv && j.kv.ping ? "✅ " + j.kv.ping : (j.kv && j.kv.configured ? "⚠️ configured, no ping" + (j.kv.status ? " (HTTP " + j.kv.status + ")" : "") : "❌ off" + kvSeen)) +
             " · SofaScore " + (j.sofascore && j.sofascore.enabled ? "on" : "off") +
-            " · FotMob " + (j.fotmob && j.fotmob.enabled ? "on" : "off") +
-            " · SportMonks " + (j.sportmonks && j.sportmonks.keyConfigured ? "key set" : "no key");
+            " · FotMob " + (j.fotmob && j.fotmob.enabled ? "on" : "off");
+        } },
+      { id: "fixtures", label: "FotMob · fixtures (api/fixtures)", needs: ["date"],
+        url: function (p) { return "/api/fixtures?date=" + p.date + "&debug=1"; },
+        summary: function (j) {
+          if (!j) return "no response";
+          var n = (j.fixtures || []).length; var d = j._debug || {};
+          return n + " fixtures · via " + (d.via || "?") +
+            " · upstream " + (d.upstream ? "ok" : "fail");
         } },
       { id: "tsdb_tv", label: "TheSportsDB · TV day (api/tv)", needs: ["date"],
         url: function (p) { return "/api/tv?date=" + p.date; },
@@ -139,13 +145,6 @@
           return tv + " channels · event " + (d.matchedEventId || "—") +
             " · resolved " + (d.resolved || 0) + "/" + (d.totalPairs || 0) +
             (pt != null ? " · PT raw " + pt : " · no PT");
-        } },
-      { id: "smtv", label: "SportMonks (api/smtv)", needs: ["date"],
-        url: function (p) { return "/api/smtv?date=" + p.date; },
-        summary: function (j) {
-          if (!j) return "no response";
-          if (j.disabled) return "disabled (no SPORTMONKS_KEY)";
-          return (j.matches || []).length + " matches with stations";
         } }
     ];
 
@@ -254,22 +253,22 @@
       return chain.then(function () { return runTest(t); });
     }, Promise.resolve()); }
 
-    // Load fixtures from TheSportsDB to populate the match picker.
+    // Load fixtures from the FotMob proxy to populate the match picker.
     function loadFixtures() {
       var date = $("date").value || todayUTC();
       var sel = $("match");
       sel.innerHTML = '<option value="">loading…</option>';
-      fetch(SDB + "/eventsday.php?d=" + date + "&s=Soccer")
+      fetch("/api/fixtures?date=" + date)
         .then(function (r) { return r.json(); })
         .then(function (j) {
-          var ev = (j && j.events) || [];
+          var ev = (j && j.fixtures) || [];
           if (!ev.length) { sel.innerHTML = '<option value="">no fixtures for ' + date + '</option>'; return; }
           sel.innerHTML = '<option value="">— ' + ev.length + ' matches —</option>';
           ev.forEach(function (e) {
             var o = document.createElement("option");
-            o.value = (e.strHomeTeam || "") + "|" + (e.strAwayTeam || "");
-            o.textContent = (e.strHomeTeam || "?") + " vs " + (e.strAwayTeam || "?") +
-              (e.strLeague ? "  ·  " + e.strLeague : "");
+            o.value = (e.home || "") + "|" + (e.away || "");
+            o.textContent = (e.home || "?") + " vs " + (e.away || "?") +
+              (e.competition ? "  ·  " + e.competition : "");
             sel.appendChild(o);
           });
         })

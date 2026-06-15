@@ -34,6 +34,16 @@ const BASE = "https://www.fotmob.com/api";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
   "(KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
+// Major competitions only (FotMob league ids): top-5 leagues + Portugal/NL/EFL,
+// UEFA club & national cups, MLS, Brasileirão, and the big internationals.
+// Override with MAJOR_LEAGUE_IDS (CSV); set it empty to show everything.
+const MAJOR = new Set(
+  (process.env.MAJOR_LEAGUE_IDS != null
+    ? process.env.MAJOR_LEAGUE_IDS
+    : "47,87,54,55,53,61,57,48,42,73,10216,9134,130,268,77,76,50,44,45")
+    .split(",").map((s) => s.trim()).filter(Boolean)
+);
+
 const TEAM_LOGO = (id) => `https://images.fotmob.com/image_resources/logo/teamlogo/${id}.png`;
 const LEAGUE_LOGO = (id) => `https://images.fotmob.com/image_resources/logo/leaguelogo/${id}.png`;
 
@@ -116,13 +126,15 @@ function leaguesOf(data) {
   return [];
 }
 
-function normalize(data, date) {
+function normalize(data, date, majorOnly) {
   const noon = new Date(date + "T12:00:00Z").toISOString();
   const out = [];
   leaguesOf(data).forEach((lg) => {
     if (!lg) return;
     const comp = lg.name || lg.leagueName || "Football";
     const leagueId = lg.primaryId != null ? lg.primaryId : lg.id;
+    if (majorOnly && MAJOR.size &&
+        !MAJOR.has(String(lg.id)) && !MAJOR.has(String(lg.primaryId))) return;
     (lg.matches || []).forEach((m) => {
       if (!m) return;
       const home = m.home || {}, away = m.away || {}, status = m.status || {};
@@ -183,7 +195,10 @@ module.exports = async (req, res) => {
     data = await getJson(`${BASE}/matches?date=${ymd}&timezone=UTC`);
     via = "matches";
   }
-  const fixtures = data ? normalize(data, date) : [];
+  // Major competitions only by default; ?all=1 (or empty MAJOR_LEAGUE_IDS)
+  // returns everything.
+  const showAll = (req.query.all === "1" || req.query.all === "true");
+  const fixtures = data ? normalize(data, date, !showAll) : [];
 
   // On empty/failed upstream, serve the permanent backup so any previously-seen
   // date (and all past dates) keep rendering even when FotMob is blocked.
@@ -199,7 +214,11 @@ module.exports = async (req, res) => {
   }
 
   const payload = { fixtures };
-  if (debug) payload._debug = { via, upstream: !!data, count: fixtures.length };
+  if (debug) {
+    const comps = {};
+    fixtures.forEach((f) => { comps[f.competition] = (comps[f.competition] || 0) + 1; });
+    payload._debug = { via, upstream: !!data, count: fixtures.length, majorOnly: !showAll, leagues: comps };
+  }
 
   if (!debug && fixtures.length) {
     const today = new Date().toISOString().slice(0, 10);

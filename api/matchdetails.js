@@ -178,16 +178,31 @@ function normalize(data) {
 
   var motm = safe(function () {
     var p = matchFacts.playerOfTheMatch || content.playerOfTheMatch;
-    if (!p) return null;
-    var name = textOf(p.name || p.fullName || p);
-    var rating = str(p.rating && (p.rating.num || p.rating.value || p.rating) || p.ratingProps && p.ratingProps.num);
+    if (!p || typeof p !== "object" || !Object.keys(p).length) return null;
+    // FotMob's player name is sometimes a string, sometimes { fullName }.
+    var nm = p.name;
+    var name = (nm && typeof nm === "object") ? str(nm.fullName || nm.name || nm.text)
+      : str(nm || p.fullName);
+    var rating = str((p.rating && (p.rating.num || p.rating.value)) || p.rating || "");
     return name ? { name: name, rating: rating } : null;
   }, null);
 
   var h2h = safe(function () {
-    var sum = content.h2h && content.h2h.summary;
+    var hh = content.h2h;
+    if (!hh) return null;
+    // Preferred: an explicit [homeWins, draws, awayWins] summary.
+    var sum = hh.summary;
     if (Array.isArray(sum) && sum.length >= 3) {
       return { home: Number(sum[0]) || 0, draw: Number(sum[1]) || 0, away: Number(sum[2]) || 0 };
+    }
+    // Fallback: derive the tally from the list of past meetings if present.
+    if (Array.isArray(hh.matches) && hh.matches.length) {
+      var h = 0, d = 0, a = 0;
+      hh.matches.forEach(function (m) {
+        var r = str(m && (m.result || m.winner)).toLowerCase();
+        if (/home/.test(r)) h++; else if (/away/.test(r)) a++; else if (/draw/.test(r)) d++;
+      });
+      if (h || d || a) return { home: h, draw: d, away: a };
     }
     return null;
   }, null);

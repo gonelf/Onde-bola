@@ -4,8 +4,10 @@
  * FotMob exposes `GET /api/data/matchDetails?matchId=ID` (older path:
  * /api/matchDetails), a large object describing one match. We don't proxy it
  * raw — it's big and its shape shifts — so we extract a small, stable subset the
- * detail modal can render: venue, referee, attendance, round, recent form,
- * head-to-head, a goal/card/sub timeline, key stats and the man of the match.
+ * detail modal / share page can render: venue, referee, attendance, round,
+ * recent form, head-to-head (tally + the list of past meetings), the probable /
+ * confirmed starting line-ups, a goal/card/sub timeline, key stats and the man
+ * of the match.
  *
  * Unofficial: every field is parsed defensively and any failure degrades to an
  * empty value rather than throwing, so a shape change never breaks the page.
@@ -13,7 +15,8 @@
  *
  * Query: ?id=FOTMOB_MATCH_ID [&debug=1]
  * Returns: { ok, details: { venue, referee, attendance, round, motm,
- *            form:{home,away}, h2h:{home,draw,away}, events:[...], stats:[...] } }
+ *            form:{home,away}, h2h:{home,draw,away}, h2hMatches:[...],
+ *            lineups:{confirmed,home,away}, events:[...], stats:[...] } }
  *
  * Env: FOTMOB_DISABLED=1, KV_REST_API_URL / KV_REST_API_TOKEN (optional cache).
  */
@@ -161,6 +164,86 @@ function statsFrom(stats) {
   return rows;
 }
 
+// A player's display name — sometimes a plain string, sometimes { fullName }.
+function playerName(p) {
+  if (!p) return "";
+  var n = p.name;
+  if (n && typeof n === "object") return str(n.fullName || n.name || n.text);
+  return str(n || p.fullName || p.shortName);
+}
+
+// One team's lineup (starting XI). FotMob's shape has shifted between versions,
+// so accept both: a team with `players` as rows (array of arrays) or a flat
+// list, with the shirt number under any of a few keys. Defensive throughout.
+function lineupSide(team) {
+  if (!team || typeof team !== "object") return null;
+  var formation = str(team.formation || team.lineupFormation || team.formationUsed);
+  var players = team.players || team.starters || team.starting || [];
+  var flat = [];
+  var pushP = function (p) {
+    if (!p || typeof p !== "object") return;
+    if (p.isCoach || p.role === "coach") return;
+    var name = playerName(p);
+    if (!name) return;
+    var num = p.shirt != null ? p.shirt : (p.shirtNumber != null ? p.shirtNumber : p.shirtNo);
+    flat.push({ num: num == null ? "" : String(num), name: name });
+  };
+  if (Array.isArray(players)) {
+    players.forEach(function (row) {
+      if (Array.isArray(row)) row.forEach(pushP);
+      else pushP(row);
+    });
+  }
+  if (!flat.length) return null;
+  return { name: str(team.teamName || team.name), formation: formation, starters: flat.slice(0, 11) };
+}
+
+// Probable / confirmed starting line-ups for both teams.
+function lineupsFrom(content) {
+  var lu = content.lineup || content.lineups;
+  if (!lu || typeof lu !== "object") return null;
+  var confirmed = lu.confirmed === true || lu.isLineupConfirmed === true ||
+    /confirm/i.test(str(lu.lineupType || lu.lineupStatus));
+  var teams = lu.lineup || lu.teams;
+  var home = null, away = null;
+  if (Array.isArray(teams) && teams.length >= 2) {
+    home = lineupSide(teams[0]); away = lineupSide(teams[1]);
+  } else if (lu.homeTeam || lu.awayTeam) {
+    home = lineupSide(lu.homeTeam); away = lineupSide(lu.awayTeam);
+  }
+  if (!home && !away) return null;
+  return { confirmed: !!confirmed, home: home, away: away };
+}
+
+// The list of past meetings (the "last encounters"), most-recent first. Each
+// item: date, the two teams, the score and the competition. Shapes vary, so
+// every field is read defensively.
+function h2hMatchesFrom(content) {
+  var hh = content.h2h;
+  var arr = hh && (hh.matches || hh.events);
+  if (!Array.isArray(arr)) return [];
+  var out = [];
+  arr.forEach(function (m) {
+    if (!m || typeof m !== "object") return;
+    var home = textOf(m.home) || str(m.homeTeam && (m.homeTeam.name || m.homeTeam));
+    var away = textOf(m.away) || str(m.awayTeam && (m.awayTeam.name || m.awayTeam));
+    if (!home || !away) return;
+    var score = str(m.status && m.status.scoreStr) || str(m.scoreStr);
+    if (!score && m.home && m.away && m.home.score != null && m.away.score != null) {
+      score = m.home.score + " - " + m.away.score;
+    }
+    var iso = str((m.status && m.status.utcTime) || (m.time && (m.time.utcTime || m.time)) ||
+      m.matchDate || m.date);
+    var d = iso ? new Date(iso) : null;
+    var date = d && !isNaN(d.getTime())
+      ? new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", day: "2-digit", month: "short", year: "numeric" }).format(d)
+      : "";
+    var comp = textOf(m.leagueName || m.tournament || m.league);
+    out.push({ date: date, home: home, away: away, score: score.replace(/\s*-\s*/, " - "), comp: comp });
+  });
+  return out.slice(0, 6);
+}
+
 function normalize(data) {
   var general = data.general || {};
   var content = data.content || {};
@@ -240,6 +323,8 @@ function normalize(data) {
     motm: motm,
     form: form,
     h2h: h2h,
+    h2hMatches: safe(function () { return h2hMatchesFrom(content); }, []),
+    lineups: safe(function () { return lineupsFrom(content); }, null),
     highlights: highlights,
     events: safe(function () { return eventsFrom(matchFacts); }, []),
     stats: safe(function () { return statsFrom(content.stats || {}); }, []),
@@ -309,6 +394,8 @@ module.exports = async (req, res) => {
       infoBox: keysOf(mf.infoBox || mf.info),
       h2h_keys: keysOf(content.h2h),
       h2h_sample: JSON.stringify(content.h2h || null).slice(0, 600),
+      lineup_keys: keysOf(content.lineup || content.lineups),
+      lineup_sample: JSON.stringify(content.lineup || content.lineups || null).slice(0, 800),
       motm_candidates: JSON.stringify({
         mfPotm: mf.playerOfTheMatch || null,
         contentPotm: content.playerOfTheMatch || null,

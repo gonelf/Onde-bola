@@ -649,6 +649,12 @@
       fx._details = det;
       fx._detailsLoaded = true;
       return det;
+    })["catch"](function () {
+      // A failed/blocked matchdetails fetch shouldn't leave the modal stuck on
+      // the "loading…" note — mark it resolved (empty) so the rest still renders.
+      fx._details = null;
+      fx._detailsLoaded = true;
+      return null;
     });
   }
 

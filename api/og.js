@@ -269,10 +269,13 @@ async function renderToday(url) {
   if (!Number.isFinite(n)) n = 5;
   n = Math.max(1, Math.min(6, n));
 
-  // Pull the day's (major-competition) fixtures from our own cached feed.
+  // Pull the day's fixtures from our own cached feed. Use all=1 so the digest
+  // reflects every competition for the date and ranks the marquee games itself
+  // (below) — it must not depend on the fixtures "major leagues" allow-list,
+  // which can miss the only competition on off-season days (e.g. the World Cup).
   let fixtures = [];
   try {
-    const r = await fetch(`${url.origin}/api/fixtures?date=${date}`, { headers: { Accept: "application/json" } });
+    const r = await fetch(`${url.origin}/api/fixtures?date=${date}&all=1`, { headers: { Accept: "application/json" } });
     if (r.ok) {
       const j = await r.json();
       if (j && Array.isArray(j.fixtures)) fixtures = j.fixtures;

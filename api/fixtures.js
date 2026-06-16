@@ -213,7 +213,19 @@ module.exports = async (req, res) => {
   // Major competitions only by default; ?all=1 (or empty MAJOR_LEAGUE_IDS)
   // returns everything.
   const showAll = (req.query.all === "1" || req.query.all === "true");
-  const fixtures = data ? normalize(data, date, !showAll) : [];
+  let fixtures = data ? normalize(data, date, !showAll) : [];
+
+  // Off-season / tournament-only days can have games of which none are in the
+  // MAJOR set — e.g. mid-summer, when domestic leagues are finished and the only
+  // football is the World Cup / Euro (whose league id may not be listed). Rather
+  // than render a blank app on a day that *does* have games, fall back to every
+  // competition for the date. (No-op on normal in-season days, which have major
+  // games, and when ?all=1 is already requested.)
+  let majorFallback = false;
+  if (!fixtures.length && !showAll && data) {
+    const all = normalize(data, date, false);
+    if (all.length) { fixtures = all; majorFallback = true; }
+  }
 
   // On empty/failed upstream, serve the permanent backup so any previously-seen
   // date (and all past dates) keep rendering even when FotMob is blocked.
@@ -232,7 +244,7 @@ module.exports = async (req, res) => {
   if (debug) {
     const comps = {};
     fixtures.forEach((f) => { comps[f.competition] = (comps[f.competition] || 0) + 1; });
-    payload._debug = { via, upstream: !!data, count: fixtures.length, majorOnly: !showAll, leagues: comps };
+    payload._debug = { via, upstream: !!data, count: fixtures.length, majorOnly: !showAll && !majorFallback, majorFallback, leagues: comps };
   }
 
   if (!debug && fixtures.length) {

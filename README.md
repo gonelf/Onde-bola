@@ -141,6 +141,14 @@ fan-out that used to get TheSportsDB's free key rate-limited (the original
 be disabled with `FOTMOB_DISABLED=1`; append `&debug=1` to inspect what it
 returned.
 
+By default `/api/fixtures` keeps only the **major competitions** (`MAJOR_LEAGUE_IDS`)
+so the app isn't flooded with thousands of low-interest worldwide fixtures.
+**Exception:** if a date has games but *none* of them are major — e.g. mid-summer,
+when domestic leagues are finished and the only football is the World Cup / Euro —
+it falls back to returning every competition for that day rather than showing a
+blank app (`_debug.majorFallback` flags it). Pass `?all=1` to always get
+everything.
+
 It's **long-term cached / DB-backed** (Vercel KV) so calls stay minimal:
 
 - **Past dates**, and **today once every match is finished**, are cached

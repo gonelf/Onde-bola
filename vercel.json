@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/sitemap.xml", "destination": "/api/share?sitemap=1" },
     { "source": "/g/:league/:date(\\d{4}-\\d{2}-\\d{2})/:slug", "destination": "/api/share?league=:league&date=:date&slug=:slug" },
     { "source": "/g/:date(\\d{4}-\\d{2}-\\d{2})/:slug", "destination": "/api/share?date=:date&slug=:slug" },
     { "source": "/g/:id(\\d+)", "destination": "/api/share?id=:id" },
@@ -12,6 +13,10 @@
     { "source": "/og", "destination": "/api/og" }
   ],
   "functions": {
-    "api/cron-highlights.js": { "maxDuration": 60 }
-  }
+    "api/cron-highlights.js": { "maxDuration": 60 },
+    "api/share.js": { "maxDuration": 60 }
+  },
+  "crons": [
+    { "path": "/api/share?cron=1", "schedule": "0 5 * * *" }
+  ]
 }

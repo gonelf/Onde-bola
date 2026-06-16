@@ -43,7 +43,9 @@ country — inspired by [ondebola.com](https://ondebola.com/).
   from the same cached `/api/fixtures` feed and **ranked by competition
   prominence, live-ness and kickoff**, so pasting `/today` into WhatsApp, X,
   Slack, etc. unfurls a "what's on today?" card. `?date=YYYY-MM-DD` shares a
-  specific day and `?n=1..6` controls how many games are shown.
+  specific day and `?n=1..6` controls how many games are shown. A small tool
+  page at **`/image`** lets you pick any date, preview the card and **download
+  the PNG** (named `hojehabola-top-games-<date>.png`) ready to post.
 - **Date navigation** — jump to previous/next day or back to today.
 - **Live scores & status** — in-play matches show the current score, the
   minute (e.g. `67'`) or `HT`, and a pulsing live badge; finished games show
@@ -88,6 +90,7 @@ api/share.js                     Per-game share page (/g/<id>) — Open Graph ca
 api/og.js                        Per-game preview image (/og/<id>) generated on the fly (1200×630 PNG, @vercel/og)
 api/today.js                     Shareable daily digest page (/today) — Open Graph card for the day's top games
 api/og-today.js                  Today's-top-games preview image (/og/today) — ranked multi-game 1200×630 PNG
+api/image.js                     Tool page (/image) to preview + download the top-games image for any date
 api/cardinfo.js                  Rebuilds a game's share-card data from its match id (FotMob + KV cache)
 api/tv.js                        Cached serverless proxy for TV listings
 api/sofatv.js                    Unofficial SofaScore TV proxy (on-demand fallback)

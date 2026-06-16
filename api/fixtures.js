@@ -104,6 +104,9 @@ function parseScore(status, home, away) {
 
 // Map FotMob's status object to a short string the client's statusOf() reads
 // ("FT", "HT", a minute like "67'", or "" for not-started/unknown).
+// Strip Unicode bidi / zero-width marks: FotMob wraps the live minute in LTR
+// marks (e.g. "32‎'‎"), which render as tofu boxes downstream.
+const cleanMarks = (s) => String(s).replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069]/g, "").trim();
 function statusStr(status) {
   if (!status) return "";
   if (status.finished) return "FT";
@@ -112,7 +115,7 @@ function statusStr(status) {
     const reason = status.reason && (status.reason.short || status.reason.long);
     if (reason && /^(HT|half)/i.test(reason)) return "HT";
     const live = status.liveTime && (status.liveTime.short || status.liveTime.long);
-    if (live) return String(live);
+    if (live) return cleanMarks(live);
     return "LIVE";
   }
   return "";

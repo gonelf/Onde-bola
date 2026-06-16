@@ -153,18 +153,16 @@ function teamColumn(uri, name) {
 // Digest card (/og/today): the day's top games as a ranked list.
 // ---------------------------------------------------------------------------
 
-// Competition prominence (kept in sync with /api/share's /today list): lower
-// index = shown first; everything unmatched sinks below.
-const RANK = [
-  /champions league/i, /europa league/i, /conference league/i, /world cup/i,
-  /european championship|\beuro\b/i, /copa am[eé]rica/i, /nations league/i,
-  /premier league/i, /la ?liga|primera divisi/i, /serie a/i, /bundesliga/i,
-  /ligue 1/i, /primeira liga|liga portugal/i, /libertadores/i, /eredivisie/i,
-  /mls/i, /saudi pro/i,
-];
-function leagueRank(comp) {
-  for (let i = 0; i < RANK.length; i++) if (RANK[i].test(comp || "")) return i;
-  return RANK.length;
+// Competition prominence by FotMob league id (mirrors fixtures' MAJOR set),
+// most-prominent first. Ranking by id — not by competition name — avoids false
+// matches like Tanzania's "Premier League" or Bolivia's "Primera División"
+// outranking the real thing. Unlisted leagues sink below, ordered by kickoff.
+const RANK_IDS = [77, 50, 44, 42, 73, 10216, 47, 87, 54, 55, 53, 61, 57, 48, 9134, 130, 268, 76, 45];
+const RANK_POS = {};
+RANK_IDS.forEach((id, i) => { RANK_POS[id] = i; });
+function leagueRank(f) {
+  const p = RANK_POS[f && f.leagueId];
+  return p == null ? 999 : p;
 }
 // live = started but not finished; surfaced first within a league.
 function phase(f) {
@@ -283,7 +281,7 @@ async function renderToday(url) {
   } catch (e) { /* degrade to the empty-state card */ }
 
   fixtures.sort((a, b) => {
-    const lr = leagueRank(a.competition) - leagueRank(b.competition);
+    const lr = leagueRank(a) - leagueRank(b);
     if (lr) return lr;
     const ph = phase(a) - phase(b);
     if (ph) return ph;

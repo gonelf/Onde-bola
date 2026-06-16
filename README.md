@@ -36,6 +36,14 @@ country — inspired by [ondebola.com](https://ondebola.com/).
   from the id alone** (`api/cardinfo`, FotMob + Vercel KV cache `card:<id>`), so
   nothing is crammed into the URL. Opening the link drops real visitors straight
   into the app with that match open (`/?match=fm:<id>&date=<YYYY-MM-DD>`).
+- **Share today's top games** — a one-tap daily digest for social: **`/today`**
+  is a server-rendered page whose social preview is a single **1200×630 image of
+  the day's biggest fixtures** (`/og/today`, via `@vercel/og`) — each row with
+  crests, the score or kickoff time and a LIVE/FT badge. The games are pulled
+  from the same cached `/api/fixtures` feed and **ranked by competition
+  prominence, live-ness and kickoff**, so pasting `/today` into WhatsApp, X,
+  Slack, etc. unfurls a "what's on today?" card. `?date=YYYY-MM-DD` shares a
+  specific day and `?n=1..6` controls how many games are shown.
 - **Date navigation** — jump to previous/next day or back to today.
 - **Live scores & status** — in-play matches show the current score, the
   minute (e.g. `67'`) or `HT`, and a pulsing live badge; finished games show
@@ -78,6 +86,8 @@ assets/data/broadcasters.js      Free-to-air channel classifier (green vs amber)
 api/fixtures.js                  Cached FotMob fixtures-by-date proxy (long-term/DB-backed)
 api/share.js                     Per-game share page (/g/<id>) — Open Graph card + deep link into the app
 api/og.js                        Per-game preview image (/og/<id>) generated on the fly (1200×630 PNG, @vercel/og)
+api/today.js                     Shareable daily digest page (/today) — Open Graph card for the day's top games
+api/og-today.js                  Today's-top-games preview image (/og/today) — ranked multi-game 1200×630 PNG
 api/cardinfo.js                  Rebuilds a game's share-card data from its match id (FotMob + KV cache)
 api/tv.js                        Cached serverless proxy for TV listings
 api/sofatv.js                    Unofficial SofaScore TV proxy (on-demand fallback)

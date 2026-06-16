@@ -4,7 +4,9 @@
     { "source": "/g/:date(\\d{4}-\\d{2}-\\d{2})/:slug", "destination": "/api/share?date=:date&slug=:slug" },
     { "source": "/g/:id(\\d+)", "destination": "/api/share?id=:id" },
     { "source": "/g/:league", "destination": "/api/league?league=:league" },
+    { "source": "/og/today", "destination": "/api/og-today" },
     { "source": "/og/:id", "destination": "/api/og?id=:id" },
+    { "source": "/today", "destination": "/api/today" },
     { "source": "/g", "destination": "/api/share" },
     { "source": "/og", "destination": "/api/og" }
   ],

@@ -4,10 +4,10 @@
     { "source": "/g/:date(\\d{4}-\\d{2}-\\d{2})/:slug", "destination": "/api/share?date=:date&slug=:slug" },
     { "source": "/g/:id(\\d+)", "destination": "/api/share?id=:id" },
     { "source": "/g/:league", "destination": "/api/league?league=:league" },
-    { "source": "/og/today", "destination": "/api/og-today" },
+    { "source": "/og/today", "destination": "/api/og?today=1" },
     { "source": "/og/:id", "destination": "/api/og?id=:id" },
-    { "source": "/today", "destination": "/api/today" },
-    { "source": "/image", "destination": "/api/image" },
+    { "source": "/today", "destination": "/api/share?view=today" },
+    { "source": "/image", "destination": "/api/share?view=image" },
     { "source": "/g", "destination": "/api/share" },
     { "source": "/og", "destination": "/api/og" }
   ],

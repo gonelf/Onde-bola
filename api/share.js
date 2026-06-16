@@ -15,7 +15,7 @@
  *     SportsEvent + BroadcastEvent JSON-LD so the fixture is eligible for
  *     rich results. A clear call-to-action opens the live app.
  *
- * The display is rebuilt server-side from the match id alone (api/cardinfo +
+ * The display is rebuilt server-side from the match id alone (lib/cardinfo +
  * api/matchdetails + api/fmtv, all FotMob, all KV-cached), so the shared link
  * stays short: /g/4667790. A legacy query form (?home=&away=&…) is still
  * honoured for back-compat and for the rare match that has no FotMob id.
@@ -25,7 +25,8 @@
  * `noindex, follow` so the crawl budget isn't spent on obscure games.
  */
 
-const { getCard } = require("./cardinfo.js");
+const { getCard } = require("../lib/cardinfo.js");
+const { renderDigestPage } = require("../lib/digest-page.js");
 
 function esc(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -165,6 +166,14 @@ module.exports = async (req, res) => {
   const proto = (req.headers["x-forwarded-proto"] || "https").split(",")[0];
   const host = req.headers["x-forwarded-host"] || req.headers.host || "hojehabola.com";
   const origin = `${proto}://${host}`;
+
+  // Day-digest pages share this function (Hobby plan's 12-function cap): /today
+  // (?view=today) and the /image download tool (?view=image). Both unfurl with
+  // the /og/today digest image.
+  const view = get("view");
+  if (view === "today" || view === "image") {
+    return renderDigestPage(req, res, { view, origin, get });
+  }
 
   const slug = get("slug");
   const pathDate = /^\d{4}-\d{2}-\d{2}$/.test(get("date")) ? get("date") : "";

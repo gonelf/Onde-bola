@@ -11,11 +11,12 @@
  *  2. Search engines + readers. The page renders the real content a visitor
  *     searches for — "where to watch <home> vs <away>" — server-side: the
  *     matchup, kickoff in local time, the TV/streaming channels per country,
- *     and match facts (venue, head-to-head, recent form). It carries
+ *     the probable (or confirmed) starting line-ups, the last meetings between
+ *     the sides, and match facts (venue, head-to-head, recent form). It carries
  *     SportsEvent + BroadcastEvent JSON-LD so the fixture is eligible for
  *     rich results. A clear call-to-action opens the live app.
  *
- * The display is rebuilt server-side from the match id alone (api/cardinfo +
+ * The display is rebuilt server-side from the match id alone (lib/cardinfo +
  * api/matchdetails + api/fmtv, all FotMob, all KV-cached), so the shared link
  * stays short: /g/4667790. A legacy query form (?home=&away=&…) is still
  * honoured for back-compat and for the rare match that has no FotMob id.
@@ -25,7 +26,8 @@
  * `noindex, follow` so the crawl budget isn't spent on obscure games.
  */
 
-const { getCard } = require("./cardinfo.js");
+const { getCard } = require("../lib/cardinfo.js");
+const { renderDigestPage } = require("../lib/digest-page.js");
 
 function esc(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -165,6 +167,14 @@ module.exports = async (req, res) => {
   const proto = (req.headers["x-forwarded-proto"] || "https").split(",")[0];
   const host = req.headers["x-forwarded-host"] || req.headers.host || "hojehabola.com";
   const origin = `${proto}://${host}`;
+
+  // Day-digest pages share this function (Hobby plan's 12-function cap): /today
+  // (?view=today) and the /image download tool (?view=image). Both unfurl with
+  // the /og/today digest image.
+  const view = get("view");
+  if (view === "today" || view === "image") {
+    return renderDigestPage(req, res, { view, origin, get });
+  }
 
   const slug = get("slug");
   const pathDate = /^\d{4}-\d{2}-\d{2}$/.test(get("date")) ? get("date") : "";
@@ -387,6 +397,40 @@ module.exports = async (req, res) => {
   </section>`
     : "";
 
+  // Probable (or confirmed) starting line-ups, side by side.
+  const lineups = details && details.lineups;
+  const xi = (side) => (side && Array.isArray(side.starters) ? side.starters : [])
+    .map((p) => `<li>${p.num ? `<span class="num">${esc(p.num)}</span>` : ""}${esc(p.name)}</li>`).join("");
+  const lineupSection = (lineups && (lineups.home || lineups.away))
+    ? `<section class="card">
+    <h2>${lineups.confirmed ? "Starting line-ups" : "Probable line-ups"}</h2>
+    <div class="lineups">
+      <div class="xi">
+        <h3>${esc(home)}${lineups.home && lineups.home.formation ? ` <span class="muted">${esc(lineups.home.formation)}</span>` : ""}</h3>
+        <ol>${xi(lineups.home)}</ol>
+      </div>
+      <div class="xi">
+        <h3>${esc(away)}${lineups.away && lineups.away.formation ? ` <span class="muted">${esc(lineups.away.formation)}</span>` : ""}</h3>
+        <ol>${xi(lineups.away)}</ol>
+      </div>
+    </div>
+    ${lineups.confirmed ? "" : `<p class="muted">Predicted from recent selections — confirmed XI is announced ~1h before kick-off.</p>`}
+  </section>`
+    : "";
+
+  // Last meetings between the two sides.
+  const meetings = (details && Array.isArray(details.h2hMatches)) ? details.h2hMatches : [];
+  const meetingsSection = meetings.length
+    ? `<section class="card">
+    <h2>Last meetings</h2>
+    <ul class="meetings">${meetings.map((m) => `<li>
+      ${m.date ? `<span class="when">${esc(m.date)}</span>` : ""}
+      <span class="mt">${esc(m.home)} <strong>${esc(m.score || "v")}</strong> ${esc(m.away)}</span>
+      ${m.comp ? `<span class="muted comp">${esc(m.comp)}</span>` : ""}
+    </li>`).join("")}</ul>
+  </section>`
+    : "";
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -451,6 +495,19 @@ module.exports = async (req, res) => {
   .crumbs{font-size:.85rem;color:var(--muted);margin-bottom:8px}
   .crumbs a{color:var(--muted)}
   .crumbs span{color:var(--txt)}
+  .lineups{display:flex;gap:16px;flex-wrap:wrap}
+  .xi{flex:1;min-width:140px}
+  .xi h3{margin:0 0 8px}
+  .xi ol{margin:0;padding:0;list-style:none;counter-reset:none}
+  .xi li{padding:4px 0;border-bottom:1px solid var(--line);font-size:.95rem}
+  .xi li:last-child{border-bottom:0}
+  .xi .num{display:inline-block;min-width:1.6em;color:var(--muted);font-variant-numeric:tabular-nums}
+  .meetings{list-style:none;padding:0;margin:0}
+  .meetings li{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 10px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .meetings li:last-child{border-bottom:0}
+  .meetings .when{color:var(--muted);font-size:.82rem;min-width:92px}
+  .meetings .mt strong{font-variant-numeric:tabular-nums}
+  .meetings .comp{font-size:.82rem}
 </style>
 </head>
 <body>
@@ -473,6 +530,8 @@ module.exports = async (req, res) => {
     <a class="cta" href="${esc(appUrl)}">Open ${esc(vs)} in the live app →</a>
 
     ${tvSection}
+    ${lineupSection}
+    ${meetingsSection}
     ${factsSection}
     ${compareSection}
 

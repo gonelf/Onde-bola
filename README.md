@@ -33,9 +33,19 @@ country — inspired by [ondebola.com](https://ondebola.com/).
   `@vercel/og`) showing the two teams, crests, competition, score/kickoff and
   date — so pasting it into WhatsApp, X/Twitter, Facebook, iMessage, Slack or
   Discord unfurls a per-match card. The game's data is rebuilt **server-side
-  from the id alone** (`api/cardinfo`, FotMob + Vercel KV cache `card:<id>`), so
+  from the id alone** (`lib/cardinfo`, FotMob + Vercel KV cache `card:<id>`), so
   nothing is crammed into the URL. Opening the link drops real visitors straight
   into the app with that match open (`/?match=fm:<id>&date=<YYYY-MM-DD>`).
+- **Share today's top games** — a one-tap daily digest for social: **`/today`**
+  is a server-rendered page whose social preview is a single **1200×630 image of
+  the day's biggest fixtures** (`/og/today`, via `@vercel/og`) — each row with
+  crests, the score or kickoff time and a LIVE/FT badge. The games are pulled
+  from the same cached `/api/fixtures` feed and **ranked by competition
+  prominence, live-ness and kickoff**, so pasting `/today` into WhatsApp, X,
+  Slack, etc. unfurls a "what's on today?" card. `?date=YYYY-MM-DD` shares a
+  specific day and `?n=1..6` controls how many games are shown. A small tool
+  page at **`/image`** lets you pick any date, preview the card and **download
+  the PNG** (named `hojehabola-top-games-<date>.png`) ready to post.
 - **Date navigation** — jump to previous/next day or back to today.
 - **Live scores & status** — in-play matches show the current score, the
   minute (e.g. `67'`) or `HT`, and a pulsing live badge; finished games show
@@ -76,9 +86,10 @@ assets/styles.css                Styling
 assets/app.js                    Fetching, matching, rendering
 assets/data/broadcasters.js      Free-to-air channel classifier (green vs amber)
 api/fixtures.js                  Cached FotMob fixtures-by-date proxy (long-term/DB-backed)
-api/share.js                     Per-game share page (/g/<id>) — Open Graph card + deep link into the app
-api/og.js                        Per-game preview image (/og/<id>) generated on the fly (1200×630 PNG, @vercel/og)
-api/cardinfo.js                  Rebuilds a game's share-card data from its match id (FotMob + KV cache)
+api/share.js                     Social pages: per-game /g/<id>, plus /today (digest) and /image (download tool)
+api/og.js                        Preview images: per-game /og/<id> and the /og/today digest (1200×630 PNG, @vercel/og)
+lib/cardinfo.js                  Rebuilds a game's share-card data from its match id (FotMob + KV cache) — shared module
+lib/digest-page.js               Renders the /today and /image HTML pages — shared module
 api/tv.js                        Cached serverless proxy for TV listings
 api/sofatv.js                    Unofficial SofaScore TV proxy (on-demand fallback)
 api/fmtv.js                      Unofficial FotMob TV proxy (free day-bulk, Portugal-first)
@@ -91,7 +102,7 @@ assets/og-image.svg              Social share / Open Graph card
 robots.txt                       Crawl rules (allows the site, disallows admin.html + /api)
 sitemap.xml                      Sitemap (homepage only; admin.html excluded)
 llms.txt                         Site summary for LLM/AI crawlers
-vercel.json                      Rewrites the public /g/<id> and /og/<id> paths; raises the cron function's time budget
+vercel.json                      Rewrites public paths (/g, /og, /today, /image, /og/today); raises the cron function's time budget
 package.json                     Declares the @vercel/og dependency (for the on-the-fly preview image)
 .github/workflows/highlights-cron.yml  Free external cron that pings /api/cron-highlights every ~30 min
 ```
@@ -103,6 +114,14 @@ package.json                     Declares the @vercel/og dependency (for the on-
 > CDN. Note FotMob's image CDN can 403 server-side crest fetches; when a crest
 > can't be loaded the card falls back to a team-initial monogram, so the image
 > always renders.
+
+> **Function budget (Hobby plan = 12).** Vercel's free plan caps a deployment at
+> 12 Serverless Functions, i.e. 12 files in `api/`. To stay under it, related
+> endpoints share one function (`/api/og` draws both the per-game and `/og/today`
+> images; `/api/share` serves `/g/<id>`, `/today` and `/image`) and shared code
+> lives in `lib/` (e.g. `lib/cardinfo.js`, `lib/digest-page.js`) — modules there
+> are imported, not deployed as their own functions. Add new helpers under `lib/`,
+> not `api/`, and fold new pages/images into an existing function where it fits.
 
 The card shows the **primary country**'s channels first; the rest fold into the
 match-details modal. The primary country defaults to the visitor's country via
@@ -121,6 +140,14 @@ fan-out that used to get TheSportsDB's free key rate-limited (the original
 *“load fixtures failing”*). Like the other FotMob feeds it's best-effort and can
 be disabled with `FOTMOB_DISABLED=1`; append `&debug=1` to inspect what it
 returned.
+
+By default `/api/fixtures` keeps only the **major competitions** (`MAJOR_LEAGUE_IDS`)
+so the app isn't flooded with thousands of low-interest worldwide fixtures.
+**Exception:** if a date has games but *none* of them are major — e.g. mid-summer,
+when domestic leagues are finished and the only football is the World Cup / Euro —
+it falls back to returning every competition for that day rather than showing a
+blank app (`_debug.majorFallback` flags it). Pass `?all=1` to always get
+everything.
 
 It's **long-term cached / DB-backed** (Vercel KV) so calls stay minimal:
 

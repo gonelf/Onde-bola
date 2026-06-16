@@ -8,7 +8,8 @@
  * broadcasters across major markets; anything not listed is assumed paid.
  */
 
-window.FREE_TO_AIR = {};
+(function () {
+var FREE = {};
 [
   // United Kingdom & Ireland
   "BBC", "BBC One", "BBC Two", "BBC Three", "BBC iPlayer", "ITV", "ITV1", "ITV4",
@@ -33,8 +34,17 @@ window.FREE_TO_AIR = {};
   "SVT", "SVT1", "TV4", "NRK", "DR", "DR1", "Yle", "TV2",
   // Others
   "SBS", "ABC TV", "Optus Sport Free", "Star Sports First", "DD Sports", "DD National",
-].forEach(function (name) { window.FREE_TO_AIR[name] = true; });
+].forEach(function (name) { FREE[name] = true; });
 
-window.isPaidChannel = function (name) {
-  return !window.FREE_TO_AIR[name];
-};
+function isPaidChannel(name) { return !FREE[name]; }
+
+// Dual export: a plain <script> on the client (window.*) and a require()-able
+// module on the server (the /g pSEO pages classify channels free vs paid too).
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { FREE_TO_AIR: FREE, isPaidChannel: isPaidChannel };
+}
+if (typeof window !== "undefined") {
+  window.FREE_TO_AIR = FREE;
+  window.isPaidChannel = isPaidChannel;
+}
+})();

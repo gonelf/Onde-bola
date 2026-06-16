@@ -28,6 +28,7 @@
 
 const { getCard } = require("../lib/cardinfo.js");
 const { renderDigestPage } = require("../lib/digest-page.js");
+const { isPaidChannel } = require("../assets/data/broadcasters.js");
 
 function esc(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -100,6 +101,26 @@ const formDots = (list) =>
   (Array.isArray(list) ? list : [])
     .map((r) => `<span class="form form-${esc(r).toLowerCase()}">${esc(r)}</span>`)
     .join("");
+
+// "A", "A and B", "A, B and C".
+function listJoin(arr) {
+  const a = (arr || []).filter(Boolean);
+  if (a.length <= 1) return a.join("");
+  return a.slice(0, -1).join(", ") + " and " + a[a.length - 1];
+}
+
+// Kick-off across the markets that matter for these queries.
+function kickoffTimes(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  const at = (tz) => new Intl.DateTimeFormat("en-GB", {
+    timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false,
+  }).format(d);
+  return {
+    pt: at("Europe/Lisbon"), uk: at("Europe/London"),
+    et: at("America/New_York"), utc: at("UTC"),
+  };
+}
 
 // --- pretty URLs: /g/<league>/<date>/<home>-vs-<away> ---------------------
 // A team's URL slug (same normalization the client uses), and the matchup slug.
@@ -175,6 +196,11 @@ module.exports = async (req, res) => {
   if (view === "today" || view === "image") {
     return renderDigestPage(req, res, { view, origin, get });
   }
+
+  // The sitemap and its daily cron also share this function to stay within the
+  // 12-function cap; they live as plain modules under lib/.
+  if (get("sitemap") === "1") return require("../lib/sitemap.js")(req, res);
+  if (get("cron") === "1") return require("../lib/cron-sitemap.js")(req, res);
 
   const slug = get("slug");
   const pathDate = /^\d{4}-\d{2}-\d{2}$/.test(get("date")) ? get("date") : "";
@@ -348,26 +374,65 @@ module.exports = async (req, res) => {
       });
     });
   });
-  const jsonLd = JSON.stringify({ "@context": "https://schema.org", "@graph": graph });
+  // jsonLd is stringified later, after the FAQ page node is appended below.
 
   // --- visible body sections ------------------------------------------------
   const badge = (url, name) => url
     ? `<img class="crest" src="${esc(url)}" alt="${esc(name)} crest" width="40" height="40" loading="lazy" />`
     : "";
 
+  const times = kickoff ? kickoffTimes(kickoff) : null;
+  const freeAny = broadcasts.some((g) => g.channels.some((c) => !isPaidChannel(c)));
+  const primaryTv = broadcasts.find((g) => g.country === "Portugal") || broadcasts[0] || null;
+
+  // Unique intro copy so each page reads differently (not a thin template).
+  const introBits = [];
+  introBits.push(
+    `${home} take on ${away}` +
+    (compDisplay ? ` in ${compDisplay}` : "") +
+    (details && details.round ? ` (${details.round})` : "") +
+    (details && details.venue ? `, at ${details.venue}` : "") + "."
+  );
+  if (times) introBits.push(`Kick-off is ${times.pt} in Portugal (${times.utc} UTC).`);
+  introBits.push(
+    finished && score
+      ? `Final score: ${score}.`
+      : freeAny
+        ? "It's on free-to-air TV in some countries — the full channel list by country is below."
+        : "Here are the TV channels and streaming services carrying it in each country."
+  );
+  const intro = introBits.join(" ");
+
+  const channelLi = (c) => {
+    const paid = isPaidChannel(c);
+    return `<li class="ch ${paid ? "paid" : "free"}">${esc(c)}` +
+      `<span class="tag">${paid ? "Subscription" : "Free-to-air"}</span></li>`;
+  };
   const tvSection = broadcasts.length
     ? `<section class="card">
-    <h2>Where to watch on TV</h2>
+    <h2>Where to watch ${esc(vs)} on TV</h2>
     ${broadcasts.map((g) => `<div class="country">
       <h3>${esc(g.country)}</h3>
-      <ul class="chips">${g.channels.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>
+      <ul class="chans">${g.channels.map(channelLi).join("")}</ul>
     </div>`).join("")}
-    <p class="muted">Channels are detected per country. Open the app to see listings for your location.</p>
+    <p class="muted">Listings are detected per country${freeAny ? "; free-to-air channels are marked" : ""}. Open the live app to confirm what's available where you are.</p>
   </section>`
     : `<section class="card">
-    <h2>Where to watch on TV</h2>
+    <h2>Where to watch ${esc(vs)} on TV</h2>
     <p>Broadcasters for ${esc(vs)} are detected for your country in the live app — including which channels are free-to-air and which need a subscription.</p>
   </section>`;
+
+  const kickoffSection = times
+    ? `<section class="card">
+    <h2>${esc(vs)} kick-off time</h2>
+    <table class="facts">
+      <tr><th>Portugal</th><td>${esc(times.pt)}${dLabel ? " · " + esc(dLabel) : ""}</td></tr>
+      <tr><th>UK</th><td>${esc(times.uk)}</td></tr>
+      <tr><th>US Eastern</th><td>${esc(times.et)}</td></tr>
+      <tr><th>UTC</th><td>${esc(times.utc)}</td></tr>
+    </table>
+  </section>`
+    : "";
 
   const factRows = [];
   if (details) {
@@ -430,6 +495,58 @@ module.exports = async (req, res) => {
     </li>`).join("")}</ul>
   </section>`
     : "";
+
+  // FAQ — targets the "what channel / what time / is it free" long-tail queries.
+  const faqs = [];
+  if (primaryTv) {
+    faqs.push([
+      `What channel is ${vs} on${primaryTv.country ? " in " + primaryTv.country : ""}?`,
+      `${vs} is shown on ${listJoin(primaryTv.channels)} in ${primaryTv.country}. ` +
+      `Broadcasters in other countries are listed above.`,
+    ]);
+  } else {
+    faqs.push([
+      `What channel is ${vs} on?`,
+      `Broadcasters vary by country — open the live app to see the TV channels and streaming services carrying ${vs} where you are.`,
+    ]);
+  }
+  if (times) {
+    faqs.push([
+      `What time does ${vs} kick off?`,
+      `${vs} kicks off at ${times.pt} in Portugal (${times.uk} UK, ${times.et} US Eastern, ${times.utc} UTC)` +
+      (dLabel ? ` on ${dLabel}` : "") + ".",
+    ]);
+  }
+  faqs.push([
+    `Is ${vs} free to watch?`,
+    freeAny
+      ? `Yes — ${vs} is on free-to-air TV in some countries (the channels marked free above). Elsewhere it needs a TV subscription or streaming service.`
+      : `${vs} is generally only on subscription TV or streaming. Check the listings above for a free option in your country.`,
+  ]);
+  if (details && details.venue) {
+    faqs.push([`Where is ${vs} being played?`, `${vs} is played at ${details.venue}.`]);
+  }
+  if (compDisplay) {
+    faqs.push([`What competition is ${vs} in?`, `${vs} is part of ${compDisplay}.`]);
+  }
+  const faqSection = `<section class="card faq">
+    <h2>${esc(vs)} — frequently asked questions</h2>
+    ${faqs.map(([qq, a]) => `<details><summary>${esc(qq)}</summary><p>${esc(a)}</p></details>`).join("")}
+  </section>`;
+  graph.push({
+    "@type": "FAQPage",
+    mainEntity: faqs.map(([qq, a]) => ({
+      "@type": "Question", name: qq,
+      acceptedAnswer: { "@type": "Answer", text: a },
+    })),
+  });
+
+  // More matches in the same competition (internal link up to the hub).
+  const moreSection = leagueUrl
+    ? `<p class="more"><a href="${esc(leagueUrl)}">More ${esc(compDisplay || "matches")} on TV →</a></p>`
+    : "";
+
+  const jsonLd = JSON.stringify({ "@context": "https://schema.org", "@graph": graph });
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -495,6 +612,25 @@ module.exports = async (req, res) => {
   .crumbs{font-size:.85rem;color:var(--muted);margin-bottom:8px}
   .crumbs a{color:var(--muted)}
   .crumbs span{color:var(--txt)}
+  .intro{margin:6px 0 4px}
+  .chans{list-style:none;display:flex;flex-direction:column;gap:6px;padding:0;margin:0}
+  .chans .ch{display:flex;align-items:center;gap:10px;
+    background:#0f1a26;border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-size:.92rem}
+  .chans .ch::before{content:"";width:8px;height:8px;border-radius:50%;flex:0 0 8px}
+  .chans .ch.free::before{background:var(--accent)}
+  .chans .ch.paid::before{background:#e0a23b}
+  .chans .ch .tag{margin-left:auto;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;
+    padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .chans .ch.free .tag{color:var(--accent);background:rgba(22,210,122,.14)}
+  .chans .ch.paid .tag{color:#e0a23b;background:rgba(224,162,59,.14)}
+  .faq details{border-top:1px solid var(--line);padding:10px 0}
+  .faq details:first-of-type{border-top:0}
+  .faq summary{cursor:pointer;font-weight:600;list-style:none}
+  .faq summary::-webkit-details-marker{display:none}
+  .faq summary::after{content:"+";float:right;color:var(--muted)}
+  .faq details[open] summary::after{content:"–"}
+  .faq p{color:var(--muted);margin:8px 0 0}
+  .more{margin:18px 0 0;font-weight:700}
   .lineups{display:flex;gap:16px;flex-wrap:wrap}
   .xi{flex:1;min-width:140px}
   .xi h3{margin:0 0 8px}
@@ -527,13 +663,18 @@ module.exports = async (req, res) => {
     ${score ? `<div class="score">${esc(score)}</div>` : ""}
     <p class="meta">${esc([compDisplay, when].filter(Boolean).join(" · "))}</p>
 
+    <p class="intro">${esc(intro)}</p>
+
     <a class="cta" href="${esc(appUrl)}">Open ${esc(vs)} in the live app →</a>
 
     ${tvSection}
+    ${kickoffSection}
     ${lineupSection}
     ${meetingsSection}
     ${factsSection}
     ${compareSection}
+    ${faqSection}
+    ${moreSection}
 
     <footer>
       <a href="/">Hoje Há Bola</a> — football on TV, worldwide. Times shown in Europe/Lisbon.

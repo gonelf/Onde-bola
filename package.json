@@ -3,7 +3,21 @@
   "version": "1.0.0",
   "private": true,
   "description": "Hoje Há Bola — football on TV worldwide & where to watch it.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
   "dependencies": {
-    "@vercel/og": "^0.6.8"
+    "@vercel/analytics": "^1.4.1",
+    "@vercel/og": "^0.6.8",
+    "next": "^15.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.18.0",
+    "eslint-config-next": "^15.1.6"
   }
 }

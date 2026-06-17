@@ -1,22 +1,7 @@
 {
-  "rewrites": [
-    { "source": "/sitemap.xml", "destination": "/api/share?sitemap=1" },
-    { "source": "/g/:league/:date(\\d{4}-\\d{2}-\\d{2})/:slug", "destination": "/api/share?league=:league&date=:date&slug=:slug" },
-    { "source": "/g/:date(\\d{4}-\\d{2}-\\d{2})/:slug", "destination": "/api/share?date=:date&slug=:slug" },
-    { "source": "/g/:id(\\d+)", "destination": "/api/share?id=:id" },
-    { "source": "/g/:league", "destination": "/api/league?league=:league" },
-    { "source": "/og/today", "destination": "/api/og?today=1" },
-    { "source": "/og/:id", "destination": "/api/og?id=:id" },
-    { "source": "/today", "destination": "/api/share?view=today" },
-    { "source": "/image", "destination": "/api/share?view=image" },
-    { "source": "/g", "destination": "/api/share" },
-    { "source": "/og", "destination": "/api/og" }
-  ],
-  "functions": {
-    "api/cron-highlights.js": { "maxDuration": 60 },
-    "api/share.js": { "maxDuration": 60 }
-  },
+  "framework": "nextjs",
+  "buildCommand": "next build",
   "crons": [
-    { "path": "/api/share?cron=1", "schedule": "0 5 * * *" }
+    { "path": "/api/cron-sitemap", "schedule": "0 5 * * *" }
   ]
 }

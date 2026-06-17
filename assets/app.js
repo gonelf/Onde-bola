@@ -1420,12 +1420,17 @@
     var n = bands.length;
     var nodes = "";
     bands.forEach(function (band, bi) {
-      var y = n > 1 ? 92 - bi * (84 / (n - 1)) : 50;
+      var bandY = n > 1 ? 92 - bi * (84 / (n - 1)) : 50;
       var k = band.length;
+      // Bow wide rows into a "smile": lift the outer players (wingers / full-
+      // backs) above the line so a busy row of 4–5 stays readable.
+      var amp = k >= 4 ? Math.min(9, (k - 3) * 3.5) : 0;
       band.forEach(function (p, pj) {
         // Spread the row across most of the pitch width (10%–90%) so adjacent
         // name labels don't collide; a lone player sits on the centre line.
         var x = k > 1 ? 10 + (pj / (k - 1)) * 80 : 50;
+        var s = k > 1 ? (pj / (k - 1) - 0.5) * 2 : 0; // −1 (left) … +1 (right)
+        var y = Math.max(6, bandY - amp * s * s);
         var num = p.num ? '<span class="pitch-num" style="color:' + txt + '">' +
           escapeHtml(String(p.num)) + "</span>" : "";
         nodes += '<div class="pitch-player" style="left:' + x.toFixed(1) + "%;top:" + y.toFixed(1) + '%">' +

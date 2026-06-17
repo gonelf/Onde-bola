@@ -4,6 +4,11 @@ node_modules/
 # Vercel
 .vercel/
 
+# Next.js
+.next/
+next-env.d.ts
+out/
+
 # Logs / OS cruft
 *.log
 .DS_Store

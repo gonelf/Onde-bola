@@ -1396,6 +1396,22 @@
     return { home: home, away: away };
   }
   var JERSEY_PATH = "M22 4 C25 9 35 9 38 4 L47 7 L58 16 L49 28 L43 24 L43 52 L17 52 L17 24 L11 28 L2 16 L13 7 Z";
+  // Pitch labels are narrow (~54px). When a full name would overflow, shorten it
+  // to "F. Lastname" (first initial + the rest); a still-too-long surname is left
+  // to the CSS ellipsis. The full name always stays in the node's title.
+  var _nameCanvas;
+  function pitchLabel(name) {
+    var full = String(name || "").trim();
+    if (!full) return "";
+    try {
+      if (!_nameCanvas) _nameCanvas = document.createElement("canvas").getContext("2d");
+      _nameCanvas.font = '600 10.9px "Segoe UI", system-ui, -apple-system, Roboto, sans-serif';
+      if (_nameCanvas.measureText(full).width <= 54) return full;
+      var parts = full.split(/\s+/);
+      if (parts.length > 1) return parts[0].charAt(0) + ". " + parts.slice(1).join(" ");
+    } catch (e) {}
+    return full;
+  }
   // One team's XI laid out on a vertical pitch (GK at the bottom goal).
   function pitchHtml(side, color) {
     var bands = lineupBands(side && side.starters, side && side.formation);
@@ -1414,7 +1430,7 @@
           '<span class="pitch-jersey"><svg class="jersey" viewBox="0 0 60 56" aria-hidden="true">' +
             '<path d="' + JERSEY_PATH + '" fill="' + color + '" stroke="rgba(0,0,0,.28)" stroke-width="1.5"/>' +
           "</svg>" + num + "</span>" +
-          '<span class="pitch-name" title="' + escapeHtml(p.name) + '">' + escapeHtml(p.name) + "</span>" +
+          '<span class="pitch-name" title="' + escapeHtml(p.name) + '">' + escapeHtml(pitchLabel(p.name)) + "</span>" +
           "</div>";
       });
     });

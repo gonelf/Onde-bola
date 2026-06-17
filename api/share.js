@@ -93,7 +93,11 @@ function broadcastsFor(feed, home, away) {
   });
   return order.map((country) => ({
     country,
-    channels: Array.from(new Set(byCountry[country])).sort(),
+    // Free-to-air (open signal) channels first, paid cable after; A–Z within each.
+    channels: Array.from(new Set(byCountry[country])).sort((x, y) => {
+      const px = isPaidChannel(x) ? 1 : 0, py = isPaidChannel(y) ? 1 : 0;
+      return px !== py ? px - py : x.localeCompare(y);
+    }),
   }));
 }
 

@@ -988,6 +988,16 @@
     });
   }
 
+  // Order a list of channel names so free-to-air (open signal) come first and
+  // paid cable / subscription channels after. Stable within each group.
+  function orderChannels(names) {
+    return names.slice().sort(function (a, b) {
+      var pa = window.isPaidChannel(a) ? 1 : 0;
+      var pb = window.isPaidChannel(b) ? 1 : 0;
+      return pa - pb;
+    });
+  }
+
   // A single channel chip, tagged free-to-air or paid cable / subscription.
   function channelChip(name) {
     var paid = window.isPaidChannel(name);
@@ -1015,7 +1025,7 @@
     var byCountry = groupByCountry(tv);
     var ordered = orderCountries(Object.keys(byCountry));
     var lead = byCountry[state.primaryCountry] ? state.primaryCountry : ordered[0];
-    var leadChannels = byCountry[lead];
+    var leadChannels = orderChannels(byCountry[lead]);
     var chips = leadChannels.slice(0, MAX_CARD_CHIPS).map(channelChip).join("");
     var hiddenChips = leadChannels.length - MAX_CARD_CHIPS;
     if (hiddenChips > 0) chips += '<span class="channel more-inline">+' + hiddenChips + "</span>";
@@ -1302,7 +1312,7 @@
       });
       return '<p class="src-note real">' + t("realListings") + "</p>" +
         orderCountries(Object.keys(byCountry)).map(function (c) {
-          return detailChannelRow(countryFlag(c), c, byCountry[c].map(channelChip).join(""));
+          return detailChannelRow(countryFlag(c), c, orderChannels(byCountry[c]).map(channelChip).join(""));
         }).join("");
     }
     return checking

@@ -194,6 +194,8 @@
       noListingDetail: "No broadcast listing found for this match yet.", vs: "vs",
       mdReferee: "Referee", mdAttendance: "Attendance", mdMotm: "Player of the match",
       mdForm: "Recent form", mdH2h: "Head-to-head", mdTimeline: "Timeline",
+      mdLineups: "Starting line-ups", mdLineupsProb: "Probable line-ups",
+      mdLineupsNote: "Predicted from recent selections — confirmed XI is announced ~1h before kick-off.",
       mdStats: "Match stats", mdLoading: "Loading match details…",
       mdHighlights: "Highlights", mdWatch: "▶ Watch highlights", mdYouTube: "🔎 Search on YouTube",
       mdW: "W", mdD: "D", mdL: "L",
@@ -231,6 +233,8 @@
       noListingDetail: "Ainda sem emissão conhecida para este jogo.", vs: "vs",
       mdReferee: "Árbitro", mdAttendance: "Assistência", mdMotm: "Homem do jogo",
       mdForm: "Forma recente", mdH2h: "Confrontos diretos", mdTimeline: "Cronologia",
+      mdLineups: "Onze inicial", mdLineupsProb: "Onzes prováveis",
+      mdLineupsNote: "Previsto a partir das escolhas recentes — o onze confirmado é anunciado ~1h antes do início.",
       mdStats: "Estatísticas", mdLoading: "A carregar detalhes do jogo…",
       mdHighlights: "Resumo", mdWatch: "▶ Ver resumo", mdYouTube: "🔎 Procurar no YouTube",
       mdW: "V", mdD: "E", mdL: "D",
@@ -1400,6 +1404,30 @@
             '<span class="stat-label">' + escapeHtml(statLabel(s.key)) + "</span>" +
             '<span class="stat-a">' + escapeHtml(s.away) + "</span></div>";
         }).join("") + "</div>";
+    }
+
+    // Probable (or confirmed) starting line-ups, side by side. Shows whichever
+    // sides FotMob has; an empty XI renders as a dash rather than a blank column.
+    var lu = d.lineups;
+    if (lu && (lu.home || lu.away)) {
+      var xi = function (side) {
+        var list = (side && Array.isArray(side.starters)) ? side.starters : [];
+        if (!list.length) return '<p class="muted">—</p>';
+        return "<ol>" + list.map(function (p) {
+          return "<li>" + (p.num ? '<span class="lineup-num">' + escapeHtml(String(p.num)) + "</span>" : "") +
+            '<span class="lineup-name">' + escapeHtml(p.name) + "</span></li>";
+        }).join("") + "</ol>";
+      };
+      var sideHtml = function (teamName, side) {
+        var formation = side && side.formation
+          ? ' <span class="lineup-formation">' + escapeHtml(side.formation) + "</span>" : "";
+        return '<div class="lineup-side"><h4>' + escapeHtml(teamName) + formation + "</h4>" + xi(side) + "</div>";
+      };
+      out += '<h3 class="detail-h">' + (lu.confirmed ? t("mdLineups") : t("mdLineupsProb")) + "</h3>" +
+        '<div class="detail-lineups">' +
+          sideHtml(fx.home, lu.home) + sideHtml(fx.away, lu.away) +
+        "</div>" +
+        (lu.confirmed ? "" : '<p class="src-note">' + t("mdLineupsNote") + "</p>");
     }
 
     if (d.form && (d.form.home.length || d.form.away.length)) {

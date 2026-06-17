@@ -751,6 +751,26 @@ body {
   font-size: 0.82rem;
 }
 
+.detail-lineups { display: flex; gap: 16px; flex-wrap: wrap; }
+.lineup-side { flex: 1; min-width: 140px; }
+.lineup-side h4 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+}
+.lineup-formation { color: var(--text-dim); font-size: 0.78rem; font-weight: 600; }
+.lineup-side ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.lineup-side li { display: flex; align-items: center; gap: 8px; font-size: 0.88rem; }
+.lineup-num {
+  flex: none;
+  min-width: 1.6em;
+  text-align: center;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+}
+.lineup-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .detail-form { display: flex; flex-direction: column; gap: 8px; }
 .form-side { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .form-side > span:first-child { flex: 1; font-weight: 600; font-size: 0.9rem; }

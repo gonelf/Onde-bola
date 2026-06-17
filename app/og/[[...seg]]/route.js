@@ -350,7 +350,8 @@ export async function GET(req, ctx) {
   const searchParams = url.searchParams;
   const g = (k) => searchParams.get(k) || "";
   const params = (ctx && ctx.params) ? await ctx.params : {};
-  const routeId = (params && params.id) || "";
+  const seg = (params && params.seg) || [];
+  const routeId = seg[0] || "";
 
   // Digest card: /og/today.
   if (routeId === "today" || searchParams.get("today") != null || g("id") === "today") {

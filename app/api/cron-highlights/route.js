@@ -21,6 +21,7 @@
 import { kv, kvConfigured } from "@/lib/kv";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const DISABLED = process.env.FOTMOB_DISABLED === "1";
 const SECRET = process.env.CRON_SECRET || "";

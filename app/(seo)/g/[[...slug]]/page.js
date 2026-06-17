@@ -17,6 +17,7 @@ import { redirect } from "next/navigation";
 import { buildShare, buildLeague } from "@/lib/seo-render";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 async function getOrigin() {
   const h = await headers();

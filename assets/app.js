@@ -194,6 +194,8 @@
       noListingDetail: "No broadcast listing found for this match yet.", vs: "vs",
       mdReferee: "Referee", mdAttendance: "Attendance", mdMotm: "Player of the match",
       mdForm: "Recent form", mdH2h: "Head-to-head", mdTimeline: "Timeline",
+      mdLineups: "Starting line-ups", mdLineupsProb: "Probable line-ups",
+      mdLineupsNote: "Predicted from recent selections — confirmed XI is announced ~1h before kick-off.",
       mdStats: "Match stats", mdLoading: "Loading match details…",
       mdHighlights: "Highlights", mdWatch: "▶ Watch highlights", mdYouTube: "🔎 Search on YouTube",
       mdW: "W", mdD: "D", mdL: "L",
@@ -231,6 +233,8 @@
       noListingDetail: "Ainda sem emissão conhecida para este jogo.", vs: "vs",
       mdReferee: "Árbitro", mdAttendance: "Assistência", mdMotm: "Homem do jogo",
       mdForm: "Forma recente", mdH2h: "Confrontos diretos", mdTimeline: "Cronologia",
+      mdLineups: "Onze inicial", mdLineupsProb: "Onzes prováveis",
+      mdLineupsNote: "Previsto a partir das escolhas recentes — o onze confirmado é anunciado ~1h antes do início.",
       mdStats: "Estatísticas", mdLoading: "A carregar detalhes do jogo…",
       mdHighlights: "Resumo", mdWatch: "▶ Ver resumo", mdYouTube: "🔎 Procurar no YouTube",
       mdW: "V", mdD: "E", mdL: "D",
@@ -1353,6 +1357,114 @@
       '<span class="event-text">' + who + "</span></div>";
   }
 
+  // ---- Pitch line-up rendering --------------------------------------------
+  // Default row split (outfield only) when FotMob gives no usable formation.
+  function defaultRows(out) {
+    if (out === 10) return [4, 3, 3];
+    var rows = [], rem = out;
+    while (rem > 0) { var take = Math.min(4, rem); rows.push(take); rem -= take; }
+    return rows;
+  }
+  // Parse "4-3-3" → [4,3,3], but only trust it when it accounts for every
+  // outfield player; otherwise fall back to a sensible default split.
+  function parseFormation(f, out) {
+    var r = String(f || "").trim().split(/[^0-9]+/).filter(Boolean)
+      .map(Number).filter(function (n) { return n > 0 && n <= 6; });
+    if (!r.length) return null;
+    var sum = r.reduce(function (a, b) { return a + b; }, 0);
+    return sum === out ? r : null;
+  }
+  // Group a starting XI into bands [GK, ...formation rows], goal-line first.
+  function lineupBands(starters, formation) {
+    var s = (starters || []).slice(0, 11);
+    if (!s.length) return [];
+    var out = s.length - 1;
+    var rows = parseFormation(formation, out) || defaultRows(out);
+    var bands = [[s[0]]], idx = 1;
+    rows.forEach(function (cnt) {
+      var band = [];
+      for (var i = 0; i < cnt && idx < s.length; i++) band.push(s[idx++]);
+      if (band.length) bands.push(band);
+    });
+    if (idx < s.length) bands.push(s.slice(idx));
+    return bands;
+  }
+  // Black or white number text for legibility on a given shirt colour.
+  function contrastText(hex) {
+    var c = String(hex || "").replace("#", "");
+    if (c.length !== 6) return "#fff";
+    var r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4, 6), 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? "#111" : "#fff";
+  }
+  // Resolve each side's shirt colour, falling back to a blue/light pair and
+  // nudging them apart if FotMob reports the same colour for both teams.
+  function jerseyColors(lineups) {
+    var c = (lineups && lineups.colors) || {};
+    var home = (c.home || "#2563eb").toLowerCase();
+    var away = (c.away || "#e5e7eb").toLowerCase();
+    if (home === away) away = contrastText(home) === "#fff" ? "#e5e7eb" : "#1f2937";
+    return { home: home, away: away };
+  }
+  var JERSEY_PATH = "M22 4 C25 9 35 9 38 4 L47 7 L58 16 L49 28 L43 24 L43 52 L17 52 L17 24 L11 28 L2 16 L13 7 Z";
+  // Pitch labels are narrow (~54px). When a full name would overflow, shorten it
+  // to "F. Lastname" (first initial + the rest); a still-too-long surname is left
+  // to the CSS ellipsis. The full name always stays in the node's title.
+  var _nameCanvas;
+  function pitchLabel(name) {
+    var full = String(name || "").trim();
+    if (!full) return "";
+    try {
+      if (!_nameCanvas) _nameCanvas = document.createElement("canvas").getContext("2d");
+      _nameCanvas.font = '600 10.9px "Segoe UI", system-ui, -apple-system, Roboto, sans-serif';
+      if (_nameCanvas.measureText(full).width <= 54) return full;
+      var parts = full.split(/\s+/);
+      if (parts.length > 1) return parts[0].charAt(0) + ". " + parts.slice(1).join(" ");
+    } catch (e) {}
+    return full;
+  }
+  // One team's XI laid out on a vertical pitch (GK at the bottom goal).
+  function pitchHtml(side, color) {
+    var bands = lineupBands(side && side.starters, side && side.formation);
+    if (!bands.length) return "";
+    var txt = contrastText(color);
+    var n = bands.length;
+    var nodes = "";
+    bands.forEach(function (band, bi) {
+      var bandY = n > 1 ? 92 - bi * (84 / (n - 1)) : 50;
+      var k = band.length;
+      // Bow wide rows into a "smile": lift the outer players (wingers / full-
+      // backs) above the line so a busy row of 4–5 stays readable.
+      var amp = k >= 4 ? Math.min(9, (k - 3) * 3.5) : 0;
+      band.forEach(function (p, pj) {
+        // Spread the row across most of the pitch width (10%–90%) so adjacent
+        // name labels don't collide; a lone player sits on the centre line.
+        var x = k > 1 ? 10 + (pj / (k - 1)) * 80 : 50;
+        var s = k > 1 ? (pj / (k - 1) - 0.5) * 2 : 0; // −1 (left) … +1 (right)
+        var y = Math.max(6, bandY - amp * s * s);
+        var num = p.num ? '<span class="pitch-num" style="color:' + txt + '">' +
+          escapeHtml(String(p.num)) + "</span>" : "";
+        nodes += '<div class="pitch-player" style="left:' + x.toFixed(1) + "%;top:" + y.toFixed(1) + '%">' +
+          '<span class="pitch-jersey"><svg class="jersey" viewBox="0 0 60 56" aria-hidden="true">' +
+            '<path d="' + JERSEY_PATH + '" fill="' + color + '" stroke="rgba(0,0,0,.28)" stroke-width="1.5"/>' +
+          "</svg>" + num + "</span>" +
+          '<span class="pitch-name" title="' + escapeHtml(p.name) + '">' + escapeHtml(pitchLabel(p.name)) + "</span>" +
+          "</div>";
+      });
+    });
+    return '<div class="pitch">' +
+      '<span class="pm-line"></span><span class="pm-circle"></span>' +
+      '<span class="pm-box top"></span><span class="pm-box bottom"></span>' +
+      nodes + "</div>";
+  }
+  // Header + pitch for one side; "" when that side has no XI yet.
+  function pitchWrap(teamName, side, color) {
+    if (!side || !Array.isArray(side.starters) || !side.starters.length) return "";
+    var formation = side.formation
+      ? ' <span class="lineup-formation">' + escapeHtml(side.formation) + "</span>" : "";
+    return '<div class="pitch-wrap"><p class="pitch-team">' + escapeHtml(teamName) + formation + "</p>" +
+      pitchHtml(side, color) + "</div>";
+  }
+
   // Everything sourced from /api/matchdetails. Renders only the sections that
   // came back with data; shows a one-line loading hint until the fetch resolves.
   function detailExtrasHtml(fx) {
@@ -1410,6 +1522,19 @@
             '<span class="stat-label">' + escapeHtml(statLabel(s.key)) + "</span>" +
             '<span class="stat-a">' + escapeHtml(s.away) + "</span></div>";
         }).join("") + "</div>";
+    }
+
+    // Probable (or confirmed) starting line-ups, drawn on a pitch per team with
+    // the club's shirt colours, formation and shirt numbers.
+    var lu = d.lineups;
+    if (lu && (lu.home || lu.away)) {
+      var col = jerseyColors(lu);
+      var pitches = pitchWrap(fx.home, lu.home, col.home) + pitchWrap(fx.away, lu.away, col.away);
+      if (pitches) {
+        out += '<h3 class="detail-h">' + (lu.confirmed ? t("mdLineups") : t("mdLineupsProb")) + "</h3>" +
+          '<div class="detail-pitches">' + pitches + "</div>" +
+          (lu.confirmed ? "" : '<p class="src-note">' + t("mdLineupsNote") + "</p>");
+      }
     }
 
     if (d.form && (d.form.home.length || d.form.away.length)) {

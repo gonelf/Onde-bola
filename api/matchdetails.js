@@ -198,8 +198,28 @@ function lineupSide(team) {
   return { name: str(team.teamName || team.name), formation: formation, starters: flat.slice(0, 11) };
 }
 
+// Normalize a colour to "#rrggbb"; "" if it isn't a usable hex value.
+function hexColor(x) {
+  var s = str(x).replace(/^#/, "");
+  if (/^[0-9a-f]{3}$/i.test(s)) s = s.replace(/(.)/g, "$1$1");
+  return /^[0-9a-f]{6}$/i.test(s) ? "#" + s.toLowerCase() : "";
+}
+
+// FotMob carries each side's shirt colour under general.teamColors, with a few
+// shapes (light/dark variants, or flat home/away). Pull a home/away pair so the
+// client can paint the jerseys; missing values degrade to "" (client defaults).
+function teamColorsFrom(general) {
+  var tc = (general && general.teamColors) || {};
+  var src = (tc.lightMode && (tc.lightMode.home || tc.lightMode.away)) ? tc.lightMode
+    : (tc.darkMode && (tc.darkMode.home || tc.darkMode.away)) ? tc.darkMode
+    : tc;
+  var home = hexColor(src && src.home);
+  var away = hexColor(src && src.away);
+  return (home || away) ? { home: home, away: away } : null;
+}
+
 // Probable / confirmed starting line-ups for both teams.
-function lineupsFrom(content) {
+function lineupsFrom(content, general) {
   var lu = content.lineup || content.lineups;
   if (!lu || typeof lu !== "object") return null;
   var confirmed = lu.confirmed === true || lu.isLineupConfirmed === true ||
@@ -212,7 +232,7 @@ function lineupsFrom(content) {
     home = lineupSide(lu.homeTeam); away = lineupSide(lu.awayTeam);
   }
   if (!home && !away) return null;
-  return { confirmed: !!confirmed, home: home, away: away };
+  return { confirmed: !!confirmed, home: home, away: away, colors: teamColorsFrom(general) };
 }
 
 // The list of past meetings (the "last encounters"), most-recent first. Each
@@ -324,7 +344,7 @@ function normalize(data) {
     form: form,
     h2h: h2h,
     h2hMatches: safe(function () { return h2hMatchesFrom(content); }, []),
-    lineups: safe(function () { return lineupsFrom(content); }, null),
+    lineups: safe(function () { return lineupsFrom(content, general); }, null),
     highlights: highlights,
     events: safe(function () { return eventsFrom(matchFacts); }, []),
     stats: safe(function () { return statsFrom(content.stats || {}); }, []),

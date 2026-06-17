@@ -4,6 +4,11 @@ A web app that shows the football games being played around the world right now
 and **which TV channels and streaming services are broadcasting them** in your
 country — inspired by [ondebola.com](https://ondebola.com/).
 
+Built with **Next.js (App Router)** and **React**, deployed on **Vercel**. The
+home page is a server-rendered shell that mounts a React client island for the
+live games browser; the per-game and league pages are server-rendered for SEO,
+and the data sources are Next.js route handlers under `app/api/`.
+
 ## Features
 
 - **Today's games worldwide** — every soccer fixture for the day from across
@@ -64,64 +69,75 @@ country — inspired by [ondebola.com](https://ondebola.com/).
 
 ## Running it
 
-The front end is a static site — no build step — but the **fixtures and TV data
-come through the serverless functions in `api/`**, which FotMob requires (it
-blocks direct browser calls via CORS). So run it with the Vercel dev server,
-which serves both:
+It's a Next.js app, so install dependencies and run the dev server:
 
 ```bash
-npx vercel dev
-# then open the printed http://localhost:3000
+npm install
+npm run dev          # http://localhost:3000
 ```
 
-A plain static server (e.g. `python3 -m http.server`) will serve the page but
-won't have the `/api/*` functions, so fixtures won't load — use it only for
-front-end-only tweaks. On Vercel, connect KV (below) so the functions cache.
+`npm run build && npm run start` runs the production build locally. The
+**fixtures and TV data come through the route handlers in `app/api/`** — FotMob
+requires this (it blocks direct browser calls via CORS) — so they're served by
+the same dev/prod server, no separate process needed. On Vercel, connect KV
+(below) so the data routes cache.
 
 ## Project structure
 
 ```
-index.html                       Page shell
-assets/styles.css                Styling
-assets/app.js                    Fetching, matching, rendering
-assets/data/broadcasters.js      Free-to-air channel classifier (green vs amber)
-api/fixtures.js                  Cached FotMob fixtures-by-date proxy (long-term/DB-backed)
-api/share.js                     Social pages: per-game /g/<id>, plus /today (digest) and /image (download tool)
-api/og.js                        Preview images: per-game /og/<id> and the /og/today digest (1200×630 PNG, @vercel/og)
-lib/cardinfo.js                  Rebuilds a game's share-card data from its match id (FotMob + KV cache) — shared module
-lib/digest-page.js               Renders the /today and /image HTML pages — shared module
-api/tv.js                        Cached serverless proxy for TV listings
-api/sofatv.js                    Unofficial SofaScore TV proxy (on-demand fallback)
-api/fmtv.js                      Unofficial FotMob TV proxy (free day-bulk, Portugal-first)
-api/cron-highlights.js           Background sweep: collects highlights for finished games into KV (external cron)
-api/highlights.js                Reads the collected highlights back as a feed (/api/highlights)
-api/geo.js                       Visitor country (Vercel edge header) for the default listings country
-api/health.js                    Read-only config/KV diagnostics for the admin page
-admin.html                       Connections debugger (live-tests every source, noindex)
-assets/og-image.svg              Social share / Open Graph card
-robots.txt                       Crawl rules (allows the site, disallows admin.html + /api)
-sitemap.xml                      Sitemap (homepage only; admin.html excluded)
-llms.txt                         Site summary for LLM/AI crawlers
-vercel.json                      Rewrites public paths (/g, /og, /today, /image, /og/today); raises the cron function's time budget
-package.json                     Declares the @vercel/og dependency (for the on-the-fly preview image)
+app/
+  layout.js                      Minimal root layout (<html>/<body> shell)
+  (app)/layout.js                App layout: global styles.css, page metadata, WebSite/WebApplication JSON-LD, Analytics
+  (app)/page.js                  Home page — server shell that mounts the games browser
+  (seo)/g/[[...slug]]/page.js    Per-game + league SEO pages (/g/<id>, /g/<league>, /g/<date>/<slug>, /g/<league>/<date>/<slug>)
+  (seo)/today/page.js            Shareable "today's top games" digest page
+  (seo)/image/page.js            Download tool for the digest image (date picker + buttons)
+  og/[[...seg]]/route.js         Preview images: /og, /og/<id>, /og/today (1200×630 PNG, next/og, edge)
+  sitemap.xml/route.js           Sitemap from the KV URL registry (live-sweep fallback)
+  api/fixtures/route.js          Cached FotMob fixtures-by-date proxy (long-term/DB-backed)
+  api/tv/route.js                Cached proxy for TheSportsDB TV listings
+  api/fmtv/route.js              Unofficial FotMob TV proxy (free day-bulk, Portugal-first)
+  api/sofatv/route.js            Unofficial SofaScore TV proxy (on-demand fallback)
+  api/matchdetails/route.js      Per-match FotMob detail (venue, timeline, lineups, h2h, stats)
+  api/highlights/route.js        Reads the collected highlights back as a feed
+  api/cron-highlights/route.js   Background sweep: collects highlights for finished games into KV (external cron)
+  api/cron-sitemap/route.js      Daily sweep: records canonical SEO URLs into the KV registry (Vercel cron)
+  api/geo/route.js               Visitor country (Vercel edge header) for the default listings country
+  api/health/route.js            Read-only config/KV diagnostics for the admin page
+components/GamesBrowser.jsx      The interactive games browser (client island): date nav, country picker, league filter, search, cards, detail modal
+lib/app-data.js                  Client data layer: fetch/merge fixtures + TV, match details, highlights, ordering
+lib/format.js                    Shared helpers (dates, slugs, status, share links)
+lib/i18n.js                      EN/PT translation table + language helpers
+lib/broadcasters.js              Free-to-air channel classifier (green vs amber)
+lib/ads.js                       AdSense slot configuration
+lib/kv.js                        Vercel KV (Upstash Redis REST) client, shared by the data routes
+lib/cardinfo.js                  Rebuilds a game's share-card data from its match id (FotMob + KV cache)
+lib/seo-render.js                Renders the /g per-game + league HTML pages (metadata, JSON-LD, body)
+lib/digest-render.js             Renders the /today and /image pages
+lib/sitemap-sweep.js             Builds the canonical SEO URL map for the sitemap + its cron
+assets/styles.css                Styling (imported by the app layout)
+public/admin.html                Connections debugger (live-tests every source, noindex)
+public/assets/og-image.svg       Default social share / Open Graph card
+public/robots.txt                Crawl rules (allows the site, disallows admin.html + /api)
+public/llms.txt                  Site summary for LLM/AI crawlers
+vercel.json                      Daily cron → /api/cron-sitemap (routing is file-based; no rewrites needed)
+next.config.js                   Next.js config
+package.json                     next, react, @vercel/og, @vercel/analytics
 .github/workflows/highlights-cron.yml  Free external cron that pings /api/cron-highlights every ~30 min
 ```
 
-> **Share previews need the Node/Vercel runtime.** `/og` runs on Vercel's edge
-> runtime and `@vercel/og` is installed from `package.json` at deploy — so the
-> custom per-game images only render on a Vercel deployment (or `vercel dev`),
-> not on a plain static server. Each game's preview is also cached hard at the
-> CDN. Note FotMob's image CDN can 403 server-side crest fetches; when a crest
-> can't be loaded the card falls back to a team-initial monogram, so the image
-> always renders.
+> **Routing is file-based.** Each public path maps to a file under `app/` (no
+> rewrites). The old `api/share.js` + `api/league.js` (which shared one function
+> to serve several pages) are now the `app/(seo)/…` pages and `app/api/…` route
+> handlers; the sitemap is `app/sitemap.xml/route.js`. Shared logic stays in
+> `lib/` so it's imported, not duplicated per route.
 
-> **Function budget (Hobby plan = 12).** Vercel's free plan caps a deployment at
-> 12 Serverless Functions, i.e. 12 files in `api/`. To stay under it, related
-> endpoints share one function (`/api/og` draws both the per-game and `/og/today`
-> images; `/api/share` serves `/g/<id>`, `/today` and `/image`) and shared code
-> lives in `lib/` (e.g. `lib/cardinfo.js`, `lib/digest-page.js`) — modules there
-> are imported, not deployed as their own functions. Add new helpers under `lib/`,
-> not `api/`, and fold new pages/images into an existing function where it fits.
+> **Share previews need the Node/Vercel runtime.** `/og` runs on the edge
+> runtime via `next/og` (`@vercel/og`) — so the custom images render on a Vercel
+> deployment or `npm run dev`. Each game's preview is cached hard at the CDN.
+> Note FotMob's image CDN can 403 server-side crest fetches; when a crest can't
+> be loaded the card falls back to a team-initial monogram, so the image always
+> renders.
 
 The card shows the **primary country**'s channels first; the rest fold into the
 match-details modal. The primary country defaults to the visitor's country via
@@ -172,8 +188,8 @@ for every visible match, so they appear on the cards without a click.
    (one call), loaded up front for every match.
 2. **TheSportsDB** `lookuptv.php?id=EVENT` — a single match's broadcasts, used
    to fill gaps the day feed missed.
-3. **SofaScore** (unofficial) via `api/sofatv.js` — **off by default**
-   (`USE_SOFASCORE = false` in `assets/app.js`) now that FotMob covers Portugal;
+3. **SofaScore** (unofficial) via `app/api/sofatv/route.js` — **off by default**
+   (`USE_SOFASCORE = false` in `lib/app-data.js`) now that FotMob covers Portugal;
    kept as an optional per-match fallback. When enabled it maps a fixture to its
    SofaScore event by date + team names, then uses these endpoints (confirmed
    against several open-source SofaScore clients on GitHub):
@@ -187,7 +203,7 @@ for every visible match, so they appear on the cards without a click.
    ⚠️ SofaScore is **unofficial and against its ToS**; it may be blocked at any
    time and degrades gracefully to nothing. Disable it with
    `SOFASCORE_DISABLED=1`.
-4. **FotMob** (unofficial, free) via `api/fmtv.js` — merged in for every match.
+4. **FotMob** (unofficial, free) via `app/api/fmtv/route.js` — merged in for every match.
    FotMob's `GET /api/data/tvlistings?countryCode=XX` returns a whole region's
    listings keyed by matchId, each carrying the team names and channel, so one
    call per country yields a full day's broadcasters with no matchId mapping.
@@ -208,9 +224,9 @@ shows *“No TV listing yet”*.
 
 Highlights used to be resolved **only on demand** — you opened a finished match
 and the detail modal fetched FotMob for a clip link (or fell back to a YouTube
-search). `api/cron-highlights.js` adds a **background sweep** that collects them
-ahead of time and stores them in KV, so they're ready instantly and can be
-served as a feed (`/api/highlights`).
+search). `app/api/cron-highlights/route.js` adds a **background sweep** that
+collects them ahead of time and stores them in KV, so they're ready instantly
+and can be served as a feed (`/api/highlights`).
 
 Each run it:
 
@@ -236,8 +252,8 @@ On the client, finished games whose highlight has been collected show a
 **▶ Highlights button on the game card** (the app indexes `/api/highlights` by
 match id on load), and the **match-details modal embeds the video inline**
 (click-to-load via `youtube-nocookie.com`, so no YouTube cookies until the user
-hits play). `api/matchdetails.js` also merges a stored clip/video when FotMob's
-live payload doesn't include one yet, and `GET /api/highlights` returns the
+hits play). `app/api/matchdetails/route.js` also merges a stored clip/video when
+FotMob's live payload doesn't include one yet, and `GET /api/highlights` returns the
 collected list (most-recent first; `?date=YYYY-MM-DD`, `?days=N`, or `?withUrl=1`
 for only real clips).
 
@@ -251,7 +267,7 @@ for only real clips).
 
 **Triggering it — use an external cron.** Vercel's free (Hobby) plan only allows
 a **daily** cron, which is too coarse for clips that appear minutes after full
-time. So `api/cron-highlights.js` is a normal endpoint meant to be poked by an
+time. So `api/cron-highlights.js` is a normal route handler meant to be poked by an
 external scheduler every ~30 min:
 
 ```
@@ -274,12 +290,13 @@ GET /api/cron-highlights?days=3&debug=1
 
 ## Caching (Vercel KV)
 
-`api/fixtures.js` (fixtures) and `api/tv.js` / `api/fmtv.js` (TV) proxy the
-upstream calls and cache the responses so repeat loads and visitors don't re-hit
-the upstream APIs. Fixtures are additionally **DB-backed** (a permanent backup
-per date) so past days are served entirely from KV. The proxies work with no DB
-(pass-through), and the client falls back to calling TheSportsDB directly for TV
-if the function isn't deployed — but to enable caching on Vercel:
+`app/api/fixtures/route.js` (fixtures) and `app/api/tv/route.js` /
+`app/api/fmtv/route.js` (TV) proxy the upstream calls and cache the responses so
+repeat loads and visitors don't re-hit the upstream APIs. Fixtures are
+additionally **DB-backed** (a permanent backup per date) so past days are served
+entirely from KV. The routes work with no DB (pass-through), and the client falls
+back to calling TheSportsDB directly for TV if the route isn't deployed — but to
+enable caching on Vercel:
 
 1. In your Vercel project, open **Storage → Create Database → Upstash for Redis**
    (Vercel's first-party "KV" is now provisioned via the Upstash marketplace),

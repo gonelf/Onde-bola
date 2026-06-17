@@ -751,8 +751,10 @@ body {
   font-size: 0.82rem;
 }
 
-.detail-pitches { display: flex; gap: 14px; flex-wrap: wrap; }
-.pitch-wrap { flex: 1; min-width: 230px; }
+/* Stack the two pitches so each gets the full modal width — side by side they
+   were too narrow for the name labels, which overlapped. */
+.detail-pitches { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.pitch-wrap { width: 100%; max-width: 420px; }
 .pitch-team {
   margin: 0 0 6px;
   font-size: 0.9rem; font-weight: 700;

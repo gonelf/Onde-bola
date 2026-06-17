@@ -1423,7 +1423,9 @@
       var y = n > 1 ? 92 - bi * (84 / (n - 1)) : 50;
       var k = band.length;
       band.forEach(function (p, pj) {
-        var x = (pj + 1) / (k + 1) * 100;
+        // Spread the row across most of the pitch width (10%–90%) so adjacent
+        // name labels don't collide; a lone player sits on the centre line.
+        var x = k > 1 ? 10 + (pj / (k - 1)) * 80 : 50;
         var num = p.num ? '<span class="pitch-num" style="color:' + txt + '">' +
           escapeHtml(String(p.num)) + "</span>" : "";
         nodes += '<div class="pitch-player" style="left:' + x.toFixed(1) + "%;top:" + y.toFixed(1) + '%">' +

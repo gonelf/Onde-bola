@@ -1,10 +1,11 @@
-// Home page — Phase 0 scaffold.
+// Home page.
 //
-// This renders the static page chrome (header + footer) ported from the old
-// index.html so we can confirm the Next.js scaffold builds and the global
-// stylesheet loads. The interactive games browser (date nav, country picker,
-// league filters, search, detail modal) is ported into a client component in
-// Phase 3 and mounted inside <main> below.
+// Static page chrome (header + footer) is server-rendered here; the interactive
+// games browser — date nav, country picker, league filters, search, the match
+// cards and the detail modal — lives in the GamesBrowser client island mounted
+// inside <main>.
+
+import GamesBrowser from "@/components/GamesBrowser";
 
 export default function HomePage() {
   return (
@@ -22,8 +23,7 @@ export default function HomePage() {
       </header>
 
       <main className="container">
-        {/* GamesBrowser client island mounts here in Phase 3 */}
-        <section className="games" aria-live="polite" />
+        <GamesBrowser />
       </main>
 
       <footer className="site-footer">

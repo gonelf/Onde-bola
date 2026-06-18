@@ -4,13 +4,13 @@
  * rendered as a real <script> element so it executes client-side.
  */
 
-import { buildImage, todayYmd, clampN } from "@/lib/digest-render";
+import { buildImage, todayYmd, clampNImage, pickFormat, pickHighlight } from "@/lib/digest-render";
 
 export const dynamic = "force-dynamic";
 
 function resolve(sp) {
   const date = /^\d{4}-\d{2}-\d{2}$/.test(sp.date || "") ? sp.date : todayYmd();
-  return { date, n: clampN(sp.n) };
+  return { date, n: clampNImage(sp.n), format: pickFormat(sp.format), highlight: pickHighlight(sp.highlight) };
 }
 
 export async function generateMetadata({ searchParams }) {

@@ -1,12 +1,16 @@
 /*
- * /og/<id> and /og/today — social preview images, generated on the fly as
- * 1200×630 PNGs with @vercel/og (Satori). Ported from api/og.js.
+ * /og/<id> and /og/today — social preview images, generated on the fly with
+ * @vercel/og (Satori). Ported from api/og.js.
  *
- *  1. Per-game (/og/<id>) — a share card for one match: the two teams (crests),
- *     competition, score or kickoff, status and date. Rebuilt from the match id
- *     via getCard(); display fields can also be passed in the query (legacy).
+ *  1. Per-game (/og/<id>) — a 1200×630 share card for one match: the two teams
+ *     (crests), competition, score or kickoff, status and date. Rebuilt from the
+ *     match id via getCard(); display fields can also be passed in the query.
  *
- *  2. Digest (/og/today) — the day's top games as a ranked list.
+ *  2. Digest (/og/today) — the day's top games as a ranked list. Query:
+ *     ?date=YYYY-MM-DD (default today, Lisbon); ?n (how many games, clamped per
+ *     format); ?format=landscape|square|story (1200×630 / 1080×1080 / 1080×1920,
+ *     default landscape); ?highlight=<fmid> to feature one game in a hero card
+ *     above the list (then ?n is how many more to list). Copy is Portuguese.
  *
  * Runs on the edge runtime (required by @vercel/og).
  */
@@ -137,6 +141,40 @@ function teamColumn(uri, name) {
 // Digest card (/og/today): the day's top games as a ranked list.
 // ---------------------------------------------------------------------------
 
+// Image formats the digest can render in. Landscape doubles as the social
+// link-preview (1.91:1); square suits an Instagram/Facebook feed post; story is
+// the 9:16 Instagram/WhatsApp Story canvas. Each carries a full set of pixel
+// sizes so one renderer (renderToday) draws all three.
+const FORMATS = {
+  landscape: {
+    W: 1200, H: 630, accentH: 10, pad: "26px 56px",
+    brandDot: 26, brandFont: 30, titleFont: 40, dateFont: 30, tagFont: 22, headGap: 18,
+    rowPad: "11px 22px", rowGap: 10, rowName: 28, rowCrest: 48, rowScore: 30,
+    rowBadge: 36, rowCompCol: 44, rowScoreCol: 150, rowNameCap: 22,
+    heroPad: "18px 30px", heroCompFont: 22, heroName: 38, heroCrest: 96,
+    heroScore: 72, heroStatusFont: 22, heroBadge: 34, heroNameCap: 24, heroGap: 18,
+    maxN: 6,
+  },
+  square: {
+    W: 1080, H: 1080, accentH: 12, pad: "44px 56px",
+    brandDot: 30, brandFont: 34, titleFont: 50, dateFont: 30, tagFont: 24, headGap: 22,
+    rowPad: "15px 26px", rowGap: 13, rowName: 32, rowCrest: 56, rowScore: 34,
+    rowBadge: 40, rowCompCol: 50, rowScoreCol: 160, rowNameCap: 20,
+    heroPad: "26px 36px", heroCompFont: 26, heroName: 46, heroCrest: 130,
+    heroScore: 92, heroStatusFont: 26, heroBadge: 42, heroNameCap: 22, heroGap: 24,
+    maxN: 7,
+  },
+  story: {
+    W: 1080, H: 1920, accentH: 16, pad: "90px 64px",
+    brandDot: 36, brandFont: 42, titleFont: 66, dateFont: 38, tagFont: 30, headGap: 30,
+    rowPad: "22px 32px", rowGap: 18, rowName: 40, rowCrest: 68, rowScore: 46,
+    rowBadge: 50, rowCompCol: 66, rowScoreCol: 190, rowNameCap: 22,
+    heroPad: "42px 46px", heroCompFont: 32, heroName: 60, heroCrest: 184,
+    heroScore: 124, heroStatusFont: 32, heroBadge: 56, heroNameCap: 24, heroGap: 30,
+    maxN: 12,
+  },
+};
+
 const RANK_IDS = [77, 50, 44, 42, 73, 10216, 47, 87, 54, 55, 53, 61, 57, 48, 9134, 130, 268, 76, 45];
 const RANK_POS = {};
 RANK_IDS.forEach((id, i) => { RANK_POS[id] = i; });
@@ -164,32 +202,39 @@ function fmtTime(iso) {
 }
 function fmtDate(ymd) {
   try {
-    return new Intl.DateTimeFormat("en-GB", {
+    return new Intl.DateTimeFormat("pt-PT", {
       timeZone: "UTC", weekday: "short", day: "2-digit", month: "short", year: "numeric",
     }).format(new Date(ymd + "T12:00:00Z"));
   } catch (e) { return ymd; }
 }
 
-function scoreCell(f) {
+// A status pill's text + colour: the live minute (or "AO VIVO") while playing,
+// "FIM" once finished, nothing for an upcoming game.
+function statusPill(f) {
+  const ph = phase(f);
+  if (ph === 0) return { t: clamp(f.status, 6) || "AO VIVO", c: COLOR.live };
+  if (ph === 2) return { t: "FIM", c: COLOR.muted };
+  return null;
+}
+
+// Center cell of a digest row: the score (live/finished) or the kickoff time.
+function scoreCell(f, S) {
   const hasScore = f.homeScore != null && f.homeScore !== "" &&
     f.awayScore != null && f.awayScore !== "";
   const big = hasScore ? `${f.homeScore} - ${f.awayScore}` : (fmtTime(f.kickoff) || "—");
-  const ph = phase(f);
-  const pill = ph === 0 ? { t: clamp(f.status, 6) || "LIVE", c: COLOR.live }
-    : ph === 2 ? { t: "FT", c: COLOR.muted }
-    : null;
+  const pill = statusPill(f);
   return h(
     "div",
-    { style: { display: "flex", flexDirection: "column", alignItems: "center", width: 150 } },
+    { style: { display: "flex", flexDirection: "column", alignItems: "center", width: S.rowScoreCol } },
     [
-      h("div", { style: { display: "flex", fontSize: 32, fontWeight: 800, color: COLOR.text } }, big),
+      h("div", { style: { display: "flex", fontSize: S.rowScore, fontWeight: 800, color: COLOR.text } }, big),
       pill
         ? h(
             "div",
             {
               style: {
                 display: "flex", marginTop: 4, padding: "1px 11px", borderRadius: 12,
-                backgroundColor: pill.c, color: COLOR.bg, fontSize: 14, fontWeight: 800,
+                backgroundColor: pill.c, color: COLOR.bg, fontSize: Math.round(S.rowScore * 0.44), fontWeight: 800,
               },
             },
             pill.t
@@ -199,60 +244,172 @@ function scoreCell(f) {
   );
 }
 
-function gameRow(f) {
+function gameRow(f, S) {
   return h(
     "div",
     {
       style: {
         display: "flex", flexDirection: "row", alignItems: "center",
         backgroundColor: COLOR.panel, border: `1px solid ${COLOR.border}`,
-        borderRadius: 16, padding: "11px 22px", marginBottom: 11,
+        borderRadius: 16, padding: S.rowPad, marginBottom: S.rowGap,
       },
     },
     [
       h(
         "div",
-        { style: { display: "flex", width: 44, alignItems: "center", justifyContent: "center" } },
+        { style: { display: "flex", width: S.rowCompCol, alignItems: "center", justifyContent: "center" } },
         f._compBadge
-          ? h("img", { src: f._compBadge, width: 36, height: 36, style: { width: 36, height: 36, objectFit: "contain" } })
+          ? h("img", { src: f._compBadge, width: S.rowBadge, height: S.rowBadge, style: { width: S.rowBadge, height: S.rowBadge, objectFit: "contain" } })
           : h("div", { style: { display: "flex" } }, "")
       ),
       h(
         "div",
         { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-end", flexGrow: 1 } },
         [
-          h("div", { style: { display: "flex", fontSize: 30, fontWeight: 700, color: COLOR.text, marginRight: 16, textAlign: "right" } }, clamp(f.home, 22)),
-          crest(f._homeBadge, f.home, 50),
+          h("div", { style: { display: "flex", fontSize: S.rowName, fontWeight: 700, color: COLOR.text, marginRight: 16, textAlign: "right" } }, clamp(f.home, S.rowNameCap)),
+          crest(f._homeBadge, f.home, S.rowCrest),
         ]
       ),
-      scoreCell(f),
+      scoreCell(f, S),
       h(
         "div",
         { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-start", flexGrow: 1 } },
         [
-          crest(f._awayBadge, f.away, 50),
-          h("div", { style: { display: "flex", fontSize: 30, fontWeight: 700, color: COLOR.text, marginLeft: 16 } }, clamp(f.away, 22)),
+          crest(f._awayBadge, f.away, S.rowCrest),
+          h("div", { style: { display: "flex", fontSize: S.rowName, fontWeight: 700, color: COLOR.text, marginLeft: 16 } }, clamp(f.away, S.rowNameCap)),
         ]
       ),
     ]
   );
 }
 
+// One team in the hero card: a big crest with its name beneath.
+function heroTeam(uri, name, S) {
+  return h(
+    "div",
+    { style: { display: "flex", flexDirection: "column", alignItems: "center", flexGrow: 1, maxWidth: Math.round(S.W * 0.34) } },
+    [
+      crest(uri, name, S.heroCrest),
+      h(
+        "div",
+        {
+          style: {
+            display: "flex", justifyContent: "center", textAlign: "center",
+            marginTop: 18, fontSize: S.heroName, fontWeight: 700, lineHeight: 1.1, color: COLOR.text,
+          },
+        },
+        clamp(name, S.heroNameCap)
+      ),
+    ]
+  );
+}
+
+// Center of the hero card: a large score/kickoff with the status pill beneath.
+function heroCenter(f, S) {
+  const hasScore = f.homeScore != null && f.homeScore !== "" &&
+    f.awayScore != null && f.awayScore !== "";
+  const big = hasScore ? `${f.homeScore} - ${f.awayScore}` : (fmtTime(f.kickoff) || "—");
+  const pill = statusPill(f);
+  return h(
+    "div",
+    { style: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" } },
+    [
+      h("div", { style: { display: "flex", fontSize: S.heroScore, fontWeight: 800, color: COLOR.text, letterSpacing: hasScore ? "2px" : "0px" } }, big),
+      pill
+        ? h(
+            "div",
+            {
+              style: {
+                display: "flex", marginTop: 12, padding: "6px 18px", borderRadius: 18,
+                backgroundColor: pill.c, color: COLOR.bg, fontSize: S.heroStatusFont, fontWeight: 800,
+              },
+            },
+            pill.t
+          )
+        : h("div", { style: { display: "flex" } }, ""),
+    ]
+  );
+}
+
+// The featured game: a prominent card above the list (competition on top, then
+// the two teams flanking the big score/kickoff).
+function heroCard(f, S) {
+  return h(
+    "div",
+    {
+      style: {
+        display: "flex", flexDirection: "column",
+        backgroundColor: COLOR.panel, border: `1px solid ${COLOR.border}`,
+        borderRadius: 22, padding: S.heroPad, marginBottom: S.heroGap,
+      },
+    },
+    [
+      f.competition || f._compBadge
+        ? h(
+            "div",
+            { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 14 } },
+            [
+              f._compBadge
+                ? h("img", { src: f._compBadge, width: S.heroBadge, height: S.heroBadge, style: { width: S.heroBadge, height: S.heroBadge, objectFit: "contain", marginRight: 12 } })
+                : h("div", { style: { display: "flex" } }, ""),
+              h("div", { style: { display: "flex", fontSize: S.heroCompFont, fontWeight: 600, color: COLOR.muted } }, clamp(f.competition, 40)),
+            ]
+          )
+        : h("div", { style: { display: "flex" } }, ""),
+      h(
+        "div",
+        { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between" } },
+        [heroTeam(f._homeBadge, f.home, S), heroCenter(f, S), heroTeam(f._awayBadge, f.away, S)]
+      ),
+    ]
+  );
+}
+
+// Pull the day's fixtures from our own cached feed, resiliently: the digest is
+// drawn on the edge and a single transient hiccup on the internal call must not
+// turn a day full of games into the "no games" card. Try ?all=1 with a timeout,
+// retry once, then fall back to the default (major) feed — which shares the same
+// KV cache/backup, so it usually answers even when upstream is momentarily down.
+async function fetchDayFixtures(origin, date) {
+  const tryOnce = async (qs) => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 5500);
+    try {
+      const r = await fetch(`${origin}/api/fixtures?date=${date}${qs}`, {
+        headers: { Accept: "application/json" }, signal: ctrl.signal,
+      });
+      if (!r.ok) return null;
+      const j = await r.json();
+      return j && Array.isArray(j.fixtures) ? j.fixtures : null;
+    } catch (e) {
+      return null;
+    } finally {
+      clearTimeout(t);
+    }
+  };
+  let fx = await tryOnce("&all=1");
+  if (!fx || !fx.length) fx = await tryOnce("&all=1");
+  if (!fx || !fx.length) fx = await tryOnce("");
+  return fx || [];
+}
+
 async function renderToday(url) {
   const sp = url.searchParams;
   const date = /^\d{4}-\d{2}-\d{2}$/.test(sp.get("date") || "") ? sp.get("date") : todayYmd();
+  const S = FORMATS[sp.get("format")] || FORMATS.landscape;
+
+  // ?highlight=<fmid> features one game in a hero card above the list; ?n is
+  // then how many *more* games to list (and how many total when nothing is
+  // highlighted). Clamp per format — a story fits far more than a 1.91:1 card.
+  const highlightId = (sp.get("highlight") || "").replace(/^fm:/, "").trim();
   let n = parseInt(sp.get("n") || "5", 10);
   if (!Number.isFinite(n)) n = 5;
-  n = Math.max(1, Math.min(6, n));
+  n = Math.max(1, Math.min(S.maxN, n));
 
-  let fixtures = [];
-  try {
-    const r = await fetch(`${url.origin}/api/fixtures?date=${date}&all=1`, { headers: { Accept: "application/json" } });
-    if (r.ok) {
-      const j = await r.json();
-      if (j && Array.isArray(j.fixtures)) fixtures = j.fixtures;
-    }
-  } catch (e) { /* degrade to the empty-state card */ }
+  // Every competition for the date (?all=1), so the digest ranks the marquee
+  // games itself (below) and doesn't depend on the fixtures "major leagues"
+  // allow-list, which can miss the only competition on off-season days.
+  let fixtures = await fetchDayFixtures(url.origin, date);
 
   fixtures.sort((a, b) => {
     const lr = leagueRank(a) - leagueRank(b);
@@ -261,10 +418,18 @@ async function renderToday(url) {
     if (ph) return ph;
     return String(a.kickoff || "").localeCompare(String(b.kickoff || ""));
   });
+
+  // Lift the highlighted game out of the list so it isn't shown twice.
+  let hero = null;
+  if (/^\d+$/.test(highlightId)) {
+    const i = fixtures.findIndex((f) => String(f.fmid) === highlightId);
+    if (i !== -1) hero = fixtures.splice(i, 1)[0];
+  }
   const top = fixtures.slice(0, n);
 
+  // Inline crests/badges for the chosen games (parallel, best-effort).
   await Promise.all(
-    top.map(async (f) => {
+    (hero ? [hero] : []).concat(top).map(async (f) => {
       const [hb, ab, cb] = await Promise.all([
         toDataUri(f.homeBadge), toDataUri(f.awayBadge), toDataUri(f.leagueBadgeUrl),
       ]);
@@ -272,31 +437,46 @@ async function renderToday(url) {
     })
   );
 
-  const body = top.length
-    ? h("div", { style: { display: "flex", flexDirection: "column", flexGrow: 1, justifyContent: "center" } }, top.map(gameRow))
-    : h(
+  const emptyState = h(
+    "div",
+    { style: { display: "flex", flexDirection: "column", flexGrow: 1, alignItems: "center", justifyContent: "center", padding: "0 40px" } },
+    [
+      h("div", { style: { display: "flex", fontSize: S.titleFont, fontWeight: 800, color: COLOR.text } }, "Sem jogos para mostrar"),
+      h(
         "div",
-        { style: { display: "flex", flexGrow: 1, alignItems: "center", justifyContent: "center" } },
-        h("div", { style: { display: "flex", fontSize: 40, fontWeight: 700, color: COLOR.muted } }, "No major games scheduled — check back soon")
-      );
+        {
+          style: {
+            display: "flex", maxWidth: S.W - 200, marginTop: 12, textAlign: "center",
+            lineHeight: 1.3, fontSize: Math.round(S.titleFont * 0.55), fontWeight: 600, color: COLOR.muted,
+          },
+        },
+        "Não há jogos de relevo agendados para este dia — volta em breve."
+      ),
+    ]
+  );
 
+  const list = top.length
+    ? h("div", { style: { display: "flex", flexDirection: "column", flexGrow: 1, justifyContent: "center" } }, top.map((f) => gameRow(f, S)))
+    : (hero ? h("div", { style: { display: "flex" } }, "") : emptyState);
+
+  const isToday = date === todayYmd();
   const tree = h(
     "div",
     {
       style: {
-        width: W, height: H, display: "flex", flexDirection: "column",
+        width: S.W, height: S.H, display: "flex", flexDirection: "column",
         backgroundColor: COLOR.bg, fontFamily: "sans-serif", color: COLOR.text,
       },
     },
     [
-      h("div", { style: { display: "flex", width: W, height: 10, backgroundColor: COLOR.accent } }, ""),
+      h("div", { style: { display: "flex", width: S.W, height: S.accentH, backgroundColor: COLOR.accent } }, ""),
       h(
         "div",
-        { style: { display: "flex", flexDirection: "column", flexGrow: 1, padding: "28px 56px" } },
+        { style: { display: "flex", flexDirection: "column", flexGrow: 1, padding: S.pad } },
         [
           h(
             "div",
-            { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 18 } },
+            { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: S.headGap } },
             [
               h(
                 "div",
@@ -306,39 +486,40 @@ async function renderToday(url) {
                     "div",
                     { style: { display: "flex", flexDirection: "row", alignItems: "center" } },
                     [
-                      h("div", { style: { display: "flex", width: 26, height: 26, borderRadius: 13, backgroundColor: COLOR.accent, marginRight: 12 } }, ""),
+                      h("div", { style: { display: "flex", width: S.brandDot, height: S.brandDot, borderRadius: S.brandDot / 2, backgroundColor: COLOR.accent, marginRight: 12 } }, ""),
                       h(
                         "div",
-                        { style: { display: "flex", flexDirection: "row", fontSize: 30, fontWeight: 800 } },
+                        { style: { display: "flex", flexDirection: "row", fontSize: S.brandFont, fontWeight: 800 } },
                         [
-                          h("div", { style: { display: "flex" } }, "Hoje Há "),
+                          h("div", { style: { display: "flex", marginRight: Math.round(S.brandFont * 0.26) } }, "Hoje Há"),
                           h("div", { style: { display: "flex", color: COLOR.accent } }, "Bola"),
                         ]
                       ),
                     ]
                   ),
-                  h("div", { style: { display: "flex", fontSize: 42, fontWeight: 800, color: COLOR.text, marginTop: 10 } }, "Today's top games"),
+                  h("div", { style: { display: "flex", fontSize: S.titleFont, fontWeight: 800, color: COLOR.text, marginTop: 10 } }, isToday ? "Jogos de hoje" : "Jogos do dia"),
                 ]
               ),
               h(
                 "div",
                 { style: { display: "flex", flexDirection: "column", alignItems: "flex-end" } },
                 [
-                  h("div", { style: { display: "flex", fontSize: 30, fontWeight: 700, color: COLOR.accent } }, fmtDate(date)),
-                  h("div", { style: { display: "flex", fontSize: 22, color: COLOR.muted, marginTop: 6 } }, "Football on TV · where to watch"),
+                  h("div", { style: { display: "flex", fontSize: S.dateFont, fontWeight: 700, color: COLOR.accent } }, fmtDate(date)),
+                  h("div", { style: { display: "flex", fontSize: S.tagFont, color: COLOR.muted, marginTop: 6 } }, "Futebol na TV · onde ver"),
                 ]
               ),
             ]
           ),
-          body,
+          hero ? heroCard(hero, S) : h("div", { style: { display: "flex" } }, ""),
+          list,
         ]
       ),
     ]
   );
 
   return new ImageResponse(tree, {
-    width: W,
-    height: H,
+    width: S.W,
+    height: S.H,
     headers: {
       "Cache-Control": "public, max-age=120, s-maxage=300, stale-while-revalidate=600",
     },
@@ -370,8 +551,8 @@ export async function GET(req, ctx) {
   }
   const f = (k, fallback) => (card && card[k]) || g(fallback || k) || "";
 
-  const home = clamp(f("home") || "Home", 28);
-  const away = clamp(f("away") || "Away", 28);
+  const home = clamp(f("home") || "Casa", 28);
+  const away = clamp(f("away") || "Fora", 28);
   const comp = clamp(f("comp"), 42);
   const score = clamp(f("score"), 9);
   const status = clamp(f("status"), 10);
@@ -462,7 +643,7 @@ export async function GET(req, ctx) {
                     "div",
                     { style: { display: "flex", flexDirection: "row", fontSize: 34, fontWeight: 800 } },
                     [
-                      h("div", { style: { display: "flex" } }, "Hoje Há "),
+                      h("div", { style: { display: "flex", marginRight: 9 } }, "Hoje Há"),
                       h("div", { style: { display: "flex", color: COLOR.accent } }, "Bola"),
                     ]
                   ),
@@ -502,7 +683,7 @@ export async function GET(req, ctx) {
             "div",
             { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between" } },
             [
-              h("div", { style: { display: "flex", fontSize: 30, fontWeight: 700, color: COLOR.accent } }, "Football on TV · where to watch"),
+              h("div", { style: { display: "flex", fontSize: 30, fontWeight: 700, color: COLOR.accent } }, "Futebol na TV · onde ver"),
               date
                 ? h("div", { style: { display: "flex", fontSize: 28, color: COLOR.muted } }, date)
                 : h("div", { style: { display: "flex" } }, ""),

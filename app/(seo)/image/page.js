@@ -4,7 +4,9 @@
  * rendered as a real <script> element so it executes client-side.
  */
 
+import { headers } from "next/headers";
 import { buildImage, todayYmd, clampNImage, pickFormat, pickHighlight } from "@/lib/digest-render";
+import { langForCountryCode } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -13,9 +15,16 @@ function resolve(sp) {
   return { date, n: clampNImage(sp.n), format: pickFormat(sp.format), highlight: pickHighlight(sp.highlight) };
 }
 
+async function getLang() {
+  const h = await headers();
+  return langForCountryCode(
+    h.get("x-vercel-ip-country") || h.get("x-country") || h.get("cf-ipcountry") || ""
+  );
+}
+
 export async function generateMetadata({ searchParams }) {
   const sp = (await searchParams) || {};
-  const built = buildImage(resolve(sp));
+  const built = buildImage({ ...resolve(sp), lang: await getLang() });
   return {
     title: built.title,
     description: built.description,
@@ -28,7 +37,7 @@ export async function generateMetadata({ searchParams }) {
 
 export default async function ImagePage({ searchParams }) {
   const sp = (await searchParams) || {};
-  const built = buildImage(resolve(sp));
+  const built = buildImage({ ...resolve(sp), lang: await getLang() });
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: built.css }} />

@@ -430,6 +430,7 @@ export default function GamesBrowser() {
   const [status, setStatus] = useState(null); // { kind, badge, text, tvCount, updated }
   const [detailId, setDetailId] = useState(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const [skeleton, setSkeleton] = useState(true);
   const [, setTick] = useState(0);
   const bump = useCallback(() => setTick((x) => x + 1), []);
@@ -685,6 +686,9 @@ export default function GamesBrowser() {
     return () => clearTimeout(id);
   }, [searchInput]);
 
+  // Re-collapse the minor competitions whenever the day changes.
+  useEffect(() => { setShowAll(false); }, [date]);
+
   // ---- Date controls ----
   const shiftDay = (delta) => {
     const d = new Date(dateRef.current);
@@ -761,10 +765,27 @@ export default function GamesBrowser() {
       const ra = compRank(meta[a], primaryCountry), rb = compRank(meta[b], primaryCountry);
       return ra[0] - rb[0] || ra[1] - rb[1] || ra[2].localeCompare(rb[2]);
     });
-    return { empty: false, groups, order };
+
+    // Split into "major" competitions (the big tournaments + the user's own
+    // country, compRank tiers 0–1) and the long tail (tier 2), which is hidden
+    // behind a "Show all games" link. A search shows everything, ungrouped by
+    // priority, so the tail is never hidden mid-search.
+    let major = order, rest = [];
+    if (!q) {
+      major = []; rest = [];
+      order.forEach((key) => {
+        (compRank(meta[key], primaryCountry)[0] < 2 ? major : rest).push(key);
+      });
+      // If nothing qualifies as major, don't collapse everything away.
+      if (!major.length) { major = order; rest = []; }
+    }
+    const restGames = rest.reduce((n, k) => n + groups[k].length, 0);
+    return { empty: false, groups, order, major, rest, restGames };
   }, [fixtures, isHidden, search, primaryCountry]);
 
   const detailFx = detailId ? fixtureById(detailId) : null;
+  const visibleOrder = grouped.empty ? [] : (showAll ? grouped.order : grouped.major);
+  const hasMore = !grouped.empty && !showAll && grouped.rest.length > 0;
 
   return (
     <>
@@ -848,7 +869,8 @@ export default function GamesBrowser() {
             }} />
           </div>
         ) : (
-          grouped.order.map((comp) => {
+          <>
+          {visibleOrder.map((comp) => {
             const games = grouped.groups[comp].slice().sort((a, b) =>
               (a.group || "").localeCompare(b.group || "") || new Date(a.kickoff) - new Date(b.kickoff));
             const badged = games.filter((g) => g.leagueBadgeUrl)[0];
@@ -878,7 +900,18 @@ export default function GamesBrowser() {
                 ))}
               </section>
             );
-          })
+          })}
+          {hasMore ? (
+            <button type="button" className="show-all-btn" onClick={() => setShowAll(true)}>
+              {t("showAllGames")} <span className="n">+{grouped.restGames}</span>
+            </button>
+          ) : null}
+          {showAll && grouped.rest.length ? (
+            <button type="button" className="show-all-btn" onClick={() => setShowAll(false)}>
+              {t("showFewer")}
+            </button>
+          ) : null}
+          </>
         )}
       </section>
 

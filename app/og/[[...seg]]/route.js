@@ -217,11 +217,22 @@ function statusPill(f) {
   return null;
 }
 
-// Center cell of a digest row: the score (live/finished) or the kickoff time.
-function scoreCell(f, S) {
+// The center value for a game: its live/final score once under way, otherwise
+// the scheduled kickoff time. Upstream can report a premature 0-0 for a game
+// that hasn't kicked off, so we only trust the score once the status says the
+// game is live or finished (phase !== 1) — an upcoming game shows its time.
+function centerValue(f) {
   const hasScore = f.homeScore != null && f.homeScore !== "" &&
     f.awayScore != null && f.awayScore !== "";
-  const big = hasScore ? `${f.homeScore} - ${f.awayScore}` : (fmtTime(f.kickoff) || "—");
+  if (phase(f) !== 1 && hasScore) {
+    return { big: `${f.homeScore} - ${f.awayScore}`, isScore: true };
+  }
+  return { big: fmtTime(f.kickoff) || "—", isScore: false };
+}
+
+// Center cell of a digest row: the score (live/finished) or the kickoff time.
+function scoreCell(f, S) {
+  const { big } = centerValue(f);
   const pill = statusPill(f);
   return h(
     "div",
@@ -306,15 +317,13 @@ function heroTeam(uri, name, S) {
 
 // Center of the hero card: a large score/kickoff with the status pill beneath.
 function heroCenter(f, S) {
-  const hasScore = f.homeScore != null && f.homeScore !== "" &&
-    f.awayScore != null && f.awayScore !== "";
-  const big = hasScore ? `${f.homeScore} - ${f.awayScore}` : (fmtTime(f.kickoff) || "—");
+  const { big, isScore } = centerValue(f);
   const pill = statusPill(f);
   return h(
     "div",
     { style: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" } },
     [
-      h("div", { style: { display: "flex", fontSize: S.heroScore, fontWeight: 800, color: COLOR.text, letterSpacing: hasScore ? "2px" : "0px" } }, big),
+      h("div", { style: { display: "flex", fontSize: S.heroScore, fontWeight: 800, color: COLOR.text, letterSpacing: isScore ? "2px" : "0px" } }, big),
       pill
         ? h(
             "div",

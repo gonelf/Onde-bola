@@ -454,10 +454,22 @@ export default function GamesBrowser() {
 
   const isHidden = useCallback((comp) => !!hidden[comp || "Football"], [hidden]);
 
-  // Keep document title + lang in sync with the chosen language.
+  // Keep document title + lang in sync with the chosen language, and localize
+  // the server-rendered page chrome (header tagline + footer). That chrome is
+  // static HTML outside this client island, so we address it by its stable ids
+  // and drive it from the same i18n table once the language is known.
   useEffect(() => {
     document.documentElement.lang = lang;
     document.title = t("title");
+    const setText = (sel, text) => {
+      const el = document.querySelector(sel);
+      if (el) el.textContent = text;
+    };
+    setText(".tagline", t("tagline"));
+    setText("#footer-data", t("footerData"));
+    setText("#footer-site-title", t("footerSite"));
+    setText("#ad-prefs", t("adPrefs"));
+    setText("#footer-copy", t("footerCopy").replace("{year}", new Date().getFullYear()));
   }, [lang, t]);
 
   // ---- Filters persistence ----
@@ -791,15 +803,15 @@ export default function GamesBrowser() {
     <>
       <section className="toolbar">
         <div className="date-nav">
-          <button className="date-btn" aria-label="Previous day" onClick={() => shiftDay(-1)}>‹</button>
+          <button className="date-btn" aria-label={t("prevDay")} onClick={() => shiftDay(-1)}>‹</button>
           <button className="date-today" onClick={goToday}>{t("today")}</button>
-          <button className="date-btn" aria-label="Next day" onClick={() => shiftDay(1)}>›</button>
+          <button className="date-btn" aria-label={t("nextDay")} onClick={() => shiftDay(1)}>›</button>
           <span className="current-date">{dateLabel}</span>
         </div>
         <div className="toolbar-right">
           <div className="country-pick">
             <label htmlFor="country-select" className="country-label">{t("yourCountry")}</label>
-            <select id="country-select" aria-label="Primary country for TV listings"
+            <select id="country-select" aria-label={t("countryAria")}
               value={primaryCountry} onChange={(e) => changeCountry(e.target.value)}>
               {countryOptions.map((c) => (
                 <option key={c} value={c}>{countryFlag(c)} {c}</option>
@@ -810,7 +822,7 @@ export default function GamesBrowser() {
             <button className="filter-btn" aria-expanded={panelOpen} aria-controls="filter-panel"
               onClick={(e) => { e.stopPropagation(); setPanelOpen((o) => !o); }}>
               <span id="league-toggle-label">
-                {t("leagues")}{hiddenCount ? <span className="count-badge"> {hiddenCount} hidden</span> : null}
+                {t("leagues")}{hiddenCount ? <span className="count-badge"> {hiddenCount} {t("hidden")}</span> : null}
               </span> ▾
             </button>
             <div id="filter-panel" className="filter-panel" hidden={!panelOpen}
@@ -827,7 +839,7 @@ export default function GamesBrowser() {
                     <span className="name">{c}</span>
                     <span className="n">{leagueCounts[c]}</span>
                   </label>
-                )) : <p className="n" style={{ padding: "6px 4px" }}>No leagues to filter.</p>}
+                )) : <p className="n" style={{ padding: "6px 4px" }}>{t("noLeagues")}</p>}
               </div>
               <label className="remember-row">
                 <input type="checkbox" checked={remember}
@@ -837,7 +849,7 @@ export default function GamesBrowser() {
             </div>
           </div>
           <div className="search-wrap">
-            <input type="search" placeholder={t("search")} aria-label="Search games"
+            <input type="search" placeholder={t("search")} aria-label={t("searchAria")}
               value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
           </div>
         </div>

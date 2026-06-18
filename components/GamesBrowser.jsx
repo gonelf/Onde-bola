@@ -222,6 +222,131 @@ function EventRow({ ev, scoreStr }) {
   );
 }
 
+// ---- Line-ups (formation pitch) ----------------------------------------
+//
+// A FotMob-style pitch: the home XI fills the bottom half attacking up, the away
+// XI the top half attacking down. Each team's `rows` are formation lines ordered
+// from goalkeeper outwards, so the home side renders bottom-up and the away side
+// top-down. Position labels (GK/CB/LW…) and last names keep each shirt readable.
+
+// Readable number colour for a kit fill when FotMob didn't give us one.
+function contrastText(hex) {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex || "");
+  if (!m) return "";
+  let h = m[1];
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  // Relative luminance — dark kits get white numbers, light kits get black.
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? "#11202e" : "#ffffff";
+}
+
+// A football-shirt icon with the shirt number on the chest, tinted to the kit.
+function Jersey({ num, fill, text }) {
+  return (
+    <span className="pitch-shirt">
+      <svg viewBox="0 0 48 44" width="30" height="28" aria-hidden="true">
+        <path d="M17 3 L4 9 L9 21 L15 18 L15 41 L33 41 L33 18 L39 21 L44 9 L31 3
+          C30 7 18 7 17 3 Z" fill={fill} stroke="rgba(0,0,0,.45)" strokeWidth="1.4"
+          strokeLinejoin="round" />
+        <text x="24" y="32" textAnchor="middle" fontSize="14" fontWeight="800"
+          fill={text} style={{ fontVariantNumeric: "tabular-nums" }}>{num || ""}</text>
+      </svg>
+    </span>
+  );
+}
+
+function PlayerMarker({ p, side, kit }) {
+  // Kit colours from FotMob when present, else a sensible home/away default.
+  const fill = (kit && kit.shirt) || (side === "away" ? "#0f1722" : "#e8eef5");
+  const text = (kit && kit.text) || contrastText(fill) || (side === "away" ? "#e8eef5" : "#11202e");
+  return (
+    <div className={"pitch-player " + side} title={p.name}>
+      <Jersey num={p.num} fill={fill} text={text} />
+      <span className="pitch-name">{p.short || p.name}</span>
+      {p.pos ? <span className="pitch-pos">{p.pos}</span> : null}
+    </div>
+  );
+}
+
+// Pitch markings drawn to scale in the pitch's own 70×90 aspect (7/9), so the
+// box / spot / D-arc line up cleanly. The goal is at the bottom (the keeper's
+// end); the halfway line and centre arc sit at the top.
+function PitchMarkings() {
+  const stroke = "rgba(255,255,255,.32)";
+  return (
+    <svg className="pitch-markings" viewBox="0 0 70 90" preserveAspectRatio="none"
+      fill="none" stroke={stroke} strokeWidth="0.6" aria-hidden="true">
+      {/* halfway line + centre circle (top) */}
+      <line x1="0" y1="0.4" x2="70" y2="0.4" />
+      <circle cx="35" cy="0" r="9" />
+      {/* penalty box, 6-yard box, spot and D-arc (bottom) */}
+      <rect x="13" y="76" width="44" height="14" />
+      <rect x="24.5" y="85" width="21" height="5" />
+      <circle cx="35" cy="80.5" r="0.5" fill={stroke} stroke="none" />
+      <path d="M28.1 76 A8 8 0 0 1 41.9 76" />
+      {/* goal */}
+      <line x1="30.5" y1="90" x2="39.5" y2="90" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
+// One team on its own full-size pitch: keeper on the goal line (bottom),
+// forwards pushed up to the halfway line, so the formation reads with room to
+// breathe instead of being squashed into half a pitch.
+function TeamPitch({ team, badge, fallbackName, side }) {
+  if (!team) return null;
+  const rows = team.rows || [];
+  const kit = team.kit;
+  return (
+    <div className="lineup-pitch-wrap">
+      <div className="lineup-team">
+        <Badge url={badge} name={team.name || fallbackName} />
+        <span className="lineup-team-name">{team.name || fallbackName}</span>
+        {team.formation ? <span className="lineup-formation">{team.formation}</span> : null}
+      </div>
+      <div className="lineup-pitch">
+        <PitchMarkings />
+        <div className="pitch-half full">
+          {rows.map((row, ri) => (
+            <div className="pitch-row" key={ri}>
+              {row.map((p, pi) => <PlayerMarker key={pi} p={p} side={side} kit={kit} />)}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Lineups({ fx, lineups, t }) {
+  if (!lineups || (!lineups.home && !lineups.away)) return null;
+  const { home, away } = lineups;
+  return (
+    <>
+      <h3 className="detail-h">
+        {t("mdLineups")}
+        <span className={"lineup-badge " + (lineups.confirmed ? "confirmed" : "probable")}>
+          {lineups.confirmed ? t("lineupConfirmed") : t("lineupProbable")}
+        </span>
+      </h3>
+      <div className="lineup-pitches">
+        {home ? (
+          <div className="lineup-col">
+            <TeamPitch team={home} badge={fx.homeBadge} fallbackName={fx.home} side="home" />
+            {home.coach ? <div className="lineup-coach">{t("mdCoach")}: {home.coach}</div> : null}
+          </div>
+        ) : null}
+        {away ? (
+          <div className="lineup-col">
+            <TeamPitch team={away} badge={fx.awayBadge} fallbackName={fx.away} side="away" />
+            {away.coach ? <div className="lineup-coach">{t("mdCoach")}: {away.coach}</div> : null}
+          </div>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
 function HlEmbed({ id, t }) {
   const [playing, setPlaying] = useState(false);
   if (playing) {
@@ -275,6 +400,8 @@ function DetailExtras({ fx, t }) {
           </div>
         </>
       ) : null}
+
+      <Lineups fx={fx} lineups={d.lineups} t={t} />
 
       {d.events && d.events.length ? (
         <>

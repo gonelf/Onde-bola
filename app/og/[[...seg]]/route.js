@@ -530,6 +530,7 @@ async function renderToday(url) {
     width: S.W,
     height: S.H,
     headers: {
+      "Access-Control-Allow-Origin": "*",
       "Cache-Control": "public, max-age=120, s-maxage=300, stale-while-revalidate=600",
     },
   });

@@ -792,92 +792,6 @@ body {
 .hl-btn.yt { background: #c4302b; border-color: #c4302b; color: #fff; }
 .hl-btn.yt:hover { filter: brightness(1.08); color: #fff; }
 
-/* Line-ups: formation pitch (home bottom-up, away top-down) */
-.detail-h .lineup-badge {
-  margin-left: 8px;
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  padding: 2px 8px;
-  border-radius: 999px;
-  vertical-align: middle;
-}
-.lineup-badge.confirmed { background: var(--accent-soft); color: var(--accent); }
-.lineup-badge.probable { background: var(--bg-elev); color: var(--text-dim); }
-/* Two stacked pitches (one per team), each a full field so the keeper sits on
-   the goal line and the forwards reach the halfway line. */
-.lineup-pitches { display: flex; flex-direction: column; gap: 18px; }
-.lineup-col { display: flex; flex-direction: column; gap: 6px; }
-.lineup-team { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.lineup-team img, .lineup-team .badge-fallback { width: 22px; height: 22px; flex: none; }
-.lineup-team-name {
-  font-weight: 700; font-size: 0.92rem;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.lineup-formation {
-  flex: none; margin-left: auto;
-  font-variant-numeric: tabular-nums;
-  font-size: 0.75rem; font-weight: 800;
-  color: var(--accent);
-  background: var(--accent-soft);
-  padding: 1px 7px; border-radius: 999px;
-}
-.lineup-pitch {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  aspect-ratio: 7 / 9;
-  width: 100%;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  overflow: hidden;
-  background:
-    repeating-linear-gradient(0deg, #1f7a44 0 12.5%, #1c6f3e 12.5% 25%);
-}
-.pitch-markings { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.pitch-half {
-  position: relative;
-  z-index: 1;
-  flex: 1;
-  display: flex;
-  padding: 10px 4px;
-}
-/* GK row is first in the data → render bottom-up so it sits on the goal line. */
-.pitch-half.full { flex-direction: column-reverse; }
-.pitch-row {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-evenly;
-  gap: 2px;
-}
-.pitch-player {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-  max-width: 24%;
-}
-.pitch-shirt {
-  display: inline-flex; align-items: center; justify-content: center;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
-}
-.pitch-shirt svg { display: block; }
-.pitch-name {
-  max-width: 100%;
-  font-size: 0.68rem; font-weight: 700; line-height: 1.1;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.pitch-pos {
-  font-size: 0.58rem; font-weight: 700; letter-spacing: 0.03em;
-  color: rgba(255, 255, 255, 0.7);
-}
-.lineup-coach { font-size: 0.82rem; color: var(--text-dim); }
-
 @media (max-width: 560px) {
   .container { width: min(960px, 100% - 24px); }
   .header-inner { height: 54px; }
@@ -947,13 +861,7 @@ body {
 .ad-banner[hidden] { display: none; }
 .ad-banner .ad-slot.ad-banner-unit {
   margin: 0;
-  min-height: 80px;
-  /* No horizontal padding so the component can measure the exact width
-     available and scale a fixed-size creative (e.g. 468px) to fit a narrow
-     phone column instead of clipping it. */
-  padding-left: 0;
-  padding-right: 0;
-  overflow: hidden;
+  min-height: 100px;
 }
 @media (min-width: 760px) {
   .ad-banner .ad-slot.ad-banner-unit { min-height: 120px; }

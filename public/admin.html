@@ -160,6 +160,24 @@
           }
           return line;
         } },
+      { id: "listings", label: "Merged store (api/listings)", needs: ["date"],
+        url: function (p) { return "/api/listings?date=" + p.date; },
+        summary: function (j) {
+          if (!j) return "no response";
+          var m = (j && j.matches) || {};
+          var ids = Object.keys(m);
+          var line = ids.length + " matches stored (built by cron-listings)";
+          var fmid = ($("fmid").value || "").trim();
+          if (fmid && m[fmid]) {
+            var rec = m[fmid], byC = {};
+            (rec.rows || []).forEach(function (r) { (byC[r.country] = byC[r.country] || []).push(r.channel); });
+            line += "\n  this match: " + (rec.rows || []).length + " channels";
+            Object.keys(byC).forEach(function (c) { line += "\n      " + c + ": " + byC[c].join(", "); });
+          } else if (fmid) {
+            line += "\n  this match (id " + fmid + "): not in store yet — run /api/cron-listings";
+          }
+          return line;
+        } },
       { id: "matchdetails", label: "FotMob · match details (api/matchdetails)", needs: ["fmid"],
         url: function (p) { return "/api/matchdetails?id=" + encodeURIComponent(p.fmid) + "&debug=1"; },
         summary: function (j) {

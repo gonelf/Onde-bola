@@ -244,7 +244,7 @@ export async function GET(request) {
       for (const channel of Object.keys(m.channels[country])) rows.push({ channel, country });
     }
     return {
-      h: norm(home), a: norm(away), home, away,
+      id: String(m.id), h: norm(home), a: norm(away), home, away,
       kickoff: m.when ? new Date(m.when).toISOString() : null,
       rows,
     };

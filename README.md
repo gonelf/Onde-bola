@@ -98,8 +98,10 @@ app/
   api/tv/route.js                Cached proxy for TheSportsDB TV listings
   api/fmtv/route.js              Unofficial FotMob TV proxy (free day-bulk, Portugal-first)
   api/sofatv/route.js            Unofficial SofaScore TV proxy (on-demand fallback)
+  api/listings/route.js          Serves the accumulated daily TV store (tv:rich:<date>) built by cron-listings
   api/matchdetails/route.js      Per-match FotMob detail (venue, timeline, lineups, h2h, stats)
   api/highlights/route.js        Reads the collected highlights back as a feed
+  api/cron-listings/route.js     Daily sweep: merges/accumulates major-league TV listings (FotMob+SofaScore) into KV
   api/cron-highlights/route.js   Background sweep: collects highlights for finished games into KV (external cron)
   api/cron-sitemap/route.js      Daily sweep: records canonical SEO URLs into the KV registry (Vercel cron)
   api/geo/route.js               Visitor country (Vercel edge header) for the default listings country
@@ -120,7 +122,7 @@ public/admin.html                Connections debugger (live-tests every source, 
 public/assets/og-image.svg       Default social share / Open Graph card
 public/robots.txt                Crawl rules (allows the site, disallows admin.html + /api)
 public/llms.txt                  Site summary for LLM/AI crawlers
-vercel.json                      Daily cron → /api/cron-sitemap (routing is file-based; no rewrites needed)
+vercel.json                      Crons → /api/cron-sitemap (daily) + /api/cron-listings (every 6h)
 next.config.js                   Next.js config
 package.json                     next, react, @vercel/og, @vercel/analytics
 .github/workflows/highlights-cron.yml  Free external cron that pings /api/cron-highlights every ~30 min
@@ -216,6 +218,25 @@ for every visible match, so they appear on the cards without a click.
    country (and any `nearMisses` where a team-name mismatch dropped a listing) —
    this is what the `/admin.html` match picker drives to debug a missing
    broadcaster like "Sport TV 5 not showing for Switzerland vs Bosnia".
+
+   Listings join onto fixtures **by FotMob match id** (the `tvlistings` map key
+   is the same global id as a fixture's `fmid`), with name matching only as a
+   fallback. This is robust against per-country localized team names — FotMob's
+   PT feed may say "Suíça"/"Bósnia e Herzegovina" where GB says
+   "Switzerland"/"Bosnia & Herzegovina", which used to fragment a match and drop
+   the Portuguese listing.
+5. **Accumulated daily store** via `app/api/cron-listings/route.js` →
+   `app/api/listings/route.js`. No single free source is complete, and
+   broadcasters publish listings piecemeal as kickoff nears (which is why Sport
+   TV 5 can appear late). A cron sweeps the **upcoming** days' major-league
+   fixtures (`LISTINGS_DAYS`, default 3), joins FotMob listings by match id, and
+   **fills gaps from SofaScore** (Portugal-first, `LISTINGS_SOFA_BUDGET`
+   bounded), then **merges into the previous result** so coverage only grows —
+   once a channel is seen it sticks. It writes `tv:rich:<date>` (keyed by
+   `fmid`, 14-day TTL); `/api/listings?date=` serves it and the client/SEO pages
+   merge it in as the richest source. Runs from `vercel.json` crons (every 6h)
+   or any external scheduler; protect with `CRON_SECRET`. Inspect it in
+   `/admin.html` via the **Merged store (api/listings)** test.
 
 There is no curated/guessed fallback — if no source has a listing, the match
 shows *“No TV listing yet”*.

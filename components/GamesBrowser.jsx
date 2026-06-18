@@ -9,7 +9,8 @@ import {
 import {
   CODE_TO_COUNTRY, countryFlag, initials, orderCountries, orderChannels,
   groupByCountry, compRank, ytIdOf, highlightLink,
-  fetchFotMobFixtures, fetchTv, attachTv, fetchFotMobDay, mergeTv, teamMatch,
+  fetchFotMobFixtures, fetchTv, attachTv, fetchFotMobDay, fetchRichListings,
+  mergeTv, teamMatch,
   ensureEventTv, ensureDetails, loadHighlights, loadedTv, detailsCache,
 } from "@/lib/app-data";
 import { normName } from "@/lib/format";
@@ -562,11 +563,13 @@ export default function GamesBrowser() {
     let feedReachable = true;
     const fixturesReq = fetchFotMobFixtures(day).catch(() => { feedReachable = false; return []; });
 
-    return Promise.all([fixturesReq, fetchTv(day), fetchFotMobDay(day)]).then((res) => {
+    return Promise.all([fixturesReq, fetchTv(day), fetchFotMobDay(day), fetchRichListings(day)])
+      .then((res) => {
       if (token !== loadToken.current) return;
       let fx = res[0] || [];
       const tv = res[1];
       const dayMaps = res[2] || [];
+      const rich = res[3] || {}; // accumulated cron store, keyed by FotMob match id
       attachTv(fx, tv);
 
       if (dayMaps.length) {
@@ -574,12 +577,22 @@ export default function GamesBrowser() {
           const h = normName(f.home), a = normName(f.away);
           for (let i = 0; i < dayMaps.length; i++) {
             const e = dayMaps[i];
-            if (e.rows && e.rows.length && teamMatch(h, e.h) && teamMatch(a, e.a)) {
-              f.tv = mergeTv(f.tv, e.rows);
-            }
+            // Join by FotMob match id when both sides carry it — robust against
+            // per-country localized team names (e.g. "Suíça"/"Bósnia"); fall back
+            // to name matching only when an id isn't available.
+            const idJoin = e.id && f.fmid && String(e.id) === String(f.fmid);
+            const matched = idJoin ||
+              (e.rows && e.rows.length && teamMatch(h, e.h) && teamMatch(a, e.a));
+            if (matched && e.rows && e.rows.length) f.tv = mergeTv(f.tv, e.rows);
           }
         });
       }
+
+      // Accumulated daily store (cron-listings): exact id join, richest source.
+      fx.forEach((f) => {
+        const r = f.fmid && rich[String(f.fmid)];
+        if (r && r.rows && r.rows.length) f.tv = mergeTv(f.tv, r.rows);
+      });
 
       fx.forEach((f) => {
         if (loadedTv[f.id]) { f.tv = mergeTv(f.tv, loadedTv[f.id]); f._tvLoaded = true; }

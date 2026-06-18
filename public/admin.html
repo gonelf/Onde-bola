@@ -131,13 +131,34 @@
           return ev.length + " TV rows";
         } },
       { id: "fmtv", label: "FotMob (api/fmtv)", needs: ["date"],
-        url: function (p) { return "/api/fmtv?date=" + p.date + "&debug=1"; },
+        url: function (p) { return "/api/fmtv?date=" + p.date + "&debug=1" +
+          (p.home ? "&home=" + encodeURIComponent(p.home) : "") +
+          (p.away ? "&away=" + encodeURIComponent(p.away) : ""); },
         summary: function (j) {
           if (!j) return "no response";
           var m = (j.matches || []).length;
           var d = j._debug || {}; var cs = d.countries || {};
           var parts = Object.keys(cs).map(function (c) { return c + ":" + (cs[c].matchKeys || 0); });
-          return m + " matches merged · per-country " + (parts.join(" ") || "—");
+          var line = m + " matches merged · per-country " + (parts.join(" ") || "—");
+          // When a match is picked, show its per-country channels so you can see
+          // whether (e.g.) Sport TV 5 / Portugal is present and actually merged.
+          if (d.match) {
+            var fmt = function (x) {
+              return Object.keys(x.byCountry).map(function (c) {
+                return "      " + c + ": " + x.byCountry[c].join(", ");
+              }).join("\n");
+            };
+            var mm = d.match.matched || [], nm = d.match.nearMisses || [];
+            line += "\n  this match: " + (mm.length ? "merged ✅" : "NOT merged ❌");
+            mm.forEach(function (x) { line += "\n" + fmt(x); });
+            if (nm.length) {
+              line += "\n  near-misses (only one team name matched — listing dropped):";
+              nm.forEach(function (x) {
+                line += "\n    " + x.home + " vs " + x.away + " (" + x.matched + " side matched)\n" + fmt(x);
+              });
+            }
+          }
+          return line;
         } },
       { id: "matchdetails", label: "FotMob · match details (api/matchdetails)", needs: ["fmid"],
         url: function (p) { return "/api/matchdetails?id=" + encodeURIComponent(p.fmid) + "&debug=1"; },

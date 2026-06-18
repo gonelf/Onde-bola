@@ -64,6 +64,22 @@ async function getJson(url, ms) {
 const norm = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
   .replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
 
+// Mirror of the client's teamMatch (lib/app-data.js) so the per-match debug view
+// reflects how listings actually merge onto a card \u2014 connective/filler tokens
+// ("and"/"&"/"e") must not block a match (the "Bosnia & Herzegovina" case).
+const TEAM_STOPWORDS = new Set(["and", "e", "y", "und", "i", "de", "the", "of"]);
+const teamTokens = (s) => norm(s).split(" ").filter((t) => t && !TEAM_STOPWORDS.has(t));
+function teamMatch(a, b) {
+  a = norm(a); b = norm(b);
+  if (!a || !b) return false;
+  if (a === b || a.indexOf(b) >= 0 || b.indexOf(a) >= 0) return true;
+  const ta = teamTokens(a), tb = teamTokens(b);
+  if (ta.length < 2 || tb.length < 2) return false;
+  const short = ta.length <= tb.length ? ta : tb;
+  const longSet = new Set(ta.length <= tb.length ? tb : ta);
+  return short.every((t) => longSet.has(t));
+}
+
 const nameOf = (x) => (typeof x === "string" ? x : (x && (x.name || x.title || x.shortName)) || "");
 
 // FotMob serves .NET-style "/Date(1781798400000)/" timestamps (and a sentinel
@@ -209,6 +225,33 @@ export async function GET(request) {
       rows,
     };
   }).filter((m) => m.rows.length);
+
+  // Per-match debug: when a home/away pair is supplied, report exactly which
+  // countries/channels FotMob returned for THAT match (so the admin page can
+  // answer "is Sport TV 5 there for Switzerland vs Bosnia, and did it merge?").
+  // `matched` uses the same teamMatch the client merge uses; `nearMisses` lists
+  // entries where only one side matched — i.e. a team-name mismatch that would
+  // silently drop a country's listing.
+  if (debug) {
+    const qHome = searchParams.get("home");
+    const qAway = searchParams.get("away");
+    if (qHome && qAway) {
+      const byCountry = (rows) => {
+        const o = {};
+        for (const r of rows) (o[r.country] = o[r.country] || []).push(r.channel);
+        return o;
+      };
+      const matched = [], nearMisses = [];
+      for (const m of matches) {
+        const hOk = teamMatch(qHome, m.home), aOk = teamMatch(qAway, m.away);
+        if (hOk && aOk) matched.push({ home: m.home, away: m.away, byCountry: byCountry(m.rows) });
+        else if (hOk || aOk) {
+          nearMisses.push({ home: m.home, away: m.away, matched: hOk ? "home" : "away", byCountry: byCountry(m.rows) });
+        }
+      }
+      dbg.match = { query: { home: qHome, away: qAway }, matched, nearMisses };
+    }
+  }
 
   const payload = debug ? { matches, _debug: dbg } : { matches };
   if (!debug) {

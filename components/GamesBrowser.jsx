@@ -268,27 +268,35 @@ function PlayerMarker({ p, side, kit }) {
   );
 }
 
-function PitchHalf({ team, side }) {
-  const rows = (team && team.rows) || [];
-  const kit = team && team.kit;
-  return (
-    <div className={"pitch-half " + side}>
-      {rows.map((row, ri) => (
-        <div className="pitch-row" key={ri}>
-          {row.map((p, pi) => <PlayerMarker key={pi} p={p} side={side} kit={kit} />)}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function TeamFormationHead({ team, badge, fallbackName }) {
+// One team on its own full-size pitch: keeper on the goal line (bottom),
+// forwards pushed up to the halfway line, so the formation reads with room to
+// breathe instead of being squashed into half a pitch.
+function TeamPitch({ team, badge, fallbackName, side }) {
   if (!team) return null;
+  const rows = team.rows || [];
+  const kit = team.kit;
   return (
-    <div className="lineup-team">
-      <Badge url={badge} name={team.name || fallbackName} />
-      <span className="lineup-team-name">{team.name || fallbackName}</span>
-      {team.formation ? <span className="lineup-formation">{team.formation}</span> : null}
+    <div className="lineup-pitch-wrap">
+      <div className="lineup-team">
+        <Badge url={badge} name={team.name || fallbackName} />
+        <span className="lineup-team-name">{team.name || fallbackName}</span>
+        {team.formation ? <span className="lineup-formation">{team.formation}</span> : null}
+      </div>
+      <div className="lineup-pitch">
+        <div className="pitch-markings" aria-hidden="true">
+          <span className="pitch-halfway" />
+          <span className="pitch-center-circle" />
+          <span className="pitch-box bottom" />
+          <span className="pitch-arc bottom" />
+        </div>
+        <div className="pitch-half full">
+          {rows.map((row, ri) => (
+            <div className="pitch-row" key={ri}>
+              {row.map((p, pi) => <PlayerMarker key={pi} p={p} side={side} kit={kit} />)}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -296,8 +304,6 @@ function TeamFormationHead({ team, badge, fallbackName }) {
 function Lineups({ fx, lineups, t }) {
   if (!lineups || (!lineups.home && !lineups.away)) return null;
   const { home, away } = lineups;
-  const coachLine = (team) => (team && team.coach
-    ? <span className="lineup-coach">{t("mdCoach")}: {team.coach}</span> : null);
   return (
     <>
       <h3 className="detail-h">
@@ -306,23 +312,20 @@ function Lineups({ fx, lineups, t }) {
           {lineups.confirmed ? t("lineupConfirmed") : t("lineupProbable")}
         </span>
       </h3>
-      <div className="lineup-heads">
-        <TeamFormationHead team={home} badge={fx.homeBadge} fallbackName={fx.home} />
-        <TeamFormationHead team={away} badge={fx.awayBadge} fallbackName={fx.away} />
+      <div className="lineup-pitches">
+        {home ? (
+          <div className="lineup-col">
+            <TeamPitch team={home} badge={fx.homeBadge} fallbackName={fx.home} side="home" />
+            {home.coach ? <div className="lineup-coach">{t("mdCoach")}: {home.coach}</div> : null}
+          </div>
+        ) : null}
+        {away ? (
+          <div className="lineup-col">
+            <TeamPitch team={away} badge={fx.awayBadge} fallbackName={fx.away} side="away" />
+            {away.coach ? <div className="lineup-coach">{t("mdCoach")}: {away.coach}</div> : null}
+          </div>
+        ) : null}
       </div>
-      <div className="lineup-pitch">
-        <div className="pitch-markings" aria-hidden="true">
-          <span className="pitch-center-line" />
-          <span className="pitch-center-circle" />
-          <span className="pitch-box top" />
-          <span className="pitch-box bottom" />
-        </div>
-        {home ? <PitchHalf team={home} side="home" /> : null}
-        {away ? <PitchHalf team={away} side="away" /> : null}
-      </div>
-      {(home && home.coach) || (away && away.coach) ? (
-        <div className="lineup-coaches">{coachLine(home)}{coachLine(away)}</div>
-      ) : null}
     </>
   );
 }

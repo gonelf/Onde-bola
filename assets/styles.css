@@ -805,21 +805,18 @@ body {
 }
 .lineup-badge.confirmed { background: var(--accent-soft); color: var(--accent); }
 .lineup-badge.probable { background: var(--bg-elev); color: var(--text-dim); }
-.lineup-heads {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 8px;
-}
+/* Two stacked pitches (one per team), each a full field so the keeper sits on
+   the goal line and the forwards reach the halfway line. */
+.lineup-pitches { display: flex; flex-direction: column; gap: 18px; }
+.lineup-col { display: flex; flex-direction: column; gap: 6px; }
 .lineup-team { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.lineup-team:last-child { flex-direction: row-reverse; text-align: right; }
 .lineup-team img, .lineup-team .badge-fallback { width: 22px; height: 22px; flex: none; }
 .lineup-team-name {
-  font-weight: 700; font-size: 0.9rem;
+  font-weight: 700; font-size: 0.92rem;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .lineup-formation {
-  flex: none;
+  flex: none; margin-left: auto;
   font-variant-numeric: tabular-nums;
   font-size: 0.75rem; font-weight: 800;
   color: var(--accent);
@@ -830,7 +827,7 @@ body {
   position: relative;
   display: flex;
   flex-direction: column;
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 7 / 9;
   width: 100%;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -839,31 +836,38 @@ body {
     repeating-linear-gradient(0deg, #1f7a44 0 12.5%, #1c6f3e 12.5% 25%);
 }
 .pitch-markings { position: absolute; inset: 0; pointer-events: none; }
-.pitch-center-line {
-  position: absolute; left: 0; right: 0; top: 50%;
+/* The halfway line sits at the very top of a single-team pitch. */
+.pitch-halfway {
+  position: absolute; left: 0; right: 0; top: 0;
   height: 2px; background: rgba(255, 255, 255, 0.3);
 }
 .pitch-center-circle {
-  position: absolute; left: 50%; top: 50%;
-  width: 22%; aspect-ratio: 1; transform: translate(-50%, -50%);
+  position: absolute; left: 50%; top: 0;
+  width: 26%; aspect-ratio: 1; transform: translate(-50%, -50%);
   border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 50%;
 }
 .pitch-box {
   position: absolute; left: 50%; transform: translateX(-50%);
-  width: 46%; height: 14%;
+  width: 54%; height: 16%;
   border: 2px solid rgba(255, 255, 255, 0.25);
 }
-.pitch-box.top { top: 0; border-top: none; }
 .pitch-box.bottom { bottom: 0; border-bottom: none; }
+/* The "D" arc above the penalty box. */
+.pitch-arc.bottom {
+  position: absolute; left: 50%; bottom: 14%;
+  width: 22%; aspect-ratio: 2 / 1; transform: translate(-50%, 50%);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50% 50% 0 0; border-bottom: none;
+}
 .pitch-half {
   position: relative;
   z-index: 1;
   flex: 1;
   display: flex;
-  padding: 8px 4px;
+  padding: 10px 4px;
 }
-.pitch-half.home { flex-direction: column-reverse; }
-.pitch-half.away { flex-direction: column; }
+/* GK row is first in the data → render bottom-up so it sits on the goal line. */
+.pitch-half.full { flex-direction: column-reverse; }
 .pitch-row {
   flex: 1;
   display: flex;
@@ -895,11 +899,7 @@ body {
   font-size: 0.58rem; font-weight: 700; letter-spacing: 0.03em;
   color: rgba(255, 255, 255, 0.7);
 }
-.lineup-coaches {
-  display: flex; justify-content: space-between; gap: 10px;
-  margin-top: 8px; font-size: 0.82rem; color: var(--text-dim);
-}
-.lineup-coaches .lineup-coach:last-child { text-align: right; }
+.lineup-coach { font-size: 0.82rem; color: var(--text-dim); }
 
 @media (max-width: 560px) {
   .container { width: min(960px, 100% - 24px); }

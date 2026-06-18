@@ -161,30 +161,93 @@ function playerName(p) {
   return str(n || p.fullName || p.shortName);
 }
 
+// The short label shown on the pitch — last name where we can, so a row of
+// shirts reads "Messi", "Xavi", "Eto'o" rather than the full legal name.
+function shortPlayerName(p, full) {
+  var n = p && p.name;
+  if (n && typeof n === "object") {
+    var ln = str(n.lastName || n.last);
+    if (ln) return ln;
+  }
+  var explicit = str(p && (p.shortName || p.knownName));
+  if (explicit) return explicit;
+  var parts = str(full).split(/\s+/).filter(Boolean);
+  return parts.length > 1 ? parts[parts.length - 1] : (parts[0] || "");
+}
+
+// A player's pitch position label (GK, CB, LW, CM…), kept short.
+function positionLabel(p) {
+  var s = str(p && (p.positionStringShort || p.positionString || p.position ||
+    p.role || p.fieldPosition));
+  if (!s) return "";
+  // Long forms occasionally come through ("Goalkeeper", "Right Back").
+  var map = { goalkeeper: "GK", keeper: "GK", defender: "DF", midfielder: "MF",
+    forward: "FW", attacker: "FW" };
+  var low = s.toLowerCase();
+  if (map[low]) return map[low];
+  return s.length <= 4 ? s.toUpperCase() : s.slice(0, 3).toUpperCase();
+}
+
+// Split the outfield players into formation lines from a "4-3-3"-style string
+// (the GK is handled separately). Falls back to a single line when unknown.
+function rowsFromFormation(formation, outfield) {
+  var counts = str(formation).split(/[-–]/).map(function (n) { return parseInt(n, 10); })
+    .filter(function (n) { return n > 0; });
+  var total = counts.reduce(function (a, b) { return a + b; }, 0);
+  if (!counts.length || total !== outfield.length) return [outfield];
+  var rows = [], i = 0;
+  counts.forEach(function (c) { rows.push(outfield.slice(i, i + c)); i += c; });
+  return rows;
+}
+
 // One team's lineup (starting XI). FotMob's shape has shifted between versions,
 // so accept both: a team with `players` as rows (array of arrays) or a flat
 // list, with the shirt number under any of a few keys. Defensive throughout.
+// We keep `starters` (a flat XI) plus `rows` (the formation lines) so the client
+// can draw the players in their positions on a pitch.
 function lineupSide(team) {
   if (!team || typeof team !== "object") return null;
   var formation = str(team.formation || team.lineupFormation || team.formationUsed);
   var players = team.players || team.starters || team.starting || [];
+  var rows = [];
   var flat = [];
-  var pushP = function (p) {
-    if (!p || typeof p !== "object") return;
-    if (p.isCoach || p.role === "coach") return;
+  var nested = false;
+  var makeP = function (p) {
+    if (!p || typeof p !== "object") return null;
+    if (p.isCoach || p.role === "coach") return null;
     var name = playerName(p);
-    if (!name) return;
+    if (!name) return null;
     var num = p.shirt != null ? p.shirt : (p.shirtNumber != null ? p.shirtNumber : p.shirtNo);
-    flat.push({ num: num == null ? "" : String(num), name: name });
+    return { num: num == null ? "" : String(num), name: name,
+      short: shortPlayerName(p, name), pos: positionLabel(p) };
   };
   if (Array.isArray(players)) {
     players.forEach(function (row) {
-      if (Array.isArray(row)) row.forEach(pushP);
-      else pushP(row);
+      if (Array.isArray(row)) {
+        nested = true;
+        var line = row.map(makeP).filter(Boolean);
+        if (line.length) rows.push(line);
+        line.forEach(function (pl) { flat.push(pl); });
+      } else {
+        var pl = makeP(row);
+        if (pl) flat.push(pl);
+      }
     });
   }
   if (!flat.length) return null;
-  return { name: str(team.teamName || team.name), formation: formation, starters: flat.slice(0, 11) };
+  flat = flat.slice(0, 11);
+  // When the shape was flat, rebuild the formation lines ourselves: first player
+  // is the keeper, the rest split by the formation string.
+  if (!nested || !rows.length) {
+    rows = [[flat[0]]].concat(rowsFromFormation(formation, flat.slice(1)));
+  }
+  var coach = safe(function () {
+    var c = team.coach || team.manager || team.coaches;
+    if (Array.isArray(c)) c = c[0];
+    return str(c && (c.name || c.fullName)) || (typeof c === "string" ? str(c) : "");
+  }, "");
+  return { name: str(team.teamName || team.name), formation: formation,
+    coach: coach, starters: flat, rows: rows };
 }
 
 // Probable / confirmed starting line-ups for both teams.

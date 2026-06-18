@@ -222,6 +222,81 @@ function EventRow({ ev, scoreStr }) {
   );
 }
 
+// ---- Line-ups (formation pitch) ----------------------------------------
+//
+// A FotMob-style pitch: the home XI fills the bottom half attacking up, the away
+// XI the top half attacking down. Each team's `rows` are formation lines ordered
+// from goalkeeper outwards, so the home side renders bottom-up and the away side
+// top-down. Position labels (GK/CB/LW…) and last names keep each shirt readable.
+
+function PlayerMarker({ p, side }) {
+  return (
+    <div className={"pitch-player " + side} title={p.name}>
+      <span className="pitch-shirt">{p.num || ""}</span>
+      <span className="pitch-name">{p.short || p.name}</span>
+      {p.pos ? <span className="pitch-pos">{p.pos}</span> : null}
+    </div>
+  );
+}
+
+function PitchHalf({ team, side }) {
+  const rows = (team && team.rows) || [];
+  return (
+    <div className={"pitch-half " + side}>
+      {rows.map((row, ri) => (
+        <div className="pitch-row" key={ri}>
+          {row.map((p, pi) => <PlayerMarker key={pi} p={p} side={side} />)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TeamFormationHead({ team, badge, fallbackName }) {
+  if (!team) return null;
+  return (
+    <div className="lineup-team">
+      <Badge url={badge} name={team.name || fallbackName} />
+      <span className="lineup-team-name">{team.name || fallbackName}</span>
+      {team.formation ? <span className="lineup-formation">{team.formation}</span> : null}
+    </div>
+  );
+}
+
+function Lineups({ fx, lineups, t }) {
+  if (!lineups || (!lineups.home && !lineups.away)) return null;
+  const { home, away } = lineups;
+  const coachLine = (team) => (team && team.coach
+    ? <span className="lineup-coach">{t("mdCoach")}: {team.coach}</span> : null);
+  return (
+    <>
+      <h3 className="detail-h">
+        {t("mdLineups")}
+        <span className={"lineup-badge " + (lineups.confirmed ? "confirmed" : "probable")}>
+          {lineups.confirmed ? t("lineupConfirmed") : t("lineupProbable")}
+        </span>
+      </h3>
+      <div className="lineup-heads">
+        <TeamFormationHead team={home} badge={fx.homeBadge} fallbackName={fx.home} />
+        <TeamFormationHead team={away} badge={fx.awayBadge} fallbackName={fx.away} />
+      </div>
+      <div className="lineup-pitch">
+        <div className="pitch-markings" aria-hidden="true">
+          <span className="pitch-center-line" />
+          <span className="pitch-center-circle" />
+          <span className="pitch-box top" />
+          <span className="pitch-box bottom" />
+        </div>
+        {home ? <PitchHalf team={home} side="home" /> : null}
+        {away ? <PitchHalf team={away} side="away" /> : null}
+      </div>
+      {(home && home.coach) || (away && away.coach) ? (
+        <div className="lineup-coaches">{coachLine(home)}{coachLine(away)}</div>
+      ) : null}
+    </>
+  );
+}
+
 function HlEmbed({ id, t }) {
   const [playing, setPlaying] = useState(false);
   if (playing) {
@@ -275,6 +350,8 @@ function DetailExtras({ fx, t }) {
           </div>
         </>
       ) : null}
+
+      <Lineups fx={fx} lineups={d.lineups} t={t} />
 
       {d.events && d.events.length ? (
         <>

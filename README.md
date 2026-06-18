@@ -211,7 +211,11 @@ for every visible match, so they appear on the cards without a click.
    default `PT,GB,ES,BR,US,FR,DE,IT,NL`), merges by match, and returns a
    per-match map the client merges into every fixture. Like SofaScore it's
    unofficial and best-effort; disable with `FOTMOB_DISABLED=1`. Append
-   `&debug=1` to inspect what FotMob returned (per-country counts + a sample).
+   `&debug=1` to inspect what FotMob returned (per-country counts + a sample);
+   add `&home=<team>&away=<team>` to see that one match's channels grouped by
+   country (and any `nearMisses` where a team-name mismatch dropped a listing) —
+   this is what the `/admin.html` match picker drives to debug a missing
+   broadcaster like "Sport TV 5 not showing for Switzerland vs Bosnia".
 
 There is no curated/guessed fallback — if no source has a listing, the match
 shows *“No TV listing yet”*.

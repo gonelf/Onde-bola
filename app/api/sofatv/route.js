@@ -54,10 +54,22 @@ async function getJson(url, ms) {
 const norm = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
   .replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
 
+// Mirror of the fmtv/client teamMatch: connective/filler tokens ("and"/"&"/"e")
+// and minor feed differences must not block a match. SofaScore lists e.g.
+// "Bosnia & Herzegovina" (-> "bosnia herzegovina") while the fixtures feed says
+// "Bosnia and Herzegovina" \u2014 a strict substring test failed that pairing, so the
+// event was never found and Sport TV 5 never surfaced.
+const TEAM_STOPWORDS = new Set(["and", "e", "y", "und", "i", "de", "the", "of"]);
+const teamTokens = (s) => norm(s).split(" ").filter((t) => t && !TEAM_STOPWORDS.has(t));
 function teamMatch(a, b) {
   a = norm(a); b = norm(b);
   if (!a || !b) return false;
-  return a === b || a.indexOf(b) >= 0 || b.indexOf(a) >= 0;
+  if (a === b || a.indexOf(b) >= 0 || b.indexOf(a) >= 0) return true;
+  const ta = teamTokens(a), tb = teamTokens(b);
+  if (ta.length < 2 || tb.length < 2) return false;
+  const short = ta.length <= tb.length ? ta : tb;
+  const longSet = new Set(ta.length <= tb.length ? tb : ta);
+  return short.every((t) => longSet.has(t));
 }
 
 // Build (and cache) a small index of the day's events: [normHome, normAway, id].

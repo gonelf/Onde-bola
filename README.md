@@ -122,10 +122,11 @@ public/admin.html                Connections debugger (live-tests every source, 
 public/assets/og-image.svg       Default social share / Open Graph card
 public/robots.txt                Crawl rules (allows the site, disallows admin.html + /api)
 public/llms.txt                  Site summary for LLM/AI crawlers
-vercel.json                      Crons → /api/cron-sitemap (daily) + /api/cron-listings (every 6h)
+vercel.json                      Crons → /api/cron-sitemap + /api/cron-listings (both daily; listings also poked ~4h via Actions)
 next.config.js                   Next.js config
 package.json                     next, react, @vercel/og, @vercel/analytics
 .github/workflows/highlights-cron.yml  Free external cron that pings /api/cron-highlights every ~30 min
+.github/workflows/listings-cron.yml    Free external cron that pings /api/cron-listings every ~4h
 ```
 
 > **Routing is file-based.** Each public path maps to a file under `app/` (no
@@ -234,9 +235,12 @@ for every visible match, so they appear on the cards without a click.
    bounded), then **merges into the previous result** so coverage only grows —
    once a channel is seen it sticks. It writes `tv:rich:<date>` (keyed by
    `fmid`, 14-day TTL); `/api/listings?date=` serves it and the client/SEO pages
-   merge it in as the richest source. Runs from `vercel.json` crons (every 6h)
-   or any external scheduler; protect with `CRON_SECRET`. Inspect it in
-   `/admin.html` via the **Merged store (api/listings)** test.
+   merge it in as the richest source. Vercel Hobby crons are daily-only, so
+   `vercel.json` runs it once a day as a baseline and
+   `.github/workflows/listings-cron.yml` (free GitHub Actions, not daily-limited)
+   pokes it every ~4h so the store keeps filling as kickoff nears. Protect with
+   `CRON_SECRET`. Inspect it in `/admin.html` via the **Merged store
+   (api/listings)** test.
 
 There is no curated/guessed fallback — if no source has a listing, the match
 shows *“No TV listing yet”*.

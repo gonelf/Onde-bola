@@ -3,6 +3,6 @@
   "buildCommand": "next build",
   "crons": [
     { "path": "/api/cron-sitemap", "schedule": "0 5 * * *" },
-    { "path": "/api/cron-listings", "schedule": "0 */6 * * *" }
+    { "path": "/api/cron-listings", "schedule": "0 4 * * *" }
   ]
 }

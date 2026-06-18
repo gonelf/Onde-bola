@@ -98,10 +98,10 @@ app/
   api/tv/route.js                Cached proxy for TheSportsDB TV listings
   api/fmtv/route.js              Unofficial FotMob TV proxy (free day-bulk, Portugal-first)
   api/sofatv/route.js            Unofficial SofaScore TV proxy (on-demand fallback)
-  api/listings/route.js          Serves the accumulated daily TV store (tv:rich:<date>) built by cron-listings
+  api/listings/route.js          Serves tv:rich:<date>; revalidates it in the background on visit (Next after())
   api/matchdetails/route.js      Per-match FotMob detail (venue, timeline, lineups, h2h, stats)
   api/highlights/route.js        Reads the collected highlights back as a feed
-  api/cron-listings/route.js     Daily sweep: merges/accumulates major-league TV listings (FotMob+SofaScore) into KV
+  api/cron-listings/route.js     Daily pre-warm of the upcoming window (shares lib/listings-build.js with on-visit refresh)
   api/cron-highlights/route.js   Background sweep: collects highlights for finished games into KV (external cron)
   api/cron-sitemap/route.js      Daily sweep: records canonical SEO URLs into the KV registry (Vercel cron)
   api/geo/route.js               Visitor country (Vercel edge header) for the default listings country
@@ -122,11 +122,10 @@ public/admin.html                Connections debugger (live-tests every source, 
 public/assets/og-image.svg       Default social share / Open Graph card
 public/robots.txt                Crawl rules (allows the site, disallows admin.html + /api)
 public/llms.txt                  Site summary for LLM/AI crawlers
-vercel.json                      Crons → /api/cron-sitemap + /api/cron-listings (both daily; listings also poked ~4h via Actions)
+vercel.json                      Crons → /api/cron-sitemap + /api/cron-listings (both daily; listings also revalidates on visit)
 next.config.js                   Next.js config
 package.json                     next, react, @vercel/og, @vercel/analytics
 .github/workflows/highlights-cron.yml  Free external cron that pings /api/cron-highlights every ~30 min
-.github/workflows/listings-cron.yml    Free external cron that pings /api/cron-listings every ~4h
 ```
 
 > **Routing is file-based.** Each public path maps to a file under `app/` (no
@@ -226,21 +225,30 @@ for every visible match, so they appear on the cards without a click.
    PT feed may say "Suíça"/"Bósnia e Herzegovina" where GB says
    "Switzerland"/"Bosnia & Herzegovina", which used to fragment a match and drop
    the Portuguese listing.
-5. **Accumulated daily store** via `app/api/cron-listings/route.js` →
-   `app/api/listings/route.js`. No single free source is complete, and
+5. **Accumulated daily store** — `lib/listings-build.js` builds a merged store
+   per date and two paths keep it filled. No single free source is complete, and
    broadcasters publish listings piecemeal as kickoff nears (which is why Sport
-   TV 5 can appear late). A cron sweeps the **upcoming** days' major-league
-   fixtures (`LISTINGS_DAYS`, default 3), joins FotMob listings by match id, and
-   **fills gaps from SofaScore** (Portugal-first, `LISTINGS_SOFA_BUDGET`
-   bounded), then **merges into the previous result** so coverage only grows —
-   once a channel is seen it sticks. It writes `tv:rich:<date>` (keyed by
-   `fmid`, 14-day TTL); `/api/listings?date=` serves it and the client/SEO pages
-   merge it in as the richest source. Vercel Hobby crons are daily-only, so
-   `vercel.json` runs it once a day as a baseline and
-   `.github/workflows/listings-cron.yml` (free GitHub Actions, not daily-limited)
-   pokes it every ~4h so the store keeps filling as kickoff nears. Protect with
-   `CRON_SECRET`. Inspect it in `/admin.html` via the **Merged store
-   (api/listings)** test.
+   TV 5 can appear late). One build joins FotMob listings by match id and **fills
+   gaps from SofaScore** (Portugal-first, budgeted), then **merges into the
+   previous result** so coverage only grows — once a channel is seen it sticks.
+   It writes `tv:rich:<date>` (keyed by `fmid`, 14-day TTL); `/api/listings?date=`
+   serves it and the client/SEO pages merge it in as the richest source.
+
+   It is refreshed two ways, so no high-frequency cron is needed:
+   - **On-visit revalidation** (`app/api/listings/route.js`): each read serves
+     the cached store instantly, then — for today/upcoming dates — rebuilds *that
+     date* in the background via Next's `after`, off the response path. A KV
+     `tv:rich:lock:<date>` (NX+EX, `LISTINGS_REVALIDATE_SEC`, default 30 min)
+     debounces it to once per window however heavy the traffic, so the current
+     visitor may see slightly stale data and the next ones get it fresher.
+   - **Daily sweep** (`app/api/cron-listings/route.js`, in `vercel.json`):
+     pre-warms the upcoming window (`LISTINGS_DAYS`, default 3) once a day so
+     dates nobody has visited yet are populated. Pokeable externally too; protect
+     with `CRON_SECRET`.
+
+   Env: `LISTINGS_SOFA_BUDGET` (40, cron), `LISTINGS_VISIT_SOFA_BUDGET` (12,
+   on-visit), `LISTINGS_REVALIDATE_SEC` (1800). Inspect it in `/admin.html` via
+   the **Merged store (api/listings)** test.
 
 There is no curated/guessed fallback — if no source has a listing, the match
 shows *“No TV listing yet”*.

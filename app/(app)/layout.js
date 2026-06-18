@@ -13,8 +13,18 @@ const TITLE = "Hoje Há Bola — Football on TV worldwide & where to watch";
 const DESCRIPTION =
   "See today's football games from around the world and which TV channels and streaming services are broadcasting them in your country — live scores, kickoff times and where to watch, free or paid.";
 
+// 1200×630 PNG generated on the fly from the day's top games. Unlike an SVG it
+// actually unfurls on Facebook, X/Twitter, WhatsApp, LinkedIn, etc.
+const OG_IMAGE = "/og/today";
+const OG_ALT =
+  "Hoje Há Bola — today's top football games and where to watch them on TV";
+
 export const metadata = {
-  title: TITLE,
+  title: {
+    default: TITLE,
+    template: "%s · Hoje Há Bola",
+  },
+  applicationName: "Hoje Há Bola",
   description: DESCRIPTION,
   keywords: [
     "football on TV",
@@ -27,8 +37,24 @@ export const metadata = {
     "live scores",
   ],
   authors: [{ name: "Hoje Há Bola" }],
-  robots: { index: true, follow: true, "max-image-preview": "large" },
+  creator: "Hoje Há Bola",
+  publisher: "Hoje Há Bola",
+  category: "sports",
+  referrer: "origin-when-cross-origin",
+  formatDetection: { telephone: false, email: false, address: false },
+  robots: {
+    index: true,
+    follow: true,
+    "max-image-preview": "large",
+    "max-snippet": -1,
+    "max-video-preview": -1,
+  },
   alternates: { canonical: "/" },
+  appleWebApp: {
+    capable: true,
+    title: "Hoje Há Bola",
+    statusBarStyle: "black-translucent",
+  },
   openGraph: {
     type: "website",
     siteName: "Hoje Há Bola",
@@ -39,11 +65,11 @@ export const metadata = {
     locale: "en",
     images: [
       {
-        url: "/assets/og-image.svg",
-        type: "image/svg+xml",
+        url: OG_IMAGE,
+        type: "image/png",
         width: 1200,
         height: 630,
-        alt: "Hoje Há Bola — football on TV worldwide and where to watch it",
+        alt: OG_ALT,
       },
     ],
   },
@@ -52,16 +78,16 @@ export const metadata = {
     title: TITLE,
     description:
       "Today's football games worldwide and which TV channels and streaming services are broadcasting them in your country.",
-    images: [
-      {
-        url: "/assets/og-image.svg",
-        alt: "Hoje Há Bola — football on TV worldwide and where to watch it",
-      },
-    ],
+    images: [{ url: OG_IMAGE, alt: OG_ALT }],
   },
   icons: {
-    icon:
-      "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>",
+    icon: [
+      {
+        url:
+          "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>",
+        type: "image/svg+xml",
+      },
+    ],
   },
   other: { "google-adsense-account": "ca-pub-2180847694344203" },
 };
@@ -71,6 +97,18 @@ const JSON_LD = {
   "@context": "https://schema.org",
   "@graph": [
     {
+      "@type": "Organization",
+      "@id": `${SITE_URL}/#org`,
+      name: "Hoje Há Bola",
+      url: `${SITE_URL}/`,
+      description:
+        "Hoje Há Bola lists football matches worldwide and the TV channels and streaming services broadcasting them in each country.",
+      logo: {
+        "@type": "ImageObject",
+        url: `${SITE_URL}/icon.svg`,
+      },
+    },
+    {
       "@type": "WebSite",
       "@id": `${SITE_URL}/#website`,
       url: `${SITE_URL}/`,
@@ -78,6 +116,7 @@ const JSON_LD = {
       description:
         "Today's football games from around the world and which TV channels and streaming services are broadcasting them in your country.",
       inLanguage: "en",
+      publisher: { "@id": `${SITE_URL}/#org` },
       potentialAction: {
         "@type": "SearchAction",
         target: {
@@ -96,6 +135,7 @@ const JSON_LD = {
       operatingSystem: "Any",
       browserRequirements: "Requires JavaScript.",
       isAccessibleForFree: true,
+      publisher: { "@id": `${SITE_URL}/#org` },
       description:
         "See today's football games worldwide and which TV channels and streaming services broadcast them in your country, with live scores and kickoff times.",
       offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" },

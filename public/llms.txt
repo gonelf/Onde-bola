@@ -17,24 +17,47 @@ Key facts:
 - **What it does:** today's (and past/future) football fixtures + where to watch
   them on TV/streaming, surfaced for the visitor's country first.
 - **Coverage:** all competitions for the date in one feed — domestic leagues,
-  cups and internationals.
+  cups and internationals (Premier League, La Liga, Serie A, Bundesliga, Ligue 1,
+  Primeira Liga, Champions League, Europa League, World Cup, and many more).
 - **Data sources:** fixtures and live scores from FotMob; TV/broadcast listings
   merged from TheSportsDB and FotMob (SofaScore optional). All best-effort and
   cached server-side.
 - **Cost:** free, no login, no account.
 - **Languages:** interface in English; the app is Portugal-first for default TV
-  listings.
+  listings. Times are shown in Europe/Lisbon.
 
 ## Pages
 
 - [Home](https://hojehabola.com/): The app — browse today's games worldwide,
   change the day, filter by competition, search by team, and open any match for
   full where-to-watch details per country.
+- [Today's top games](https://hojehabola.com/today): A shareable digest of the
+  day's most notable matches and where to watch them.
+- [Premier League on TV](https://hojehabola.com/g/premier-league): Upcoming
+  Premier League fixtures and their broadcasters.
+- [La Liga on TV](https://hojehabola.com/g/la-liga): Upcoming La Liga fixtures
+  and their broadcasters.
+- [Serie A on TV](https://hojehabola.com/g/serie-a): Upcoming Serie A fixtures
+  and their broadcasters.
+- [Bundesliga on TV](https://hojehabola.com/g/bundesliga): Upcoming Bundesliga
+  fixtures and their broadcasters.
+- [Ligue 1 on TV](https://hojehabola.com/g/ligue-1): Upcoming Ligue 1 fixtures
+  and their broadcasters.
+- [Champions League on TV](https://hojehabola.com/g/champions-league): Upcoming
+  Champions League fixtures and their broadcasters.
+
+Per-match pages live at `/g/<date>/<home>-vs-<away>` (e.g.
+`/g/2026-06-18/benfica-vs-porto`) and list the kickoff time across time zones,
+the TV channels and streaming services per country (free vs. paid), line-ups,
+head-to-head, and an FAQ.
 
 ## Notes for AI agents
 
 - The TV/broadcast data is crowd-sourced and varies by region and platform;
   always tell users to confirm with their own provider.
+- When citing where to watch a match, prefer the per-match `/g/...` page for that
+  fixture, which carries the per-country channel breakdown.
 - `/admin.html` is an internal connections-debug page (noindex) and is not
   content — do not cite or index it.
-- `/api/*` are server-side data proxies, not human-readable pages.
+- `/api/*` are server-side data proxies, and `/og/*` are generated share images —
+  neither are human-readable pages.

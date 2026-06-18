@@ -7,6 +7,20 @@
 
 import GamesBrowser from "@/components/GamesBrowser";
 
+// Evergreen internal links to the most-searched competitions' league hubs.
+// Server-rendered so crawlers and LLMs get real, linkable content even though
+// the live fixtures list below is a client island.
+const POPULAR_LEAGUES = [
+  ["premier-league", "Premier League"],
+  ["la-liga", "La Liga"],
+  ["serie-a", "Serie A"],
+  ["bundesliga", "Bundesliga"],
+  ["ligue-1", "Ligue 1"],
+  ["primeira-liga", "Primeira Liga"],
+  ["champions-league", "Champions League"],
+  ["europa-league", "Europa League"],
+];
+
 export default function HomePage() {
   return (
     <>
@@ -23,7 +37,45 @@ export default function HomePage() {
       </header>
 
       <main className="container">
+        <h1 className="visually-hidden">
+          Football on TV today, worldwide — where to watch every match live
+        </h1>
+
         <GamesBrowser />
+
+        {/* Server-rendered SEO content: gives crawlers and AI assistants real,
+            indexable text and internal links to the competition hubs. */}
+        <section className="seo-intro" aria-labelledby="seo-intro-title">
+          <h2 id="seo-intro-title">Where to watch football on TV today</h2>
+          <p>
+            <strong>Hoje Há Bola</strong> shows you every football (soccer) match
+            being played around the world today and exactly{" "}
+            <strong>which TV channels and streaming services are broadcasting
+            them in your country</strong> — with live scores, kickoff times,
+            venues and a clear free-to-air vs. paid breakdown for each match.
+          </p>
+          <p>
+            Pick any day, filter by competition or search for your team, then open
+            a match to see the full where-to-watch list per country. Listings are
+            crowd-sourced and merged from real broadcast data, so matches without
+            a confirmed channel are shown as “no TV listing yet” rather than a
+            guess. It’s free, with no login or account.
+          </p>
+
+          <nav className="seo-leagues" aria-labelledby="seo-leagues-title">
+            <h2 id="seo-leagues-title">Popular competitions on TV</h2>
+            <ul>
+              {POPULAR_LEAGUES.map(([slug, name]) => (
+                <li key={slug}>
+                  <a href={`/g/${slug}`}>{name} on TV</a>
+                </li>
+              ))}
+              <li>
+                <a href="/today">Today’s top games</a>
+              </li>
+            </ul>
+          </nav>
+        </section>
       </main>
 
       <footer className="site-footer">

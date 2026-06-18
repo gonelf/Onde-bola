@@ -880,16 +880,10 @@ body {
   max-width: 24%;
 }
 .pitch-shirt {
-  width: 26px; height: 26px;
   display: inline-flex; align-items: center; justify-content: center;
-  border-radius: 50%;
-  font-size: 0.72rem; font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: #06231a;
-  background: #e8eef5;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
 }
-.pitch-player.away .pitch-shirt { background: #0f1722; color: #e8eef5; }
+.pitch-shirt svg { display: block; }
 .pitch-name {
   max-width: 100%;
   font-size: 0.68rem; font-weight: 700; line-height: 1.1;

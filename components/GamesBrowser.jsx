@@ -229,10 +229,39 @@ function EventRow({ ev, scoreStr }) {
 // from goalkeeper outwards, so the home side renders bottom-up and the away side
 // top-down. Position labels (GK/CB/LW…) and last names keep each shirt readable.
 
-function PlayerMarker({ p, side }) {
+// Readable number colour for a kit fill when FotMob didn't give us one.
+function contrastText(hex) {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex || "");
+  if (!m) return "";
+  let h = m[1];
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  // Relative luminance — dark kits get white numbers, light kits get black.
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? "#11202e" : "#ffffff";
+}
+
+// A football-shirt icon with the shirt number on the chest, tinted to the kit.
+function Jersey({ num, fill, text }) {
+  return (
+    <span className="pitch-shirt">
+      <svg viewBox="0 0 48 44" width="30" height="28" aria-hidden="true">
+        <path d="M17 3 L4 9 L9 21 L15 18 L15 41 L33 41 L33 18 L39 21 L44 9 L31 3
+          C30 7 18 7 17 3 Z" fill={fill} stroke="rgba(0,0,0,.45)" strokeWidth="1.4"
+          strokeLinejoin="round" />
+        <text x="24" y="32" textAnchor="middle" fontSize="14" fontWeight="800"
+          fill={text} style={{ fontVariantNumeric: "tabular-nums" }}>{num || ""}</text>
+      </svg>
+    </span>
+  );
+}
+
+function PlayerMarker({ p, side, kit }) {
+  // Kit colours from FotMob when present, else a sensible home/away default.
+  const fill = (kit && kit.shirt) || (side === "away" ? "#0f1722" : "#e8eef5");
+  const text = (kit && kit.text) || contrastText(fill) || (side === "away" ? "#e8eef5" : "#11202e");
   return (
     <div className={"pitch-player " + side} title={p.name}>
-      <span className="pitch-shirt">{p.num || ""}</span>
+      <Jersey num={p.num} fill={fill} text={text} />
       <span className="pitch-name">{p.short || p.name}</span>
       {p.pos ? <span className="pitch-pos">{p.pos}</span> : null}
     </div>
@@ -241,11 +270,12 @@ function PlayerMarker({ p, side }) {
 
 function PitchHalf({ team, side }) {
   const rows = (team && team.rows) || [];
+  const kit = team && team.kit;
   return (
     <div className={"pitch-half " + side}>
       {rows.map((row, ri) => (
         <div className="pitch-row" key={ri}>
-          {row.map((p, pi) => <PlayerMarker key={pi} p={p} side={side} />)}
+          {row.map((p, pi) => <PlayerMarker key={pi} p={p} side={side} kit={kit} />)}
         </div>
       ))}
     </div>

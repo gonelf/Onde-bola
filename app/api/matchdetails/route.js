@@ -250,8 +250,36 @@ function lineupSide(team) {
     coach: coach, starters: flat, rows: rows };
 }
 
+// A #rrggbb (or #rgb) hex from whatever FotMob hands us, else "".
+function hex(x) {
+  var s = str(x);
+  return /^#?[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(s) ? (s[0] === "#" ? s : "#" + s) : "";
+}
+
+// FotMob carries each side's kit colour (and a contrasting number colour) so the
+// client can draw the right jersey. The block has moved around between versions,
+// so probe a few spots and both light/dark variants. Returns { shirt, text } per
+// side, or null when nothing usable is found.
+function teamColorsFrom(data) {
+  var tc = safe(function () { return data.general.teamColors; }, null) ||
+    safe(function () { return data.header.teamColors; }, null) ||
+    safe(function () { return (data.content || {}).teamColors; }, null);
+  if (!tc || typeof tc !== "object") return null;
+  var m = tc.darkMode || tc.dark || tc;
+  var side = function (shirtKeys, fontKeys) {
+    var shirt = "";
+    shirtKeys.forEach(function (k) { if (!shirt) shirt = hex(m[k]); });
+    var text = "";
+    fontKeys.forEach(function (k) { if (!text) text = hex(m[k]); });
+    return shirt ? { shirt: shirt, text: text } : null;
+  };
+  var home = side(["home", "homeColor", "lightHome"], ["fontHome", "homeFont", "fontLightHome"]);
+  var away = side(["away", "awayColor", "lightAway"], ["fontAway", "awayFont", "fontLightAway"]);
+  return home || away ? { home: home, away: away } : null;
+}
+
 // Probable / confirmed starting line-ups for both teams.
-function lineupsFrom(content) {
+function lineupsFrom(content, colors) {
   var lu = content.lineup || content.lineups;
   if (!lu || typeof lu !== "object") return null;
   var confirmed = lu.confirmed === true || lu.isLineupConfirmed === true ||
@@ -264,6 +292,10 @@ function lineupsFrom(content) {
     home = lineupSide(lu.homeTeam); away = lineupSide(lu.awayTeam);
   }
   if (!home && !away) return null;
+  if (colors) {
+    if (home && colors.home) home.kit = colors.home;
+    if (away && colors.away) away.kit = colors.away;
+  }
   return { confirmed: !!confirmed, home: home, away: away };
 }
 
@@ -376,7 +408,7 @@ function normalize(data) {
     form: form,
     h2h: h2h,
     h2hMatches: safe(function () { return h2hMatchesFrom(content); }, []),
-    lineups: safe(function () { return lineupsFrom(content); }, null),
+    lineups: safe(function () { return lineupsFrom(content, teamColorsFrom(data)); }, null),
     highlights: highlights,
     events: safe(function () { return eventsFrom(matchFacts); }, []),
     stats: safe(function () { return statsFrom(content.stats || {}); }, []),

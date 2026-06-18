@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import AdsterraBanner from "@/components/AdsterraBanner";
+import { ADSTERRA_CONFIG } from "@/lib/adsterra";
 import { isPaidChannel } from "@/lib/broadcasters";
 import { langFor, makeT, localeFor } from "@/lib/i18n";
 import {
@@ -964,6 +966,14 @@ export default function GamesBrowser() {
         </div>
       ) : null}
 
+      {ADSTERRA_CONFIG.enabled && ADSTERRA_CONFIG.top.key ? (
+        <AdsterraBanner
+          zoneKey={ADSTERRA_CONFIG.top.key}
+          width={ADSTERRA_CONFIG.top.width}
+          height={ADSTERRA_CONFIG.top.height}
+        />
+      ) : null}
+
       <section className="games" aria-live="polite">
         {skeleton ? (
           Array.from({ length: 5 }).map((_, i) => <div className="skeleton" key={i} />)
@@ -975,7 +985,7 @@ export default function GamesBrowser() {
             }} />
           </div>
         ) : (
-          grouped.order.map((comp) => {
+          grouped.order.map((comp, idx) => {
             const games = grouped.groups[comp].slice().sort((a, b) =>
               (a.group || "").localeCompare(b.group || "") || new Date(a.kickoff) - new Date(b.kickoff));
             const badged = games.filter((g) => g.leagueBadgeUrl)[0];
@@ -987,27 +997,47 @@ export default function GamesBrowser() {
               buckets[k].push(g);
             });
             const multiGroup = groupOrder.length > 1 || (groupOrder.length === 1 && groupOrder[0]);
+            const showInFeedAd =
+              ADSTERRA_CONFIG.enabled && ADSTERRA_CONFIG.inFeed.key &&
+              (idx + 1) % ADSTERRA_CONFIG.everyN === 0 && idx < grouped.order.length - 1;
             return (
-              <section className="competition" key={comp}>
-                <h2 className="competition-head">
-                  <LeagueLogo url={badgeUrl} name={comp} />
-                  <span className="competition-name">{comp}</span>
-                  <span className="count">{games.length}</span>
-                </h2>
-                {groupOrder.map((k) => (
-                  <div key={k || "_"}>
-                    {multiGroup && k ? <h3 className="group-head">{t("group") + " " + k}</h3> : null}
-                    {buckets[k].map((g) => (
-                      <GameCard key={g.id} fx={g} t={t} locale={locale} primaryCountry={primaryCountry}
-                        highlightsById={highlightsById} onOpen={openDetails} onShare={onShare} />
-                    ))}
-                  </div>
-                ))}
-              </section>
+              <Fragment key={comp}>
+                <section className="competition">
+                  <h2 className="competition-head">
+                    <LeagueLogo url={badgeUrl} name={comp} />
+                    <span className="competition-name">{comp}</span>
+                    <span className="count">{games.length}</span>
+                  </h2>
+                  {groupOrder.map((k) => (
+                    <div key={k || "_"}>
+                      {multiGroup && k ? <h3 className="group-head">{t("group") + " " + k}</h3> : null}
+                      {buckets[k].map((g) => (
+                        <GameCard key={g.id} fx={g} t={t} locale={locale} primaryCountry={primaryCountry}
+                          highlightsById={highlightsById} onOpen={openDetails} onShare={onShare} />
+                      ))}
+                    </div>
+                  ))}
+                </section>
+                {showInFeedAd ? (
+                  <AdsterraBanner
+                    zoneKey={ADSTERRA_CONFIG.inFeed.key}
+                    width={ADSTERRA_CONFIG.inFeed.width}
+                    height={ADSTERRA_CONFIG.inFeed.height}
+                  />
+                ) : null}
+              </Fragment>
             );
           })
         )}
       </section>
+
+      {ADSTERRA_CONFIG.enabled && ADSTERRA_CONFIG.bottom.key ? (
+        <AdsterraBanner
+          zoneKey={ADSTERRA_CONFIG.bottom.key}
+          width={ADSTERRA_CONFIG.bottom.width}
+          height={ADSTERRA_CONFIG.bottom.height}
+        />
+      ) : null}
 
       {detailFx ? (
         <DetailModal fx={detailFx} checking={!detailFx._tvLoaded} t={t} locale={locale}

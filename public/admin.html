@@ -300,9 +300,26 @@
       return lines.join("\n");
     }
 
-    function runAll() { TESTS.reduce(function (chain, t) {
+    function runAll() { return TESTS.reduce(function (chain, t) {
       return chain.then(function () { return runTest(t); });
     }, Promise.resolve()); }
+
+    // Copy report runs every test first so the report is never a wall of
+    // "not run" — on open only Health auto-runs, so copying straight away
+    // produced an empty report. Run all, then copy the fresh results.
+    function copyReport() {
+      var btn = $("copyReport");
+      if (btn.disabled) return;
+      var old = btn.textContent;
+      btn.disabled = true; btn.textContent = "Running…";
+      runAll().then(function () {
+        btn.disabled = false; btn.textContent = old;
+        copyText(buildReport(), btn);
+      }, function () {
+        btn.disabled = false; btn.textContent = old;
+        copyText(buildReport(), btn);
+      });
+    }
 
     // Load fixtures from the FotMob proxy to populate the match picker.
     function loadFixtures() {
@@ -334,7 +351,7 @@
     $("loadFixtures").addEventListener("click", loadFixtures);
     $("date").addEventListener("change", loadFixtures); // reload picker when date changes
     $("runAll").addEventListener("click", runAll);
-    $("copyReport").addEventListener("click", function () { copyText(buildReport(), $("copyReport")); });
+    $("copyReport").addEventListener("click", copyReport);
 
     render();
     runTest(TESTS[0]); // health on open

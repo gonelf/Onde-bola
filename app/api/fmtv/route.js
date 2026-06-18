@@ -172,7 +172,14 @@ export async function GET(request) {
   const dayEnd = midnight + 86400000 + 12 * 3600000;
 
   const dbg = { countries: {}, sampleListing: null, droppedNoTeams: 0, droppedDate: 0, kept: 0 };
-  const byMatch = {}; // "h|a" -> { h, a, names: {country: Set} , when }
+  // Keyed by FotMob's matchId (the listings-map key), which is GLOBAL and
+  // identical across every country's feed. Keying by team name instead would
+  // fragment a match whenever a country spells/localizes the pairing
+  // differently (e.g. Portugal's "Bósnia e Herzegovina" vs the UK's "Bosnia &
+  // Herzegovina"), so that country's listing — Sport TV 5 — would land in a
+  // separate bucket the English-named fixture never merges. cand holds each
+  // country's team names so we can pick an English-market label for merging.
+  const byMatch = {}; // id -> { id, when, channels: {country:{ch:true}}, cand: {country:{home,away}} }
 
   const results = await Promise.all(COUNTRIES.map(async (code) => {
     const data = await getJson(`${BASE}/data/tvlistings?countryCode=${code}`);
@@ -199,13 +206,13 @@ export async function GET(request) {
       if (when && (when < dayStart || when >= dayEnd)) { if (debug) dbg.droppedDate++; continue; }
       if (debug) dbg.kept++;
 
-      const key = norm(h) + "|" + norm(a);
-      if (!byMatch[key]) {
-        byMatch[key] = { h: norm(h), a: norm(a), home: h, away: a, when: when || 0, names: {} };
-      } else if (when && !byMatch[key].when) {
-        byMatch[key].when = when; // fill kickoff from whichever country carried it
+      if (!byMatch[id]) {
+        byMatch[id] = { id, when: when || 0, channels: {}, cand: {} };
+      } else if (when && !byMatch[id].when) {
+        byMatch[id].when = when; // fill kickoff from whichever country carried it
       }
-      const bucket = byMatch[key].names;
+      byMatch[id].cand[country] = { home: h, away: a };
+      const bucket = byMatch[id].channels;
       if (!bucket[country]) bucket[country] = {};
       for (const l of listings) {
         const ch = nameOf(l && l.station);
@@ -214,17 +221,34 @@ export async function GET(request) {
     }
   }
 
+  // Pick the team names the client merges on. The fixtures feed (/api/fixtures)
+  // is English, so prefer English-market labels; fall back to any country.
+  const NAME_PREF = ["GB", "IE", "US", "AU", "CA"];
+  const namePriority = [
+    ...NAME_PREF.filter((c) => COUNTRIES.includes(c)),
+    ...COUNTRIES.filter((c) => !NAME_PREF.includes(c)),
+  ].map((code) => CODE_TO_COUNTRY[code] || code);
+
+  function pickNames(cand) {
+    for (const country of namePriority) {
+      if (cand[country]) return cand[country];
+    }
+    const first = Object.keys(cand)[0];
+    return first ? cand[first] : { home: "", away: "" };
+  }
+
   const matches = Object.values(byMatch).map((m) => {
+    const { home, away } = pickNames(m.cand);
     const rows = [];
-    for (const country of Object.keys(m.names)) {
-      for (const channel of Object.keys(m.names[country])) rows.push({ channel, country });
+    for (const country of Object.keys(m.channels)) {
+      for (const channel of Object.keys(m.channels[country])) rows.push({ channel, country });
     }
     return {
-      h: m.h, a: m.a, home: m.home, away: m.away,
+      h: norm(home), a: norm(away), home, away,
       kickoff: m.when ? new Date(m.when).toISOString() : null,
       rows,
     };
-  }).filter((m) => m.rows.length);
+  }).filter((m) => m.home && m.away && m.rows.length);
 
   // Per-match debug: when a home/away pair is supplied, report exactly which
   // countries/channels FotMob returned for THAT match (so the admin page can

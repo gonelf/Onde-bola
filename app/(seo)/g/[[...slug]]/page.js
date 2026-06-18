@@ -15,26 +15,28 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { buildShare, buildLeague } from "@/lib/seo-render";
+import { langForCountryCode } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-async function getOrigin() {
+async function getContext() {
   const h = await headers();
   const proto = (h.get("x-forwarded-proto") || "https").split(",")[0];
   const host = h.get("x-forwarded-host") || h.get("host") || "hojehabola.com";
-  return `${proto}://${host}`;
+  const code = h.get("x-vercel-ip-country") || h.get("x-country") || h.get("cf-ipcountry") || "";
+  return { origin: `${proto}://${host}`, lang: langForCountryCode(code) };
 }
 
 async function build(params, searchParams) {
-  const origin = await getOrigin();
+  const { origin, lang } = await getContext();
   const parts = (params && params.slug) || [];
   const query = (await searchParams) || {};
   // A single non-numeric segment is a league hub; everything else is a game page.
   if (parts.length === 1 && !/^\d+$/.test(parts[0])) {
-    return buildLeague({ origin, leagueSlug: parts[0] });
+    return buildLeague({ origin, lang, leagueSlug: parts[0] });
   }
-  return buildShare({ origin, parts, query });
+  return buildShare({ origin, lang, parts, query });
 }
 
 export async function generateMetadata({ params, searchParams }) {

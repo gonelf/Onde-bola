@@ -430,6 +430,7 @@ export default function GamesBrowser() {
   const [status, setStatus] = useState(null); // { kind, badge, text, tvCount, updated }
   const [detailId, setDetailId] = useState(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const [skeleton, setSkeleton] = useState(true);
   const [, setTick] = useState(0);
   const bump = useCallback(() => setTick((x) => x + 1), []);
@@ -453,10 +454,34 @@ export default function GamesBrowser() {
 
   const isHidden = useCallback((comp) => !!hidden[comp || "Football"], [hidden]);
 
-  // Keep document title + lang in sync with the chosen language.
+  // Keep document title + lang in sync with the chosen language, and localize
+  // the server-rendered page chrome (header tagline + footer). That chrome is
+  // static HTML outside this client island, so we address it by its stable ids
+  // and drive it from the same i18n table once the language is known.
   useEffect(() => {
     document.documentElement.lang = lang;
     document.title = t("title");
+    const setText = (sel, text) => {
+      const el = document.querySelector(sel);
+      if (el) el.textContent = text;
+    };
+    const setHtml = (sel, html) => {
+      const el = document.querySelector(sel);
+      if (el) el.innerHTML = html;
+    };
+    setText(".tagline", t("tagline"));
+    setText("#footer-data", t("footerData"));
+    setText("#footer-site-title", t("footerSite"));
+    setText("#ad-prefs", t("adPrefs"));
+    setText("#footer-copy", t("footerCopy").replace("{year}", new Date().getFullYear()));
+    // SEO intro block (server-rendered English by default for crawlers).
+    setText("#seo-h1", t("seoH1"));
+    setText("#seo-intro-title", t("seoIntroTitle"));
+    setHtml("#seo-p1", t("seoP1"));
+    setHtml("#seo-p2", t("seoP2"));
+    setText("#seo-leagues-title", t("seoLeaguesTitle"));
+    setText("#seo-today-link", t("seoTodayLink"));
+    document.querySelectorAll(".seo-on-tv").forEach((el) => { el.textContent = t("seoOnTv"); });
   }, [lang, t]);
 
   // ---- Filters persistence ----
@@ -685,6 +710,9 @@ export default function GamesBrowser() {
     return () => clearTimeout(id);
   }, [searchInput]);
 
+  // Re-collapse the minor competitions whenever the day changes.
+  useEffect(() => { setShowAll(false); }, [date]);
+
   // ---- Date controls ----
   const shiftDay = (delta) => {
     const d = new Date(dateRef.current);
@@ -761,24 +789,41 @@ export default function GamesBrowser() {
       const ra = compRank(meta[a], primaryCountry), rb = compRank(meta[b], primaryCountry);
       return ra[0] - rb[0] || ra[1] - rb[1] || ra[2].localeCompare(rb[2]);
     });
-    return { empty: false, groups, order };
+
+    // Split into "major" competitions (the big tournaments + the user's own
+    // country, compRank tiers 0–1) and the long tail (tier 2), which is hidden
+    // behind a "Show all games" link. A search shows everything, ungrouped by
+    // priority, so the tail is never hidden mid-search.
+    let major = order, rest = [];
+    if (!q) {
+      major = []; rest = [];
+      order.forEach((key) => {
+        (compRank(meta[key], primaryCountry)[0] < 2 ? major : rest).push(key);
+      });
+      // If nothing qualifies as major, don't collapse everything away.
+      if (!major.length) { major = order; rest = []; }
+    }
+    const restGames = rest.reduce((n, k) => n + groups[k].length, 0);
+    return { empty: false, groups, order, major, rest, restGames };
   }, [fixtures, isHidden, search, primaryCountry]);
 
   const detailFx = detailId ? fixtureById(detailId) : null;
+  const visibleOrder = grouped.empty ? [] : (showAll ? grouped.order : grouped.major);
+  const hasMore = !grouped.empty && !showAll && grouped.rest.length > 0;
 
   return (
     <>
       <section className="toolbar">
         <div className="date-nav">
-          <button className="date-btn" aria-label="Previous day" onClick={() => shiftDay(-1)}>‹</button>
+          <button className="date-btn" aria-label={t("prevDay")} onClick={() => shiftDay(-1)}>‹</button>
           <button className="date-today" onClick={goToday}>{t("today")}</button>
-          <button className="date-btn" aria-label="Next day" onClick={() => shiftDay(1)}>›</button>
+          <button className="date-btn" aria-label={t("nextDay")} onClick={() => shiftDay(1)}>›</button>
           <span className="current-date">{dateLabel}</span>
         </div>
         <div className="toolbar-right">
           <div className="country-pick">
             <label htmlFor="country-select" className="country-label">{t("yourCountry")}</label>
-            <select id="country-select" aria-label="Primary country for TV listings"
+            <select id="country-select" aria-label={t("countryAria")}
               value={primaryCountry} onChange={(e) => changeCountry(e.target.value)}>
               {countryOptions.map((c) => (
                 <option key={c} value={c}>{countryFlag(c)} {c}</option>
@@ -789,7 +834,7 @@ export default function GamesBrowser() {
             <button className="filter-btn" aria-expanded={panelOpen} aria-controls="filter-panel"
               onClick={(e) => { e.stopPropagation(); setPanelOpen((o) => !o); }}>
               <span id="league-toggle-label">
-                {t("leagues")}{hiddenCount ? <span className="count-badge"> {hiddenCount} hidden</span> : null}
+                {t("leagues")}{hiddenCount ? <span className="count-badge"> {hiddenCount} {t("hidden")}</span> : null}
               </span> ▾
             </button>
             <div id="filter-panel" className="filter-panel" hidden={!panelOpen}
@@ -806,7 +851,7 @@ export default function GamesBrowser() {
                     <span className="name">{c}</span>
                     <span className="n">{leagueCounts[c]}</span>
                   </label>
-                )) : <p className="n" style={{ padding: "6px 4px" }}>No leagues to filter.</p>}
+                )) : <p className="n" style={{ padding: "6px 4px" }}>{t("noLeagues")}</p>}
               </div>
               <label className="remember-row">
                 <input type="checkbox" checked={remember}
@@ -816,7 +861,7 @@ export default function GamesBrowser() {
             </div>
           </div>
           <div className="search-wrap">
-            <input type="search" placeholder={t("search")} aria-label="Search games"
+            <input type="search" placeholder={t("search")} aria-label={t("searchAria")}
               value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
           </div>
         </div>
@@ -848,7 +893,8 @@ export default function GamesBrowser() {
             }} />
           </div>
         ) : (
-          grouped.order.map((comp) => {
+          <>
+          {visibleOrder.map((comp) => {
             const games = grouped.groups[comp].slice().sort((a, b) =>
               (a.group || "").localeCompare(b.group || "") || new Date(a.kickoff) - new Date(b.kickoff));
             const badged = games.filter((g) => g.leagueBadgeUrl)[0];
@@ -878,7 +924,18 @@ export default function GamesBrowser() {
                 ))}
               </section>
             );
-          })
+          })}
+          {hasMore ? (
+            <button type="button" className="show-all-btn" onClick={() => setShowAll(true)}>
+              {t("showAllGames")} <span className="n">+{grouped.restGames}</span>
+            </button>
+          ) : null}
+          {showAll && grouped.rest.length ? (
+            <button type="button" className="show-all-btn" onClick={() => setShowAll(false)}>
+              {t("showFewer")}
+            </button>
+          ) : null}
+          </>
         )}
       </section>
 

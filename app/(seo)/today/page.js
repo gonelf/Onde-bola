@@ -5,6 +5,7 @@
 
 import { headers } from "next/headers";
 import { buildToday, todayYmd, clampN } from "@/lib/digest-render";
+import { langForCountryCode } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -13,10 +14,13 @@ async function build(searchParams) {
   const proto = (h.get("x-forwarded-proto") || "https").split(",")[0];
   const host = h.get("x-forwarded-host") || h.get("host") || "hojehabola.com";
   const origin = `${proto}://${host}`;
+  const lang = langForCountryCode(
+    h.get("x-vercel-ip-country") || h.get("x-country") || h.get("cf-ipcountry") || ""
+  );
   const sp = (await searchParams) || {};
   const date = /^\d{4}-\d{2}-\d{2}$/.test(sp.date || "") ? sp.date : todayYmd();
   const n = clampN(sp.n);
-  return buildToday({ origin, date, n });
+  return buildToday({ origin, lang, date, n });
 }
 
 export async function generateMetadata({ searchParams }) {

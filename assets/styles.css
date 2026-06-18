@@ -337,6 +337,25 @@ body {
   padding: 0;
 }
 
+/* Show all / fewer games */
+.show-all-btn {
+  display: block;
+  width: 100%;
+  margin: 4px 0 26px;
+  padding: 13px 16px;
+  background: var(--bg-elev);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.show-all-btn:hover { border-color: var(--accent); color: var(--accent); }
+.show-all-btn .n { color: var(--text-dim); font-weight: 700; margin-left: 4px; }
+.show-all-btn:hover .n { color: var(--accent); }
+
 /* Match card */
 .match {
   display: grid;

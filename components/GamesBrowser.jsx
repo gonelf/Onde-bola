@@ -19,6 +19,11 @@ const STORAGE_REMEMBER = "ondebola.rememberFilters";
 const STORAGE_COUNTRY = "ondebola.primaryCountry";
 const MAX_CARD_CHIPS = 3;
 
+// Refresh cadence: poll faster while games are live (the live ticker needs
+// fresh scores/minutes), and fall back to a slower idle rate otherwise.
+const LIVE_REFRESH_MS = 20000;
+const IDLE_REFRESH_MS = 60000;
+
 const origin = () => (typeof window !== "undefined" ? window.location.origin : "https://hojehabola.com");
 
 // ---- Small presentational bits -----------------------------------------
@@ -615,7 +620,7 @@ export default function GamesBrowser() {
     loadHighlights().then((map) => setHighlightsById(map));
   }, []);
 
-  // ---- Init: deep link + first load + 60s refresh ----
+  // ---- Init: deep link + first load + adaptive refresh ----
   useEffect(() => {
     try {
       const params = new URLSearchParams(location.search);
@@ -626,15 +631,22 @@ export default function GamesBrowser() {
     } catch (e) {}
     loadFixtures();
     refreshHighlights();
-    const iv = setInterval(() => {
+
+    let timer = null;
+    const tick = () => {
+      let live = false;
       if (isSameDay(dateRef.current, new Date())) {
         loadFixtures(true);
         refreshHighlights();
+        live = fixturesRef.current.some((f) => statusOf(f, t).state === "live");
       } else {
         bump();
       }
-    }, 60000);
-    return () => clearInterval(iv);
+      // Speed up the cadence while a live ticker is running.
+      timer = setTimeout(tick, live ? LIVE_REFRESH_MS : IDLE_REFRESH_MS);
+    };
+    timer = setTimeout(tick, IDLE_REFRESH_MS);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

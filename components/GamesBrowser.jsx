@@ -268,6 +268,28 @@ function PlayerMarker({ p, side, kit }) {
   );
 }
 
+// Pitch markings drawn to scale in the pitch's own 70×90 aspect (7/9), so the
+// box / spot / D-arc line up cleanly. The goal is at the bottom (the keeper's
+// end); the halfway line and centre arc sit at the top.
+function PitchMarkings() {
+  const stroke = "rgba(255,255,255,.32)";
+  return (
+    <svg className="pitch-markings" viewBox="0 0 70 90" preserveAspectRatio="none"
+      fill="none" stroke={stroke} strokeWidth="0.6" aria-hidden="true">
+      {/* halfway line + centre circle (top) */}
+      <line x1="0" y1="0.4" x2="70" y2="0.4" />
+      <circle cx="35" cy="0" r="9" />
+      {/* penalty box, 6-yard box, spot and D-arc (bottom) */}
+      <rect x="13" y="76" width="44" height="14" />
+      <rect x="24.5" y="85" width="21" height="5" />
+      <circle cx="35" cy="80.5" r="0.5" fill={stroke} stroke="none" />
+      <path d="M28.1 76 A8 8 0 0 1 41.9 76" />
+      {/* goal */}
+      <line x1="30.5" y1="90" x2="39.5" y2="90" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
 // One team on its own full-size pitch: keeper on the goal line (bottom),
 // forwards pushed up to the halfway line, so the formation reads with room to
 // breathe instead of being squashed into half a pitch.
@@ -283,12 +305,7 @@ function TeamPitch({ team, badge, fallbackName, side }) {
         {team.formation ? <span className="lineup-formation">{team.formation}</span> : null}
       </div>
       <div className="lineup-pitch">
-        <div className="pitch-markings" aria-hidden="true">
-          <span className="pitch-halfway" />
-          <span className="pitch-center-circle" />
-          <span className="pitch-box bottom" />
-          <span className="pitch-arc bottom" />
-        </div>
+        <PitchMarkings />
         <div className="pitch-half full">
           {rows.map((row, ri) => (
             <div className="pitch-row" key={ri}>

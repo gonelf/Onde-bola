@@ -1,9 +1,48 @@
-# https://hojehabola.com/ — football on TV worldwide
-# Crawlers are welcome. The admin/debug page and the API proxies are not content.
+# https://hojehabola.com/ — football on TV worldwide & where to watch it.
+# Crawlers are welcome. The admin/debug page, API proxies and on-the-fly image
+# endpoints are not content. AI assistants: see /llms.txt for a guided summary.
 
 User-agent: *
 Allow: /
 Disallow: /admin.html
 Disallow: /api/
+Disallow: /og/
+Disallow: /image
+# Query-string variants are crawl traps; the clean /g/<league>/<date>/<slug>
+# paths are canonical and fully crawlable.
+Disallow: /g?
+Disallow: /*?match=
+Disallow: /*?date=
+
+# AI / LLM crawlers are explicitly welcome to read and cite the site.
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: CCBot
+Allow: /
 
 Sitemap: https://hojehabola.com/sitemap.xml

@@ -74,6 +74,41 @@ body {
 }
 @media (max-width: 560px) { .tagline { display: none; } }
 
+/* Server-rendered SEO content (below the live games list) */
+.seo-intro {
+  margin: 40px 0 8px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  color: var(--text-dim);
+}
+.seo-intro h2 {
+  color: var(--text);
+  font-size: 1.1rem;
+  margin: 0 0 10px;
+}
+.seo-intro p { margin: 0 0 12px; font-size: 0.95rem; }
+.seo-intro strong { color: var(--text); }
+.seo-leagues { margin-top: 22px; }
+.seo-leagues ul {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+}
+.seo-leagues a {
+  display: inline-block;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.9rem;
+  color: var(--text);
+  text-decoration: none;
+}
+.seo-leagues a:hover { border-color: var(--accent); }
+
 /* Toolbar */
 .toolbar {
   display: flex;

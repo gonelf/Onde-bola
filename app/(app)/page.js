@@ -37,7 +37,7 @@ export default function HomePage() {
       </header>
 
       <main className="container">
-        <h1 className="visually-hidden">
+        <h1 id="seo-h1" className="visually-hidden">
           Football on TV today, worldwide — where to watch every match live
         </h1>
 
@@ -47,14 +47,14 @@ export default function HomePage() {
             indexable text and internal links to the competition hubs. */}
         <section className="seo-intro" aria-labelledby="seo-intro-title">
           <h2 id="seo-intro-title">Where to watch football on TV today</h2>
-          <p>
+          <p id="seo-p1">
             <strong>Hoje Há Bola</strong> shows you every football (soccer) match
             being played around the world today and exactly{" "}
             <strong>which TV channels and streaming services are broadcasting
             them in your country</strong> — with live scores, kickoff times,
             venues and a clear free-to-air vs. paid breakdown for each match.
           </p>
-          <p>
+          <p id="seo-p2">
             Pick any day, filter by competition or search for your team, then open
             a match to see the full where-to-watch list per country. Listings are
             crowd-sourced and merged from real broadcast data, so matches without
@@ -67,11 +67,11 @@ export default function HomePage() {
             <ul>
               {POPULAR_LEAGUES.map(([slug, name]) => (
                 <li key={slug}>
-                  <a href={`/g/${slug}`}>{name} on TV</a>
+                  <a href={`/g/${slug}`}>{name} <span className="seo-on-tv">on TV</span></a>
                 </li>
               ))}
               <li>
-                <a href="/today">Today’s top games</a>
+                <a id="seo-today-link" href="/today">Today’s top games</a>
               </li>
             </ul>
           </nav>

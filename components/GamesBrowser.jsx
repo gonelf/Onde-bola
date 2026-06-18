@@ -465,11 +465,23 @@ export default function GamesBrowser() {
       const el = document.querySelector(sel);
       if (el) el.textContent = text;
     };
+    const setHtml = (sel, html) => {
+      const el = document.querySelector(sel);
+      if (el) el.innerHTML = html;
+    };
     setText(".tagline", t("tagline"));
     setText("#footer-data", t("footerData"));
     setText("#footer-site-title", t("footerSite"));
     setText("#ad-prefs", t("adPrefs"));
     setText("#footer-copy", t("footerCopy").replace("{year}", new Date().getFullYear()));
+    // SEO intro block (server-rendered English by default for crawlers).
+    setText("#seo-h1", t("seoH1"));
+    setText("#seo-intro-title", t("seoIntroTitle"));
+    setHtml("#seo-p1", t("seoP1"));
+    setHtml("#seo-p2", t("seoP2"));
+    setText("#seo-leagues-title", t("seoLeaguesTitle"));
+    setText("#seo-today-link", t("seoTodayLink"));
+    document.querySelectorAll(".seo-on-tv").forEach((el) => { el.textContent = t("seoOnTv"); });
   }, [lang, t]);
 
   // ---- Filters persistence ----

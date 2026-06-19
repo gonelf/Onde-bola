@@ -120,8 +120,10 @@
     function load() {
       setHint("loading…");
       fetch("/api/ads").then(handle).then(function (j) {
-        setRows(j && j.ads);
-        setHint(j && j.kvConfigured ? "loaded" : "⚠️ KV not configured — saves won’t persist");
+        var ads = (j && Array.isArray(j.ads)) ? j.ads : [];
+        setRows(ads);
+        var note = (j && j.kvConfigured) ? "" : " · ⚠️ KV not configured — saves won’t persist";
+        setHint("loaded · " + ads.length + " ad" + (ads.length === 1 ? "" : "s") + note);
       }).catch(function (err) { setHint(String(err.message || err)); });
     }
 
@@ -137,16 +139,25 @@
       }).catch(function (err) { setHint(String(err.message || err)); });
     }
 
-    $("adsAdd").addEventListener("click", function () {
+    function addRow() {
       var empty = rowsEl.querySelector(".ad-empty"); if (empty) empty.remove();
       var row = makeRow({ enabled: true });
       rowsEl.appendChild(row);
       row.querySelector(".ad-src").focus();
-    });
-    $("adsSave").addEventListener("click", save);
-    $("adsReload").addEventListener("click", load);
+    }
 
-    load();
+    // Any setup error (e.g. a missing element) is shown in the hint rather than
+    // silently leaving the page looking broken.
+    try {
+      if (!rowsEl) throw new Error("internal: #adsRows missing");
+      $("adsAdd").addEventListener("click", addRow);
+      $("adsSave").addEventListener("click", save);
+      $("adsReload").addEventListener("click", load);
+      refreshEmpty(); // show a baseline immediately, before the fetch resolves
+      load();
+    } catch (e) {
+      setHint("init error: " + (e && e.message || e));
+    }
   })();
   </script>
 </body>

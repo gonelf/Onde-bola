@@ -37,12 +37,20 @@ const nextConfig = {
         headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
       },
       {
+        // Admin console: never index, and never cache (so updates to the static
+        // pages/assets take effect immediately instead of serving stale copies).
         source: "/admin/:path*",
-        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+        headers: [
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+          { key: "Cache-Control", value: "no-store, must-revalidate" },
+        ],
       },
       {
         source: "/admin",
-        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+        headers: [
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+          { key: "Cache-Control", value: "no-store, must-revalidate" },
+        ],
       },
       {
         // Immutable, fingerprint-free static assets — cache hard.

@@ -83,6 +83,6 @@ a { color: var(--accent); }
 .admin-drawer a.active { color: var(--accent); border-left: 3px solid var(--accent); background: var(--panel2); }
 .admin-backdrop {
   position: fixed; inset: 0; z-index: 30; background: rgba(0, 0, 0, .5);
-  opacity: 0; pointer-events: none; transition: opacity .2s ease;
+  display: none;
 }
-.admin-nav-open .admin-backdrop { opacity: 1; pointer-events: auto; }
+.admin-nav-open .admin-backdrop { display: block; }

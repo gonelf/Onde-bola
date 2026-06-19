@@ -111,6 +111,17 @@ export default function HomePage() {
         <div className="footer-bottom">
           <div className="container">
             <p id="footer-copy">© 2026 Hoje Há Bola · All rights reserved.</p>
+            <p id="footer-credits" className="footer-credits">
+              Made with ❤️ by{" "}
+              <a href="https://x.com/gonelf" target="_blank" rel="noopener">
+                @gonelf
+              </a>
+              ,{" "}
+              <a href="https://x.com/etyk" target="_blank" rel="noopener">
+                @etyk
+              </a>
+              , and Claude Code
+            </p>
           </div>
         </div>
       </footer>

@@ -275,6 +275,25 @@ export async function GET(request) {
       }
       dbg.match = { query: { home: qHome, away: qAway }, matched, nearMisses };
     }
+
+    // Channel scan: list every merged match carrying a channel whose name
+    // contains `chan` (e.g. "sport tv"), with its id and (possibly localized)
+    // team names. Reveals whether FotMob's PT feed has a match under a name our
+    // join misses — e.g. a "Suíça vs Canadá / Sport TV 5" the English fixture
+    // never reaches. Independent of home/away, so it catches hidden duplicates.
+    const chan = searchParams.get("chan");
+    if (chan) {
+      const needle = chan.toLowerCase();
+      const hits = [];
+      for (const m of matches) {
+        const rows = m.rows.filter((r) => r.channel.toLowerCase().indexOf(needle) >= 0);
+        if (rows.length) {
+          hits.push({ id: m.id, home: m.home, away: m.away,
+            channels: rows.map((r) => r.country + ": " + r.channel) });
+        }
+      }
+      dbg.channelScan = { needle: chan, count: hits.length, hits: hits.slice(0, 80) };
+    }
   }
 
   const payload = debug ? { matches, _debug: dbg } : { matches };

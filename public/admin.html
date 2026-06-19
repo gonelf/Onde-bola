@@ -160,6 +160,18 @@
           }
           return line;
         } },
+      { id: "sporttvscan", label: "FotMob · Sport TV scan (which matches PT has)", needs: ["date"],
+        url: function (p) { return "/api/fmtv?date=" + p.date + "&debug=1&chan=" + encodeURIComponent("sport tv"); },
+        summary: function (j) {
+          if (!j) return "no response";
+          var sc = (j._debug && j._debug.channelScan) || null;
+          if (!sc) return "no scan";
+          var line = sc.count + " matches carry a \"Sport TV\" channel";
+          (sc.hits || []).forEach(function (h) {
+            line += "\n  " + h.home + " vs " + h.away + " (id " + h.id + "): " + h.channels.join(", ");
+          });
+          return line;
+        } },
       { id: "listings", label: "Merged store (api/listings)", needs: ["date"],
         url: function (p) { return "/api/listings?date=" + p.date; },
         summary: function (j) {

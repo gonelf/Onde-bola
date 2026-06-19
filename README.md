@@ -70,7 +70,9 @@ and the data sources are Next.js route handlers under `app/api/`.
   `lib/country-flags`; club sides render with none) and **one Portuguese TV
   channel** — free-to-air if available, otherwise the cheapest cable option,
   resolved from the same TV feeds the site uses. `?date=YYYY-MM-DD`, `?n=1..20`
-  and `?lang=pt|en` (default Portuguese) are honoured.
+  and `?lang=pt|en` (default Portuguese) are honoured. The **`/image`** tool page
+  also shows this text below the preview with a **Copy** button, kept in sync with
+  the chosen date and game count.
 - **Date navigation** — jump to previous/next day or back to today.
 - **Live scores & status** — in-play matches show the current score, the
   minute (e.g. `67'`) or `HT`, and a pulsing live badge; finished games show

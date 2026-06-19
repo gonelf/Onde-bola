@@ -91,6 +91,32 @@
     </div>
   </div>
 
+  <div class="card" id="ovCard">
+    <div style="font-weight:600; margin-bottom:2px;">🔒 Manual TV override</div>
+    <div class="sub" style="margin-bottom:10px;">
+      Add broadcasters a free feed missed (e.g. Sport TV for a match FotMob skips).
+      Saved server-side and merged into the listings like any source. Admin login required
+      (set <code>ADMIN_USER</code> / <code>ADMIN_PASSWORD</code> in the env).
+    </div>
+    <div class="row">
+      <div>
+        <label for="ovCountry">Country</label>
+        <input id="ovCountry" type="text" value="Portugal" />
+      </div>
+      <div>
+        <label for="ovChannels">Channels (comma-separated)</label>
+        <input id="ovChannels" type="text" placeholder="e.g. Sport TV 5" />
+      </div>
+    </div>
+    <div class="toolbar">
+      <button id="ovSave">Save override</button>
+      <button class="secondary" id="ovReload">Show overrides for date</button>
+      <button class="secondary" id="ovRemove">Remove for this match</button>
+      <span class="pill" id="ovHint">pick a match first</span>
+    </div>
+    <pre id="ovList">—</pre>
+  </div>
+
   <div class="tests" id="tests"></div>
 
   <script>
@@ -151,12 +177,55 @@
             var mm = d.match.matched || [], nm = d.match.nearMisses || [];
             line += "\n  this match: " + (mm.length ? "merged ✅" : "NOT merged ❌");
             mm.forEach(function (x) { line += "\n" + fmt(x); });
+            // Raw probe: which countries' raw feed (pre-date-filter) carried this
+            // match id, and the station + startTime — so we can see if PT omits
+            // it or just listed a repeat the date filter dropped.
+            var raw = d.match.rawById || {};
+            Object.keys(raw).forEach(function (id) {
+              line += "\n  raw feed for id " + id + ":";
+              var per = raw[id], codes = Object.keys(per);
+              if (!codes.length) { line += " (no country's raw feed has this id)"; return; }
+              codes.forEach(function (c) {
+                var entries = per[c].map(function (e) { return e.station + " @ " + e.start; });
+                line += "\n      " + c + ": " + entries.join(" | ");
+              });
+            });
             if (nm.length) {
               line += "\n  near-misses (only one team name matched — listing dropped):";
               nm.forEach(function (x) {
                 line += "\n    " + x.home + " vs " + x.away + " (" + x.matched + " side matched)\n" + fmt(x);
               });
             }
+          }
+          return line;
+        } },
+      { id: "sporttvscan", label: "FotMob · Sport TV scan (which matches PT has)", needs: ["date"],
+        url: function (p) { return "/api/fmtv?date=" + p.date + "&debug=1&chan=" + encodeURIComponent("sport tv"); },
+        summary: function (j) {
+          if (!j) return "no response";
+          var sc = (j._debug && j._debug.channelScan) || null;
+          if (!sc) return "no scan";
+          var line = sc.count + " matches carry a \"Sport TV\" channel";
+          (sc.hits || []).forEach(function (h) {
+            line += "\n  " + h.home + " vs " + h.away + " (id " + h.id + "): " + h.channels.join(", ");
+          });
+          return line;
+        } },
+      { id: "listings", label: "Merged store (api/listings)", needs: ["date"],
+        url: function (p) { return "/api/listings?date=" + p.date; },
+        summary: function (j) {
+          if (!j) return "no response";
+          var m = (j && j.matches) || {};
+          var ids = Object.keys(m);
+          var line = ids.length + " matches stored (built by cron-listings)";
+          var fmid = ($("fmid").value || "").trim();
+          if (fmid && m[fmid]) {
+            var rec = m[fmid], byC = {};
+            (rec.rows || []).forEach(function (r) { (byC[r.country] = byC[r.country] || []).push(r.channel); });
+            line += "\n  this match: " + (rec.rows || []).length + " channels";
+            Object.keys(byC).forEach(function (c) { line += "\n      " + c + ": " + byC[c].join(", "); });
+          } else if (fmid) {
+            line += "\n  this match (id " + fmid + "): not in store yet — run /api/cron-listings";
           }
           return line;
         } },
@@ -183,6 +252,13 @@
               "\n  h2h sample: " + (s.h2h_sample || "") +
               "\n  motm: " + (s.motm_candidates || "");
           }
+          // Broadcast scan: does the per-match FotMob payload carry ANY TV /
+          // channel / "Sport TV" data the day-bulk endpoint misses?
+          var b = j._broadcast || [];
+          line += "\n  broadcast scan: " + b.length + " hit(s)";
+          b.forEach(function (h) {
+            line += "\n      " + h.path + (h.value ? " = " + h.value : (h.sample ? " → " + h.sample : ""));
+          });
           return line;
         } },
       { id: "sofatv", label: "SofaScore (api/sofatv)", needs: ["date", "home", "away"],
@@ -192,7 +268,11 @@
           if (!j) return "no response";
           var tv = (j.tvevent || []).length; var d = j._debug || {};
           var pt = d.countries && d.countries.PT;
-          return tv + " channels · event " + (d.matchedEventId || "—") +
+          // dayIndex = how many events SofaScore's scheduled-events returned. 0
+          // means the upstream is blocked/empty (so SofaScore can't help at all);
+          // a positive number with event "—" means the match wasn't found/matched.
+          return tv + " channels · dayIndex " + (d.dayIndexSize != null ? d.dayIndexSize : "?") +
+            " · event " + (d.matchedEventId || "—") +
             " · resolved " + (d.resolved || 0) + "/" + (d.totalPairs || 0) +
             (pt != null ? " · PT raw " + pt : " · no PT");
         } }
@@ -300,9 +380,26 @@
       return lines.join("\n");
     }
 
-    function runAll() { TESTS.reduce(function (chain, t) {
+    function runAll() { return TESTS.reduce(function (chain, t) {
       return chain.then(function () { return runTest(t); });
     }, Promise.resolve()); }
+
+    // Copy report runs every test first so the report is never a wall of
+    // "not run" — on open only Health auto-runs, so copying straight away
+    // produced an empty report. Run all, then copy the fresh results.
+    function copyReport() {
+      var btn = $("copyReport");
+      if (btn.disabled) return;
+      var old = btn.textContent;
+      btn.disabled = true; btn.textContent = "Running…";
+      runAll().then(function () {
+        btn.disabled = false; btn.textContent = old;
+        copyText(buildReport(), btn);
+      }, function () {
+        btn.disabled = false; btn.textContent = old;
+        copyText(buildReport(), btn);
+      });
+    }
 
     // Load fixtures from the FotMob proxy to populate the match picker.
     function loadFixtures() {
@@ -334,7 +431,59 @@
     $("loadFixtures").addEventListener("click", loadFixtures);
     $("date").addEventListener("change", loadFixtures); // reload picker when date changes
     $("runAll").addEventListener("click", runAll);
-    $("copyReport").addEventListener("click", function () { copyText(buildReport(), $("copyReport")); });
+    $("copyReport").addEventListener("click", copyReport);
+
+    // ---- Manual overrides (admin) ----
+    // The page is behind HTTP Basic Auth, so the browser attaches the admin
+    // credentials to these same-origin /api/overrides calls automatically.
+    function ovErr(r) {
+      if (r.status === 401) throw new Error("unauthorized — reload the page and log in");
+      return r.json();
+    }
+    function ovSave(e) {
+      if (e) e.preventDefault();
+      var p = params();
+      if (!p.fmid) { $("ovHint").textContent = "pick a match (need its id) first"; return; }
+      var country = $("ovCountry").value.trim();
+      var channels = $("ovChannels").value.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+      if (!country || !channels.length) { $("ovHint").textContent = "country + at least one channel"; return; }
+      var rows = channels.map(function (ch) { return { country: country, channel: ch }; });
+      $("ovHint").textContent = "saving…";
+      fetch("/api/overrides", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fmid: p.fmid, date: p.date, home: p.home, away: p.away, rows: rows }),
+      }).then(ovErr).then(function (j) {
+        $("ovHint").textContent = j && j.ok ? "saved ✓ (reload the app to see it)" : ((j && j.error) || "error");
+        ovReload();
+      }).catch(function (err) { $("ovHint").textContent = String(err.message || err); });
+    }
+    function ovReload(e) {
+      if (e) e.preventDefault();
+      var p = params();
+      fetch("/api/overrides?date=" + encodeURIComponent(p.date)).then(ovErr).then(function (j) {
+        var ov = (j && j.overrides) || [];
+        if (!ov.length) { $("ovList").textContent = "no overrides for " + p.date; return; }
+        $("ovList").textContent = ov.map(function (o) {
+          return o.fmid + "  " + (o.home || "?") + " vs " + (o.away || "?") + "\n  " +
+            (o.rows || []).map(function (r) { return r.country + ": " + r.channel; }).join(", ");
+        }).join("\n\n");
+      }).catch(function (err) { $("ovList").textContent = String(err.message || err); });
+    }
+    function ovRemove(e) {
+      if (e) e.preventDefault();
+      var p = params();
+      if (!p.fmid) { $("ovHint").textContent = "pick a match first"; return; }
+      fetch("/api/overrides?fmid=" + encodeURIComponent(p.fmid), { method: "DELETE" })
+        .then(ovErr).then(function () { $("ovHint").textContent = "removed"; ovReload(); })
+        .catch(function (err) { $("ovHint").textContent = String(err.message || err); });
+    }
+    $("ovSave").addEventListener("click", ovSave);
+    $("ovReload").addEventListener("click", ovReload);
+    $("ovRemove").addEventListener("click", ovRemove);
+    $("match").addEventListener("change", function () {
+      var p = params();
+      $("ovHint").textContent = p.fmid ? ("match " + p.fmid + " — fill channel + Save") : "pick a match first";
+    });
 
     render();
     runTest(TESTS[0]); // health on open

@@ -9,7 +9,8 @@ import {
 import {
   CODE_TO_COUNTRY, countryFlag, initials, orderCountries, orderChannels,
   groupByCountry, compRank, ytIdOf, highlightLink,
-  fetchFotMobFixtures, fetchTv, attachTv, fetchFotMobDay, mergeTv, teamMatch,
+  fetchFotMobFixtures, fetchTv, attachTv, fetchFotMobDay, fetchRichListings,
+  mergeTv, teamMatch,
   ensureEventTv, ensureDetails, loadHighlights, loadedTv, detailsCache,
 } from "@/lib/app-data";
 import { normName } from "@/lib/format";
@@ -433,6 +434,8 @@ export default function GamesBrowser() {
   const [primaryCountry, setPrimaryCountry] = useState("Portugal");
   const [highlightsById, setHighlightsById] = useState({});
   const [status, setStatus] = useState(null); // { kind, badge, text, tvCount, updated }
+  const [refreshingTv, setRefreshingTv] = useState(false); // background listings build in flight
+  const tvFollowup = useRef(false); // guards the one-shot re-fetch after a build
   const [detailId, setDetailId] = useState(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -562,11 +565,14 @@ export default function GamesBrowser() {
     let feedReachable = true;
     const fixturesReq = fetchFotMobFixtures(day).catch(() => { feedReachable = false; return []; });
 
-    return Promise.all([fixturesReq, fetchTv(day), fetchFotMobDay(day)]).then((res) => {
+    return Promise.all([fixturesReq, fetchTv(day), fetchFotMobDay(day), fetchRichListings(day)])
+      .then((res) => {
       if (token !== loadToken.current) return;
       let fx = res[0] || [];
       const tv = res[1];
       const dayMaps = res[2] || [];
+      const rich = res[3] || {};            // { matches, refreshing } from /api/listings
+      const richMatches = rich.matches || {}; // accumulated store, keyed by FotMob match id
       attachTv(fx, tv);
 
       if (dayMaps.length) {
@@ -574,11 +580,35 @@ export default function GamesBrowser() {
           const h = normName(f.home), a = normName(f.away);
           for (let i = 0; i < dayMaps.length; i++) {
             const e = dayMaps[i];
-            if (e.rows && e.rows.length && teamMatch(h, e.h) && teamMatch(a, e.a)) {
-              f.tv = mergeTv(f.tv, e.rows);
-            }
+            // Join by FotMob match id when both sides carry it — robust against
+            // per-country localized team names (e.g. "Suíça"/"Bósnia"); fall back
+            // to name matching only when an id isn't available.
+            const idJoin = e.id && f.fmid && String(e.id) === String(f.fmid);
+            const matched = idJoin ||
+              (e.rows && e.rows.length && teamMatch(h, e.h) && teamMatch(a, e.a));
+            if (matched && e.rows && e.rows.length) f.tv = mergeTv(f.tv, e.rows);
           }
         });
+      }
+
+      // Accumulated daily store (cron-listings): exact id join, richest source.
+      fx.forEach((f) => {
+        const r = f.fmid && richMatches[String(f.fmid)];
+        if (r && r.rows && r.rows.length) f.tv = mergeTv(f.tv, r.rows);
+      });
+
+      // When the store is being rebuilt in the background, show a banner and
+      // re-fetch once shortly after so the freshly merged channels appear without
+      // a manual reload. The server's per-window lock makes the follow-up return
+      // refreshing=false, so this fires at most once (no loop).
+      if (rich.refreshing) {
+        setRefreshingTv(true);
+        if (!tvFollowup.current) {
+          tvFollowup.current = true;
+          setTimeout(() => { tvFollowup.current = false; loadRef.current && loadRef.current(true); }, 9000);
+        }
+      } else {
+        setRefreshingTv(false);
       }
 
       fx.forEach((f) => {
@@ -614,6 +644,11 @@ export default function GamesBrowser() {
       prefetchListings(token, fx, day);
     });
   }, [t, locale, prefetchListings]);
+
+  // Stable handle to the latest loader, so the post-build follow-up timer can
+  // re-fetch without being a dependency of the callback that schedules it.
+  const loadRef = useRef(loadFixtures);
+  useEffect(() => { loadRef.current = loadFixtures; }, [loadFixtures]);
 
   // ---- Highlights ----
   const refreshHighlights = useCallback(() => {
@@ -878,6 +913,13 @@ export default function GamesBrowser() {
           </div>
         </div>
       </section>
+
+      {refreshingTv ? (
+        <div className="status refreshing" role="status" aria-live="polite">
+          <span className="badge">⏳</span>
+          {t("refreshingTv")}
+        </div>
+      ) : null}
 
       {status ? (
         <div className={"status" + (status.kind === "error" ? " error" : "")}>

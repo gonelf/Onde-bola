@@ -273,6 +273,9 @@ body {
   margin-bottom: 16px;
 }
 .status.error { border-color: #5a2a2a; color: #ffb3b3; }
+.status.refreshing { border-color: var(--accent); color: var(--text); margin-bottom: 12px; }
+.status.refreshing .badge { animation: hb-pulse 1.2s ease-in-out infinite; }
+@keyframes hb-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 .status .badge {
   display: inline-block;
   background: var(--accent-soft);

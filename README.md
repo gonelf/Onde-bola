@@ -150,11 +150,11 @@ lib/digest-text.js               Builds the /text plain-text digest (ranking, fl
 lib/country-flags.js             National-team name → flag emoji (EN + PT names) for the text digest
 lib/sitemap-sweep.js             Builds the canonical SEO URL map for the sitemap + its cron
 assets/styles.css                Styling (imported by the app layout)
-public/admin.html                Connections debugger (live-tests every source, noindex)
+public/admin/                    Admin console (noindex): /admin connections debugger, /admin/overrides, /admin/ads
 public/assets/og-image.svg       Default social share / Open Graph card
-public/robots.txt                Crawl rules (allows the site, disallows admin.html + /api)
+public/robots.txt                Crawl rules (allows the site, disallows /admin + /api)
 public/llms.txt                  Site summary for LLM/AI crawlers
-middleware.js                    Edge HTTP Basic Auth gating /admin.html + /api/overrides (ADMIN_USER / ADMIN_PASSWORD)
+middleware.js                    Edge HTTP Basic Auth gating /admin + /api/overrides + /api/ads (ADMIN_USER / ADMIN_PASSWORD)
 vercel.json                      Crons → /api/cron-sitemap + /api/cron-listings (both daily; listings also revalidates on visit)
 next.config.js                   Next.js config
 package.json                     next, react, @vercel/og, @vercel/analytics
@@ -249,7 +249,7 @@ for every visible match, so they appear on the cards without a click.
    `&debug=1` to inspect what FotMob returned (per-country counts + a sample);
    add `&home=<team>&away=<team>` to see that one match's channels grouped by
    country (and any `nearMisses` where a team-name mismatch dropped a listing) —
-   this is what the `/admin.html` match picker drives to debug a missing
+   this is what the `/admin` match picker drives to debug a missing
    broadcaster like "Sport TV 5 not showing for Switzerland vs Bosnia".
 
    Listings join onto fixtures **by FotMob match id** (the `tvlistings` map key
@@ -280,13 +280,13 @@ for every visible match, so they appear on the cards without a click.
      with `CRON_SECRET`.
 
    Env: `LISTINGS_SOFA_BUDGET` (40, cron), `LISTINGS_VISIT_SOFA_BUDGET` (12,
-   on-visit), `LISTINGS_REVALIDATE_SEC` (1800). Inspect it in `/admin.html` via
+   on-visit), `LISTINGS_REVALIDATE_SEC` (1800). Inspect it in `/admin` via
    the **Merged store (api/listings)** test.
 6. **Manual overrides** (`lib/overrides.js`, `app/api/overrides/route.js`) — the
    highest-trust source, for the rare match no free feed covers in a country
    (e.g. FotMob's PT feed occasionally omits a single World Cup game while
    carrying all the others, and SofaScore is blocked from the server). The owner
-   adds broadcasters by hand in `/admin.html` (the **Manual TV override** card);
+   adds broadcasters by hand in `/admin` (the **Manual TV override** card);
    they're stored in KV under `tv:overrides` and merged into the listings store
    (at build) and `/api/listings` (instantly, so they show without waiting for a
    rebuild). The admin surface is gated by HTTP Basic Auth — set `ADMIN_USER` /
@@ -384,7 +384,7 @@ enable caching on Vercel:
    the REST credentials automatically. The proxies read `KV_REST_API_URL` /
    `KV_REST_API_TOKEN`, falling back to `UPSTASH_REDIS_REST_URL` /
    `UPSTASH_REDIS_REST_TOKEN`, so either naming the integration injects will work.
-   Verify on `/admin.html` (Health → `KV ✅ PONG`) or an `X-Cache: HIT` header.
+   Verify on `/admin` (Health → `KV ✅ PONG`) or an `X-Cache: HIT` header.
 2. *(Optional)* set `THESPORTSDB_KEY` if you have a premium key — otherwise it
    defaults to the free `123` key.
 3. Redeploy. Responses include an `X-Cache: HIT|MISS` header so you can verify
@@ -394,7 +394,7 @@ enable caching on Vercel:
 > request per country in `FOTMOB_COUNTRIES` (9 by default). Without KV every
 > visitor triggers all of them live, which is slow and risks FotMob
 > rate-limiting/blocking the deployment. With KV connected it becomes ~one
-> cached fetch per ~30 min for everyone. The `/admin.html` health check shows
+> cached fetch per ~30 min for everyone. The `/admin` health check shows
 > whether KV is reachable.
 
 Cache TTL adapts to the date. For TV: ~10 min for today (so live listings stay

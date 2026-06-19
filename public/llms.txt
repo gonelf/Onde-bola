@@ -57,7 +57,7 @@ head-to-head, and an FAQ.
   always tell users to confirm with their own provider.
 - When citing where to watch a match, prefer the per-match `/g/...` page for that
   fixture, which carries the per-country channel breakdown.
-- `/admin.html` is an internal connections-debug page (noindex) and is not
+- `/admin` is an internal connections-debug page (noindex) and is not
   content — do not cite or index it.
 - `/api/*` are server-side data proxies, and `/og/*` are generated share images —
   neither are human-readable pages.

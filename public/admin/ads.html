@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Hoje Há Bola — Manage Ads</title>
+<link rel="stylesheet" href="/admin/admin.css" />
+</head>
+<body>
+  <div class="sub">Third-party ad units and where each one renders in the layout.</div>
+
+  <!-- NB: ids/classes here are intentionally "loader-*", not "ad(s)-*": ad
+       blockers (e.g. Brave shields) hide elements whose class/id looks
+       ad-related, which would make these rows vanish on managers' own browsers. -->
+  <div class="card" id="loaderCard">
+    <div style="font-weight:600; margin-bottom:2px;">📢 Manage ads</div>
+    <div class="sub" style="margin-bottom:10px;">
+      Paste the full snippet the ad network gives you (a <code>&lt;script&gt;…&lt;/script&gt;</code>
+      and/or banner markup) into a unit, pick where it should show, and Save.
+      Use <b>Preview</b> to render a unit in a sandbox. Stored server-side (needs
+      <code>ADMIN_USER</code> / <code>ADMIN_PASSWORD</code> and KV configured);
+      live within a few minutes. <i>Self-placing formats (popunder / social bar)
+      won't show in Preview, and ad blockers suppress previews — disable shields
+      to preview real ads.</i>
+    </div>
+    <div id="loaderRows"></div>
+    <div class="toolbar">
+      <button class="secondary" id="loaderAdd">+ Add unit</button>
+      <button id="loaderSave">Save</button>
+      <button class="secondary" id="loaderReload">Reload</button>
+      <span class="pill" id="loaderHint">loading…</span>
+    </div>
+  </div>
+
+  <script src="/admin/admin-nav.js"></script>
+  <script>
+  // ---- Manage ad units (admin) ----
+  // The page is behind HTTP Basic Auth, so the browser attaches the admin
+  // credentials to these same-origin /api/ads calls automatically.
+  (function () {
+    "use strict";
+    var $ = function (id) { return document.getElementById(id); };
+    var rowsEl = $("loaderRows");
+
+    // Layout slots; overwritten by the API's list on load.
+    var SLOTS = [
+      { id: "list-top", label: "Games list — top" },
+      { id: "list-bottom", label: "Games list — bottom" },
+      { id: "detail", label: "Per-game page" },
+      { id: "global", label: "Site-wide (self-placing)" },
+    ];
+
+    function setHint(msg) { $("loaderHint").textContent = msg; }
+
+    function slotSelect(selected) {
+      var sel = document.createElement("select");
+      sel.className = "loader-slot";
+      SLOTS.forEach(function (s) {
+        var o = document.createElement("option");
+        o.value = s.id; o.textContent = s.label;
+        if (s.id === selected) o.selected = true;
+        sel.appendChild(o);
+      });
+      return sel;
+    }
+
+    function makeRow(unit) {
+      unit = unit || {};
+      var row = document.createElement("div");
+      row.className = "loader-row";
+
+      var head = document.createElement("div");
+      head.className = "loader-head";
+
+      var onLabel = document.createElement("label");
+      onLabel.className = "loader-onlabel";
+      var chk = document.createElement("input");
+      chk.type = "checkbox"; chk.className = "loader-on";
+      chk.checked = unit.enabled !== false;
+      onLabel.appendChild(chk);
+      onLabel.appendChild(document.createTextNode("on"));
+
+      var sel = slotSelect(unit.slot || "global");
+
+      var del = document.createElement("button");
+      del.type = "button"; del.className = "loader-del"; del.textContent = "✕";
+      del.title = "Remove";
+      del.addEventListener("click", function () { row.remove(); refreshEmpty(); });
+
+      head.appendChild(onLabel); head.appendChild(sel); head.appendChild(del);
+
+      var script = document.createElement("textarea");
+      script.className = "loader-src"; script.rows = 4;
+      script.placeholder = "<script>…</" + "script>  or  banner HTML";
+      script.value = unit.script || "";
+
+      var label = document.createElement("input");
+      label.type = "text"; label.className = "loader-label";
+      label.placeholder = "label (optional)";
+      label.value = unit.label || "";
+
+      var actions = document.createElement("div");
+      actions.className = "loader-actions";
+      var prev = document.createElement("button");
+      prev.type = "button"; prev.className = "secondary loader-preview";
+      prev.textContent = "Preview";
+      prev.addEventListener("click", function () { togglePreview(row); });
+      actions.appendChild(prev);
+
+      var box = document.createElement("div");
+      box.className = "loader-preview-box";
+
+      row.appendChild(head);
+      row.appendChild(script);
+      row.appendChild(label);
+      row.appendChild(actions);
+      row.appendChild(box);
+      return row;
+    }
+
+    // Render the unit's snippet in a sandboxed iframe so it can't touch the page.
+    function togglePreview(row) {
+      var box = row.querySelector(".loader-preview-box");
+      if (box.firstChild) { box.innerHTML = ""; return; } // toggle off
+      var snippet = row.querySelector(".loader-src").value;
+      if (!snippet.trim()) { box.textContent = "(empty)"; return; }
+      var frame = document.createElement("iframe");
+      frame.className = "loader-preview-frame";
+      frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox");
+      frame.srcdoc = "<!doctype html><html><head><meta charset='utf-8'><base target='_blank'>" +
+        "<style>html,body{margin:0}body{font:13px/1.4 sans-serif;color:#555;padding:8px}</style>" +
+        "</head><body>" + snippet + "</body></html>";
+      box.appendChild(frame);
+    }
+
+    function refreshEmpty() {
+      var has = rowsEl.querySelector(".loader-row");
+      var empty = rowsEl.querySelector(".loader-empty");
+      if (!has && !empty) {
+        var e = document.createElement("div");
+        e.className = "loader-empty"; e.textContent = "Nothing configured — click “Add unit” to create one.";
+        rowsEl.appendChild(e);
+      } else if (has && empty) {
+        empty.remove();
+      }
+    }
+
+    function setRows(units) {
+      rowsEl.innerHTML = "";
+      (units || []).forEach(function (u) { rowsEl.appendChild(makeRow(u)); });
+      refreshEmpty();
+    }
+
+    function collect() {
+      var out = [];
+      rowsEl.querySelectorAll(".loader-row").forEach(function (row) {
+        var script = row.querySelector(".loader-src").value.trim();
+        if (!script) return; // skip blank units
+        out.push({
+          script: script,
+          label: row.querySelector(".loader-label").value.trim(),
+          enabled: row.querySelector(".loader-on").checked,
+          slot: row.querySelector(".loader-slot").value,
+        });
+      });
+      return out;
+    }
+
+    // Surface the server's real error instead of a generic message.
+    function handle(r) {
+      return r.json().then(function (j) {
+        if (!r.ok) {
+          var msg = (j && j.error) || ("HTTP " + r.status);
+          if (r.status === 401) msg += " — set ADMIN_USER / ADMIN_PASSWORD, then reload";
+          throw new Error(msg);
+        }
+        return j;
+      }, function () {
+        throw new Error("HTTP " + r.status + " (non-JSON response)");
+      });
+    }
+
+    function load() {
+      setHint("loading…");
+      fetch("/api/ads").then(handle).then(function (j) {
+        if (j && Array.isArray(j.slots) && j.slots.length) SLOTS = j.slots;
+        var units = (j && Array.isArray(j.ads)) ? j.ads : [];
+        setRows(units);
+        var note = (j && j.kvConfigured) ? "" : " · ⚠️ KV not configured — saves won’t persist";
+        setHint("loaded · " + units.length + " unit" + (units.length === 1 ? "" : "s") + note);
+      }).catch(function (err) { setHint(String(err.message || err)); });
+    }
+
+    function save() {
+      var units = collect();
+      setHint("saving…");
+      fetch("/api/ads", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ads: units }),
+      }).then(handle).then(function (j) {
+        if (j && j.ok) { setRows(j.ads); setHint("saved ✓ (live within a few minutes)"); }
+        else { setHint((j && j.error) || "error"); }
+      }).catch(function (err) { setHint(String(err.message || err)); });
+    }
+
+    function addRow() {
+      var empty = rowsEl.querySelector(".loader-empty"); if (empty) empty.remove();
+      var row = makeRow({ enabled: true, slot: "list-top" });
+      rowsEl.appendChild(row);
+      row.querySelector(".loader-src").focus();
+    }
+
+    // Any setup error is shown in the hint rather than failing silently.
+    try {
+      if (!rowsEl) throw new Error("internal: #loaderRows missing");
+      $("loaderAdd").addEventListener("click", addRow);
+      $("loaderSave").addEventListener("click", save);
+      $("loaderReload").addEventListener("click", load);
+      refreshEmpty(); // baseline before the fetch resolves
+      load();
+    } catch (e) {
+      setHint("init error: " + (e && e.message || e));
+    }
+  })();
+  </script>
+</body>
+</html>

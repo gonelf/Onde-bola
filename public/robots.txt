@@ -4,7 +4,7 @@
 
 User-agent: *
 Allow: /
-Disallow: /admin.html
+Disallow: /admin
 Disallow: /api/
 Disallow: /og/
 Disallow: /image

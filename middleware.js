@@ -1,10 +1,11 @@
 /*
  * Edge middleware: gate the admin surface behind HTTP Basic Auth.
  *
- * Protects the /admin.html debug/console page and the /api/overrides write API
- * with ADMIN_USER / ADMIN_PASSWORD. Once the owner authenticates to load the
- * page, the browser reuses the credentials for the same-origin fetches the page
- * makes to /api/overrides.
+ * Protects the /admin debug/console page (served from public/admin.html, and
+ * its legacy /admin.html path) and the admin write APIs (/api/overrides,
+ * /api/ads) with ADMIN_USER / ADMIN_PASSWORD. Once the owner authenticates to
+ * load the page, the browser reuses the credentials for the same-origin fetches
+ * the page makes to those endpoints.
  *
  * Until the credentials are configured in the environment, nothing is gated —
  * so the read-only debug page keeps working out of the box. (The override API
@@ -14,7 +15,7 @@
 import { NextResponse } from "next/server";
 
 export const config = {
-  matcher: ["/admin.html", "/api/overrides"],
+  matcher: ["/admin", "/admin/:path*", "/admin.html", "/api/overrides", "/api/ads"],
 };
 
 export function middleware(request) {

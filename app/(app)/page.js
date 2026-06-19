@@ -6,7 +6,12 @@
 // inside <main>.
 
 import GamesBrowser from "@/components/GamesBrowser";
-import Ads from "@/components/Ads";
+import AdSlot from "@/components/AdSlot";
+
+// ISR: the page chrome is static, but the ad slots read the admin-managed list,
+// so regenerate periodically to pick up changes (admin saves also bust it via
+// the "ads" cache tag for a near-immediate refresh).
+export const revalidate = 300;
 
 // Evergreen internal links to the most-searched competitions' league hubs.
 // Server-rendered so crawlers and LLMs get real, linkable content even though
@@ -42,7 +47,11 @@ export default function HomePage() {
           Football on TV today, worldwide — where to watch every match live
         </h1>
 
+        <AdSlot name="list-top" />
+
         <GamesBrowser />
+
+        <AdSlot name="list-bottom" />
 
         {/* Server-rendered SEO content: gives crawlers and AI assistants real,
             indexable text and internal links to the competition hubs. */}
@@ -126,7 +135,7 @@ export default function HomePage() {
         </div>
       </footer>
 
-      <Ads />
+      <AdSlot name="global" />
     </>
   );
 }

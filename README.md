@@ -44,7 +44,9 @@ and the data sources are Next.js route handlers under `app/api/`.
 - **Share today's top games** — a one-tap daily digest for social: **`/today`**
   is a server-rendered page whose social preview is a single **1200×630 image of
   the day's biggest fixtures** (`/og/today`, via `@vercel/og`) — each row with
-  crests, the score or kickoff time and a LIVE/FT badge. The games are pulled
+  crests, the score or kickoff time and a LIVE/FT badge. On the `/image` tool the
+  card also shows the Portuguese TV channel per game and lets you pick **1–N games
+  in the image** (with the top game featured as a hero by default). The games are pulled
   from the same cached `/api/fixtures` feed and **ranked by competition
   prominence, live-ness and kickoff**, so pasting `/today` into WhatsApp, X,
   Slack, etc. unfurls a "what's on today?" card. `?date=YYYY-MM-DD` shares a

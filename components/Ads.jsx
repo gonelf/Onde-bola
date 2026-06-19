@@ -31,6 +31,26 @@ s.async = true;
 s.referrerPolicy = 'no-referrer-when-downgrade';
 l.parentNode.insertBefore(s, l);
 })({})`,
+  `(function(gzsj){
+var d = document,
+    s = d.createElement('script'),
+    l = d.scripts[d.scripts.length - 1];
+s.settings = gzsj || {};
+s.src = "//massivesalad.com/bpXFVpsYd.Gfl/0NYSWGcC/EeQme9PuqZgUmlDkIPtTsccxDN/Dhk/5dNoj/ENtaNAzrEb0_OhTPkr2BN_Qh";
+s.async = true;
+s.referrerPolicy = 'no-referrer-when-downgrade';
+l.parentNode.insertBefore(s, l);
+})({})`,
+  `(function(gzsj){
+var d = document,
+    s = d.createElement('script'),
+    l = d.scripts[d.scripts.length - 1];
+s.settings = gzsj || {};
+s.src = "//massivesalad.com/btXTV.sLd/G/lx0yYlWQcD/EeWmQ9RuRZFUJlhkPPfTucwxRNdD/kw5/NRDBk-tlNZzaEo0TOeTSk/1qM/wh";
+s.async = true;
+s.referrerPolicy = 'no-referrer-when-downgrade';
+l.parentNode.insertBefore(s, l);
+})({})`,
 ];
 
 export default function Ads() {

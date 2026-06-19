@@ -21,13 +21,16 @@ input, select, button {
 }
 .row { display: flex; gap: 10px; flex-wrap: wrap; }
 .row > div { flex: 1 1 140px; }
-.ad-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-.ad-row input[type="text"] { flex: 1 1 auto; }
-.ad-row input.ad-label { flex: 0 1 150px; }
-.ad-row input[type="checkbox"] { width: auto; flex: none; }
-.ad-row .ad-del { width: auto; flex: none; padding: 8px 11px; background: var(--panel2);
+/* Loader-list rows. NB: these are deliberately NOT named ad-* / ads-* — ad
+   blockers (Brave shields, EasyList cosmetic rules) hide elements whose class
+   or id looks ad-related, which would strip this admin UI. */
+.loader-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.loader-row input[type="text"] { flex: 1 1 auto; }
+.loader-row input.loader-label { flex: 0 1 150px; }
+.loader-row input[type="checkbox"] { width: auto; flex: none; }
+.loader-row .loader-del { width: auto; flex: none; padding: 8px 11px; background: var(--panel2);
                   border-color: var(--line); color: var(--bad); font-weight: 700; }
-.ad-empty { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+.loader-empty { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
 button { background: #1d4ed8; border-color: #1d4ed8; cursor: pointer; font-weight: 600; width: auto; }
 button:hover { filter: brightness(1.08); }
 button.secondary { background: var(--panel2); border-color: var(--line); }

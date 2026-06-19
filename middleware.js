@@ -15,7 +15,7 @@
 import { NextResponse } from "next/server";
 
 export const config = {
-  matcher: ["/admin", "/admin.html", "/api/overrides", "/api/ads"],
+  matcher: ["/admin", "/admin/:path*", "/admin.html", "/api/overrides", "/api/ads"],
 };
 
 export function middleware(request) {

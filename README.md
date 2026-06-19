@@ -150,7 +150,7 @@ lib/digest-text.js               Builds the /text plain-text digest (ranking, fl
 lib/country-flags.js             National-team name → flag emoji (EN + PT names) for the text digest
 lib/sitemap-sweep.js             Builds the canonical SEO URL map for the sitemap + its cron
 assets/styles.css                Styling (imported by the app layout)
-public/admin.html                Connections debugger, served at /admin (live-tests every source, noindex)
+public/admin/                    Admin console (noindex): /admin connections debugger, /admin/overrides, /admin/ads
 public/assets/og-image.svg       Default social share / Open Graph card
 public/robots.txt                Crawl rules (allows the site, disallows /admin + /api)
 public/llms.txt                  Site summary for LLM/AI crawlers

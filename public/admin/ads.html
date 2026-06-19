@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Hoje Há Bola — Manage Ads</title>
+<link rel="stylesheet" href="/admin/admin.css" />
+</head>
+<body>
+  <div class="sub">Third-party ad-loader scripts injected on the games list and the per-game pages.</div>
+
+  <div class="card" id="adsCard">
+    <div style="font-weight:600; margin-bottom:2px;">📢 Manage ads</div>
+    <div class="sub" style="margin-bottom:10px;">
+      Enter the loader <code>src</code> the network gives you (e.g.
+      <code>//massivesalad.com/…</code>); the surrounding loader snippet is added
+      automatically. Toggle a unit off to pause it without deleting. Saved
+      server-side (needs <code>ADMIN_USER</code> / <code>ADMIN_PASSWORD</code> and
+      KV configured) and live within a few minutes.
+    </div>
+    <div id="adsRows"></div>
+    <div class="toolbar">
+      <button class="secondary" id="adsAdd">+ Add ad</button>
+      <button id="adsSave">Save ads</button>
+      <button class="secondary" id="adsReload">Reload</button>
+      <span class="pill" id="adsHint">loading…</span>
+    </div>
+  </div>
+
+  <script src="/admin/admin-nav.js"></script>
+  <script>
+  // ---- Manage ads (admin) ----
+  // The page is behind HTTP Basic Auth, so the browser attaches the admin
+  // credentials to these same-origin /api/ads calls automatically.
+  (function () {
+    "use strict";
+    var $ = function (id) { return document.getElementById(id); };
+    var rowsEl = $("adsRows");
+
+    function setHint(msg) { $("adsHint").textContent = msg; }
+
+    function makeRow(ad) {
+      ad = ad || {};
+      var row = document.createElement("div");
+      row.className = "ad-row";
+
+      var chk = document.createElement("input");
+      chk.type = "checkbox"; chk.className = "ad-enabled";
+      chk.checked = ad.enabled !== false;
+      chk.title = "Enabled";
+
+      var src = document.createElement("input");
+      src.type = "text"; src.className = "ad-src";
+      src.placeholder = "//network.example/loader-id";
+      src.value = ad.src || "";
+
+      var label = document.createElement("input");
+      label.type = "text"; label.className = "ad-label";
+      label.placeholder = "label (optional)";
+      label.value = ad.label || "";
+
+      var del = document.createElement("button");
+      del.type = "button"; del.className = "ad-del"; del.textContent = "✕";
+      del.title = "Remove";
+      del.addEventListener("click", function () { row.remove(); refreshEmpty(); });
+
+      row.appendChild(chk); row.appendChild(src); row.appendChild(label); row.appendChild(del);
+      return row;
+    }
+
+    function refreshEmpty() {
+      var has = rowsEl.querySelector(".ad-row");
+      var empty = rowsEl.querySelector(".ad-empty");
+      if (!has && !empty) {
+        var e = document.createElement("div");
+        e.className = "ad-empty"; e.textContent = "No ads — click “Add ad” to create one.";
+        rowsEl.appendChild(e);
+      } else if (has && empty) {
+        empty.remove();
+      }
+    }
+
+    function setRows(ads) {
+      rowsEl.innerHTML = "";
+      (ads || []).forEach(function (a) { rowsEl.appendChild(makeRow(a)); });
+      refreshEmpty();
+    }
+
+    function collect() {
+      var out = [];
+      rowsEl.querySelectorAll(".ad-row").forEach(function (row) {
+        var src = row.querySelector(".ad-src").value.trim();
+        if (!src) return; // skip blank rows
+        out.push({
+          src: src,
+          label: row.querySelector(".ad-label").value.trim(),
+          enabled: row.querySelector(".ad-enabled").checked,
+        });
+      });
+      return out;
+    }
+
+    function handle(r) {
+      if (r.status === 401) throw new Error("unauthorized — reload the page and log in");
+      return r.json();
+    }
+
+    function load() {
+      setHint("loading…");
+      fetch("/api/ads").then(handle).then(function (j) {
+        setRows(j && j.ads);
+        setHint(j && j.kvConfigured ? "loaded" : "⚠️ KV not configured — saves won’t persist");
+      }).catch(function (err) { setHint(String(err.message || err)); });
+    }
+
+    function save() {
+      var ads = collect();
+      setHint("saving…");
+      fetch("/api/ads", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ads: ads }),
+      }).then(handle).then(function (j) {
+        if (j && j.ok) { setRows(j.ads); setHint("saved ✓ (live within a few minutes)"); }
+        else { setHint((j && j.error) || "error"); }
+      }).catch(function (err) { setHint(String(err.message || err)); });
+    }
+
+    $("adsAdd").addEventListener("click", function () {
+      var empty = rowsEl.querySelector(".ad-empty"); if (empty) empty.remove();
+      var row = makeRow({ enabled: true });
+      rowsEl.appendChild(row);
+      row.querySelector(".ad-src").focus();
+    });
+    $("adsSave").addEventListener("click", save);
+    $("adsReload").addEventListener("click", load);
+
+    load();
+  })();
+  </script>
+</body>
+</html>

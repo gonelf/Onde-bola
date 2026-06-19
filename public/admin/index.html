@@ -5,63 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex, nofollow" />
 <title>Hoje Há Bola — Connections Debug</title>
-<style>
-  :root {
-    --bg: #0b1220; --panel: #131c2e; --panel2: #0f1726; --line: #243349;
-    --text: #e6edf6; --muted: #93a3b8; --accent: #38bdf8; --ok: #34d399;
-    --warn: #fbbf24; --bad: #f87171;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    padding: 16px; max-width: 920px; margin: 0 auto;
-  }
-  h1 { font-size: 20px; margin: 4px 0 2px; }
-  h1 b { color: var(--accent); }
-  .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
-  label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
-  input, select, button {
-    font: inherit; color: var(--text); background: var(--panel2);
-    border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; width: 100%;
-  }
-  .row { display: flex; gap: 10px; flex-wrap: wrap; }
-  .row > div { flex: 1 1 140px; }
-  .ad-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-  .ad-row input[type="text"] { flex: 1 1 auto; }
-  .ad-row input.ad-label { flex: 0 1 150px; }
-  .ad-row input[type="checkbox"] { width: auto; flex: none; }
-  .ad-row .ad-del { width: auto; flex: none; padding: 8px 11px; background: var(--panel2);
-                    border-color: var(--line); color: var(--bad); font-weight: 700; }
-  .ad-empty { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
-  button { background: #1d4ed8; border-color: #1d4ed8; cursor: pointer; font-weight: 600; width: auto; }
-  button:hover { filter: brightness(1.08); }
-  button.secondary { background: var(--panel2); border-color: var(--line); }
-  button.run-all { background: #0e7490; border-color: #0e7490; }
-  .tests { display: grid; gap: 12px; }
-  .test { background: var(--panel2); border: 1px solid var(--line); border-radius: 11px; overflow: hidden; }
-  .test > summary { list-style: none; cursor: pointer; padding: 12px 14px; display: flex; align-items: center; gap: 10px; }
-  .test > summary::-webkit-details-marker { display: none; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: #475569; flex: none; }
-  .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); } .dot.warn { background: var(--warn); }
-  .test .name { font-weight: 600; }
-  .test .meta { margin-left: auto; color: var(--muted); font-size: 12px; text-align: right; }
-  .test .copy { width: auto; padding: 5px 10px; font-size: 12px; font-weight: 600;
-                background: var(--panel); border-color: var(--line); color: var(--text); flex: none; }
-  .test .copy:hover { filter: brightness(1.15); }
-  .test .copy.done { background: #065f46; border-color: #065f46; }
-  .test .summary-line { padding: 0 14px 8px 34px; color: var(--text); font-size: 13px; }
-  .test .summary-line .k { color: var(--muted); }
-  pre { margin: 0; padding: 12px 14px; background: #0a1120; border-top: 1px solid var(--line);
-        overflow: auto; max-height: 360px; font-size: 12px; color: #cbd5e1; }
-  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
-  .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
-  a { color: var(--accent); }
-</style>
+<link rel="stylesheet" href="/admin/admin.css" />
 </head>
 <body>
-  <h1>Hoje Há <b>Bola</b> · Connections Debug</h1>
   <div class="sub">Live-tests each TV source through its own proxy. Runs from the deployed
     server, so it can reach upstreams (FotMob/SofaScore) your browser and CI can't. Read-only.</div>
 
@@ -98,60 +44,15 @@
     </div>
   </div>
 
-  <div class="card" id="ovCard">
-    <div style="font-weight:600; margin-bottom:2px;">🔒 Manual TV override</div>
-    <div class="sub" style="margin-bottom:10px;">
-      Add broadcasters a free feed missed (e.g. Sport TV for a match FotMob skips).
-      Saved server-side and merged into the listings like any source. Admin login required
-      (set <code>ADMIN_USER</code> / <code>ADMIN_PASSWORD</code> in the env).
-    </div>
-    <div class="row">
-      <div>
-        <label for="ovCountry">Country</label>
-        <input id="ovCountry" type="text" value="Portugal" />
-      </div>
-      <div>
-        <label for="ovChannels">Channels (comma-separated)</label>
-        <input id="ovChannels" type="text" placeholder="e.g. Sport TV 5" />
-      </div>
-    </div>
-    <div class="toolbar">
-      <button id="ovSave">Save override</button>
-      <button class="secondary" id="ovReload">Show overrides for date</button>
-      <button class="secondary" id="ovRemove">Remove for this match</button>
-      <span class="pill" id="ovHint">pick a match first</span>
-    </div>
-    <pre id="ovList">—</pre>
-  </div>
-
-  <div class="card" id="adsCard">
-    <div style="font-weight:600; margin-bottom:2px;">📢 Manage ads</div>
-    <div class="sub" style="margin-bottom:10px;">
-      Third-party ad-loader scripts injected on the games list and the per-game
-      pages. Enter the loader <code>src</code> the network gives you (e.g.
-      <code>//massivesalad.com/…</code>); the surrounding loader snippet is added
-      automatically. Toggle a unit off to pause it without deleting. Saved
-      server-side (needs <code>ADMIN_USER</code> / <code>ADMIN_PASSWORD</code> and
-      KV configured) and live within a few minutes.
-    </div>
-    <div id="adsRows"></div>
-    <div class="toolbar">
-      <button class="secondary" id="adsAdd">+ Add ad</button>
-      <button id="adsSave">Save ads</button>
-      <button class="secondary" id="adsReload">Reload</button>
-      <span class="pill" id="adsHint">loading…</span>
-    </div>
-  </div>
-
   <div class="tests" id="tests"></div>
 
+  <script src="/admin/admin-nav.js"></script>
+  <script src="/admin/admin-common.js"></script>
   <script>
   (function () {
     "use strict";
-    var $ = function (id) { return document.getElementById(id); };
-
-    function todayUTC() { return new Date().toISOString().slice(0, 10); }
-    $("date").value = todayUTC();
+    var $ = AdminCommon.$;
+    var params = AdminCommon.params;
 
     // Each test: id, label, url builder, and a summarizer (json -> short string).
     var TESTS = [
@@ -306,11 +207,6 @@
 
     var results = {}; // id -> { label, url, status, line }
 
-    function params() {
-      return { date: $("date").value || todayUTC(), home: $("home").value.trim(),
-        away: $("away").value.trim(), fmid: $("fmid").value.trim() };
-    }
-
     function render() {
       var box = $("tests"); box.innerHTML = "";
       TESTS.forEach(function (t) {
@@ -427,203 +323,12 @@
       });
     }
 
-    // Load fixtures from the FotMob proxy to populate the match picker.
-    function loadFixtures() {
-      var date = $("date").value || todayUTC();
-      var sel = $("match");
-      sel.innerHTML = '<option value="">loading…</option>';
-      fetch("/api/fixtures?date=" + date)
-        .then(function (r) { return r.json(); })
-        .then(function (j) {
-          var ev = (j && j.fixtures) || [];
-          if (!ev.length) { sel.innerHTML = '<option value="">no fixtures for ' + date + '</option>'; return; }
-          sel.innerHTML = '<option value="">— ' + ev.length + ' matches —</option>';
-          ev.forEach(function (e) {
-            var o = document.createElement("option");
-            o.value = (e.home || "") + "|" + (e.away || "") + "|" + (e.fmid || "");
-            o.textContent = (e.home || "?") + " vs " + (e.away || "?") +
-              (e.competition ? "  ·  " + e.competition : "");
-            sel.appendChild(o);
-          });
-        })
-        .catch(function () { sel.innerHTML = '<option value="">failed to load</option>'; });
-    }
-
-    $("match").addEventListener("change", function () {
-      var v = this.value; if (!v) return;
-      var parts = v.split("|"); $("home").value = parts[0] || ""; $("away").value = parts[1] || "";
-      $("fmid").value = parts[2] || "";
-    });
-    $("loadFixtures").addEventListener("click", loadFixtures);
-    $("date").addEventListener("change", loadFixtures); // reload picker when date changes
     $("runAll").addEventListener("click", runAll);
     $("copyReport").addEventListener("click", copyReport);
 
-    // ---- Manual overrides (admin) ----
-    // The page is behind HTTP Basic Auth, so the browser attaches the admin
-    // credentials to these same-origin /api/overrides calls automatically.
-    function ovErr(r) {
-      if (r.status === 401) throw new Error("unauthorized — reload the page and log in");
-      return r.json();
-    }
-    function ovSave(e) {
-      if (e) e.preventDefault();
-      var p = params();
-      if (!p.fmid) { $("ovHint").textContent = "pick a match (need its id) first"; return; }
-      var country = $("ovCountry").value.trim();
-      var channels = $("ovChannels").value.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
-      if (!country || !channels.length) { $("ovHint").textContent = "country + at least one channel"; return; }
-      var rows = channels.map(function (ch) { return { country: country, channel: ch }; });
-      $("ovHint").textContent = "saving…";
-      fetch("/api/overrides", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fmid: p.fmid, date: p.date, home: p.home, away: p.away, rows: rows }),
-      }).then(ovErr).then(function (j) {
-        $("ovHint").textContent = j && j.ok ? "saved ✓ (reload the app to see it)" : ((j && j.error) || "error");
-        ovReload();
-      }).catch(function (err) { $("ovHint").textContent = String(err.message || err); });
-    }
-    function ovReload(e) {
-      if (e) e.preventDefault();
-      var p = params();
-      fetch("/api/overrides?date=" + encodeURIComponent(p.date)).then(ovErr).then(function (j) {
-        var ov = (j && j.overrides) || [];
-        if (!ov.length) { $("ovList").textContent = "no overrides for " + p.date; return; }
-        $("ovList").textContent = ov.map(function (o) {
-          return o.fmid + "  " + (o.home || "?") + " vs " + (o.away || "?") + "\n  " +
-            (o.rows || []).map(function (r) { return r.country + ": " + r.channel; }).join(", ");
-        }).join("\n\n");
-      }).catch(function (err) { $("ovList").textContent = String(err.message || err); });
-    }
-    function ovRemove(e) {
-      if (e) e.preventDefault();
-      var p = params();
-      if (!p.fmid) { $("ovHint").textContent = "pick a match first"; return; }
-      fetch("/api/overrides?fmid=" + encodeURIComponent(p.fmid), { method: "DELETE" })
-        .then(ovErr).then(function () { $("ovHint").textContent = "removed"; ovReload(); })
-        .catch(function (err) { $("ovHint").textContent = String(err.message || err); });
-    }
-    $("ovSave").addEventListener("click", ovSave);
-    $("ovReload").addEventListener("click", ovReload);
-    $("ovRemove").addEventListener("click", ovRemove);
-    $("match").addEventListener("change", function () {
-      var p = params();
-      $("ovHint").textContent = p.fmid ? ("match " + p.fmid + " — fill channel + Save") : "pick a match first";
-    });
-
     render();
-    runTest(TESTS[0]); // health on open
-    loadFixtures();    // populate the match picker on open
-  })();
-  </script>
-
-  <script>
-  // ---- Manage ads (admin) ----
-  // The page is behind HTTP Basic Auth, so the browser attaches the admin
-  // credentials to these same-origin /api/ads calls automatically.
-  (function () {
-    "use strict";
-    var $ = function (id) { return document.getElementById(id); };
-    var rowsEl = $("adsRows");
-
-    function setHint(msg) { $("adsHint").textContent = msg; }
-
-    function makeRow(ad) {
-      ad = ad || {};
-      var row = document.createElement("div");
-      row.className = "ad-row";
-
-      var chk = document.createElement("input");
-      chk.type = "checkbox"; chk.className = "ad-enabled";
-      chk.checked = ad.enabled !== false;
-      chk.title = "Enabled";
-
-      var src = document.createElement("input");
-      src.type = "text"; src.className = "ad-src";
-      src.placeholder = "//network.example/loader-id";
-      src.value = ad.src || "";
-
-      var label = document.createElement("input");
-      label.type = "text"; label.className = "ad-label";
-      label.placeholder = "label (optional)";
-      label.value = ad.label || "";
-
-      var del = document.createElement("button");
-      del.type = "button"; del.className = "ad-del"; del.textContent = "✕";
-      del.title = "Remove";
-      del.addEventListener("click", function () { row.remove(); refreshEmpty(); });
-
-      row.appendChild(chk); row.appendChild(src); row.appendChild(label); row.appendChild(del);
-      return row;
-    }
-
-    function refreshEmpty() {
-      var has = rowsEl.querySelector(".ad-row");
-      var empty = rowsEl.querySelector(".ad-empty");
-      if (!has && !empty) {
-        var e = document.createElement("div");
-        e.className = "ad-empty"; e.textContent = "No ads — click “Add ad” to create one.";
-        rowsEl.appendChild(e);
-      } else if (has && empty) {
-        empty.remove();
-      }
-    }
-
-    function setRows(ads) {
-      rowsEl.innerHTML = "";
-      (ads || []).forEach(function (a) { rowsEl.appendChild(makeRow(a)); });
-      refreshEmpty();
-    }
-
-    function collect() {
-      var out = [];
-      rowsEl.querySelectorAll(".ad-row").forEach(function (row) {
-        var src = row.querySelector(".ad-src").value.trim();
-        if (!src) return; // skip blank rows
-        out.push({
-          src: src,
-          label: row.querySelector(".ad-label").value.trim(),
-          enabled: row.querySelector(".ad-enabled").checked,
-        });
-      });
-      return out;
-    }
-
-    function handle(r) {
-      if (r.status === 401) throw new Error("unauthorized — reload the page and log in");
-      return r.json();
-    }
-
-    function load() {
-      setHint("loading…");
-      fetch("/api/ads").then(handle).then(function (j) {
-        setRows(j && j.ads);
-        setHint(j && j.kvConfigured ? "loaded" : "⚠️ KV not configured — saves won’t persist");
-      }).catch(function (err) { setHint(String(err.message || err)); });
-    }
-
-    function save() {
-      var ads = collect();
-      setHint("saving…");
-      fetch("/api/ads", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ads: ads }),
-      }).then(handle).then(function (j) {
-        if (j && j.ok) { setRows(j.ads); setHint("saved ✓ (live within a few minutes)"); }
-        else { setHint((j && j.error) || "error"); }
-      }).catch(function (err) { setHint(String(err.message || err)); });
-    }
-
-    $("adsAdd").addEventListener("click", function () {
-      var empty = rowsEl.querySelector(".ad-empty"); if (empty) empty.remove();
-      var row = makeRow({ enabled: true });
-      rowsEl.appendChild(row);
-      row.querySelector(".ad-src").focus();
-    });
-    $("adsSave").addEventListener("click", save);
-    $("adsReload").addEventListener("click", load);
-
-    load();
+    AdminCommon.initPicker();   // date + fixtures picker
+    runTest(TESTS[0]);          // health on open
   })();
   </script>
 

@@ -186,10 +186,12 @@ export async function GET(request) {
     return [code, data];
   }));
 
+  const rawMaps = {}; // debug only: country -> raw listings map, for the id probe
+
   for (const [code, data] of results) {
     const map = listingsMap(data);
     const keys = Object.keys(map || {});
-    if (debug) dbg.countries[code] = { ok: !!data, matchKeys: keys.length };
+    if (debug) { dbg.countries[code] = { ok: !!data, matchKeys: keys.length }; rawMaps[code] = map; }
     const country = CODE_TO_COUNTRY[code] || code;
 
     for (const id of keys) {
@@ -201,9 +203,18 @@ export async function GET(request) {
       const [h, a] = teamsOf(withProgram && withProgram.program);
       if (!h || !a) { if (debug) dbg.droppedNoTeams++; continue; }
 
-      // Date filter (when timestamps are present).
-      const when = parseMsDate(listings[0] && (listings[0].startTime || listings[0].matchTime));
-      if (when && (when < dayStart || when >= dayEnd)) { if (debug) dbg.droppedDate++; continue; }
+      // Date filter. A match can carry several listings (the live broadcast plus
+      // repeats on other days). Checking only listings[0] dropped the whole
+      // match for a country whose first array entry was an out-of-window repeat
+      // — e.g. Portugal's Sport TV listing for one game while the live one
+      // aired. Keep the match if ANY listing falls in the day window.
+      const times = listings
+        .map((l) => parseMsDate(l && (l.startTime || l.matchTime)))
+        .filter((n) => n > 0);
+      if (times.length && !times.some((n) => n >= dayStart && n < dayEnd)) {
+        if (debug) dbg.droppedDate++; continue;
+      }
+      const when = times.find((n) => n >= dayStart && n < dayEnd) || times[0] || 0;
       if (debug) dbg.kept++;
 
       if (!byMatch[id]) {
@@ -268,12 +279,32 @@ export async function GET(request) {
       const matched = [], nearMisses = [];
       for (const m of matches) {
         const hOk = teamMatch(qHome, m.home), aOk = teamMatch(qAway, m.away);
-        if (hOk && aOk) matched.push({ home: m.home, away: m.away, byCountry: byCountry(m.rows) });
+        if (hOk && aOk) matched.push({ id: m.id, home: m.home, away: m.away, byCountry: byCountry(m.rows) });
         else if (hOk || aOk) {
           nearMisses.push({ home: m.home, away: m.away, matched: hOk ? "home" : "away", byCountry: byCountry(m.rows) });
         }
       }
-      dbg.match = { query: { home: qHome, away: qAway }, matched, nearMisses };
+
+      // Raw probe: for each matched id, dump what EACH country's raw feed
+      // contains for that id (station + startTime), BEFORE the date filter. This
+      // tells us whether (e.g.) Portugal genuinely omits the match, or lists it
+      // with a repeat first that the date filter dropped.
+      const rawById = {};
+      matched.forEach((mm) => {
+        const per = {};
+        for (const code of Object.keys(rawMaps)) {
+          const arr = rawMaps[code] && rawMaps[code][mm.id];
+          if (Array.isArray(arr)) {
+            per[code] = arr.map((l) => ({
+              station: nameOf(l && l.station),
+              start: (l && (l.startTime || l.matchTime)) || null,
+            }));
+          }
+        }
+        rawById[mm.id] = per;
+      });
+
+      dbg.match = { query: { home: qHome, away: qAway }, matched, nearMisses, rawById };
     }
 
     // Channel scan: list every merged match carrying a channel whose name

@@ -151,6 +151,19 @@
             var mm = d.match.matched || [], nm = d.match.nearMisses || [];
             line += "\n  this match: " + (mm.length ? "merged ✅" : "NOT merged ❌");
             mm.forEach(function (x) { line += "\n" + fmt(x); });
+            // Raw probe: which countries' raw feed (pre-date-filter) carried this
+            // match id, and the station + startTime — so we can see if PT omits
+            // it or just listed a repeat the date filter dropped.
+            var raw = d.match.rawById || {};
+            Object.keys(raw).forEach(function (id) {
+              line += "\n  raw feed for id " + id + ":";
+              var per = raw[id], codes = Object.keys(per);
+              if (!codes.length) { line += " (no country's raw feed has this id)"; return; }
+              codes.forEach(function (c) {
+                var entries = per[c].map(function (e) { return e.station + " @ " + e.start; });
+                line += "\n      " + c + ": " + entries.join(" | ");
+              });
+            });
             if (nm.length) {
               line += "\n  near-misses (only one team name matched — listing dropped):";
               nm.forEach(function (x) {

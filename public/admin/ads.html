@@ -101,9 +101,20 @@
       return out;
     }
 
+    // Surface the server's real error (e.g. "admin credentials not configured",
+    // "KV not configured") instead of a generic message, so a failed load/save
+    // says why rather than silently looking broken.
     function handle(r) {
-      if (r.status === 401) throw new Error("unauthorized — reload the page and log in");
-      return r.json();
+      return r.json().then(function (j) {
+        if (!r.ok) {
+          var msg = (j && j.error) || ("HTTP " + r.status);
+          if (r.status === 401) msg += " — set ADMIN_USER / ADMIN_PASSWORD, then reload";
+          throw new Error(msg);
+        }
+        return j;
+      }, function () {
+        throw new Error("HTTP " + r.status + " (non-JSON response)");
+      });
     }
 
     function load() {

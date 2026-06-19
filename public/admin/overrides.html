@@ -79,9 +79,18 @@
     var $ = AdminCommon.$;
     var params = AdminCommon.params;
 
+    // Surface the server's real error instead of a generic message.
     function ovErr(r) {
-      if (r.status === 401) throw new Error("unauthorized — reload the page and log in");
-      return r.json();
+      return r.json().then(function (j) {
+        if (!r.ok) {
+          var msg = (j && j.error) || ("HTTP " + r.status);
+          if (r.status === 401) msg += " — set ADMIN_USER / ADMIN_PASSWORD, then reload";
+          throw new Error(msg);
+        }
+        return j;
+      }, function () {
+        throw new Error("HTTP " + r.status + " (non-JSON response)");
+      });
     }
     function ovSave(e) {
       if (e) e.preventDefault();

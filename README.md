@@ -71,8 +71,11 @@ and the data sources are Next.js route handlers under `app/api/`.
   channel** — free-to-air if available, otherwise the cheapest cable option,
   resolved from the same TV feeds the site uses. `?date=YYYY-MM-DD`, `?n=1..20`
   and `?lang=pt|en` (default Portuguese) are honoured. The **`/image`** tool page
-  also shows this text below the preview with a **Copy** button, kept in sync with
-  the chosen date and game count.
+  also shows this text below the preview with a **Copy** button — built in the
+  browser from the same fixtures the canvas drew, so it always matches the image
+  and fills in as games load. Every digest surface (page, image, social card and
+  text) shares one selection rule (`lib/digest-select`): **only well-known
+  leagues and competitions**, ranked by prominence, live-ness and kickoff.
 - **Date navigation** — jump to previous/next day or back to today.
 - **Live scores & status** — in-play matches show the current score, the
   minute (e.g. `67'`) or `HT`, and a pulsing live badge; finished games show
@@ -141,6 +144,7 @@ lib/kv.js                        Vercel KV (Upstash Redis REST) client, shared b
 lib/cardinfo.js                  Rebuilds a game's share-card data from its match id (FotMob + KV cache)
 lib/seo-render.js                Renders the /g per-game + league HTML pages (metadata, JSON-LD, body)
 lib/digest-render.js             Renders the /today and /image pages
+lib/digest-select.js             Shared "day's top games" selection (well-known competitions + ranking) for every digest surface
 lib/digest-image-endpoint.js     Factory for the /image/{landscape,square,portrait} ready-to-post PNGs
 lib/digest-text.js               Builds the /text plain-text digest (ranking, flags, one PT channel per game)
 lib/country-flags.js             National-team name → flag emoji (EN + PT names) for the text digest

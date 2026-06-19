@@ -17,6 +17,7 @@
 
 import { ImageResponse } from "next/og";
 import { getCard } from "@/lib/cardinfo";
+import { isKnownCompetition } from "@/lib/digest-select";
 
 export const runtime = "edge";
 
@@ -419,6 +420,9 @@ async function renderToday(url) {
   // games itself (below) and doesn't depend on the fixtures "major leagues"
   // allow-list, which can miss the only competition on off-season days.
   let fixtures = await fetchDayFixtures(url.origin, date);
+
+  // Keep only well-known competitions, so the card stays a "big games" digest.
+  fixtures = fixtures.filter(isKnownCompetition);
 
   fixtures.sort((a, b) => {
     const lr = leagueRank(a) - leagueRank(b);

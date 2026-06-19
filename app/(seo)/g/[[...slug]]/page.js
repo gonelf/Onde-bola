@@ -16,6 +16,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { buildShare, buildLeague } from "@/lib/seo-render";
 import { langForCountryCode } from "@/lib/i18n";
+import Ads from "@/components/Ads";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -81,6 +82,7 @@ export default async function GamePage({ params, searchParams }) {
       <style dangerouslySetInnerHTML={{ __html: built.css }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: built.jsonLd }} />
       <div dangerouslySetInnerHTML={{ __html: built.bodyHtml }} />
+      <Ads />
     </>
   );
 }

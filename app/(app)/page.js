@@ -6,6 +6,7 @@
 // inside <main>.
 
 import GamesBrowser from "@/components/GamesBrowser";
+import Ads from "@/components/Ads";
 
 // Evergreen internal links to the most-searched competitions' league hubs.
 // Server-rendered so crawlers and LLMs get real, linkable content even though
@@ -113,6 +114,8 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
+
+      <Ads />
     </>
   );
 }

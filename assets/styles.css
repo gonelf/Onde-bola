@@ -1123,3 +1123,9 @@ body {
 }
 .hl-embed:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .detail-embed { margin: 4px 0 10px; max-width: 520px; }
+
+/* Ad slots: centered banner containers placed by <AdSlot>. Empty/script-only
+   slots collapse to nothing. (Visitor ad blockers may hide these — expected.) */
+.ad-slot { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 16px auto; }
+.ad-slot:empty { display: none; margin: 0; }
+.ad-slot .ad-unit { max-width: 100%; }

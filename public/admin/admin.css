@@ -21,15 +21,26 @@ input, select, button {
 }
 .row { display: flex; gap: 10px; flex-wrap: wrap; }
 .row > div { flex: 1 1 140px; }
-/* Loader-list rows. NB: these are deliberately NOT named ad-* / ads-* — ad
-   blockers (Brave shields, EasyList cosmetic rules) hide elements whose class
-   or id looks ad-related, which would strip this admin UI. */
-.loader-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-.loader-row input[type="text"] { flex: 1 1 auto; }
-.loader-row input.loader-label { flex: 0 1 150px; }
-.loader-row input[type="checkbox"] { width: auto; flex: none; }
-.loader-row .loader-del { width: auto; flex: none; padding: 8px 11px; background: var(--panel2);
-                  border-color: var(--line); color: var(--bad); font-weight: 700; }
+/* Loader unit blocks. NB: deliberately NOT named ad-* / ads-* — ad blockers
+   (Brave shields, EasyList cosmetic rules) hide elements whose class or id
+   looks ad-related, which would strip this admin UI. */
+.loader-row { border: 1px solid var(--line); border-radius: 10px; padding: 10px;
+              margin-bottom: 10px; background: var(--panel2); }
+.loader-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.loader-head .loader-slot { flex: 1 1 auto; }
+.loader-onlabel { display: flex; align-items: center; gap: 6px; width: auto; flex: none;
+                  font-size: 13px; color: var(--text); white-space: nowrap; }
+.loader-onlabel input { width: auto; }
+.loader-row textarea.loader-src { width: 100%; min-height: 76px; resize: vertical;
+              font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; }
+.loader-row input.loader-label { width: 100%; margin-top: 8px; }
+.loader-actions { margin-top: 8px; }
+.loader-preview { width: auto; }
+.loader-del { width: auto; flex: none; padding: 7px 10px; background: var(--panel);
+              border-color: var(--line); color: var(--bad); font-weight: 700; }
+.loader-preview-box { margin-top: 8px; }
+.loader-preview-frame { width: 100%; height: 170px; border: 1px dashed var(--line);
+              border-radius: 8px; background: #fff; }
 .loader-empty { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
 button { background: #1d4ed8; border-color: #1d4ed8; cursor: pointer; font-weight: 600; width: auto; }
 button:hover { filter: brightness(1.08); }

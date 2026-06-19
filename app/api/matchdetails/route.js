@@ -415,6 +415,40 @@ function normalize(data) {
   };
 }
 
+// Debug-only: walk the whole FotMob match payload for any broadcast/TV data we
+// might not be reading (fotmob.com's match page shows a "where to watch" block,
+// so the per-match payload may carry PT/Sport TV even when the day-bulk
+// tvlistings endpoint omits the match). Reports keys that look TV-related and
+// any value mentioning "Sport TV". Bounded so it can't blow up on a big blob.
+function scanBroadcast(root) {
+  const hits = [];
+  const KEY_RE = /tv|broadcast|channel|station|watch|stream|provider/i;
+  const seen = new Set();
+  const walk = (node, path, depth) => {
+    if (hits.length >= 40 || depth > 7 || node == null) return;
+    if (typeof node === "string") {
+      if (/sport\s*tv/i.test(node)) hits.push({ path, value: node.slice(0, 80) });
+      return;
+    }
+    if (typeof node !== "object") return;
+    if (seen.has(node)) return;
+    seen.add(node);
+    if (Array.isArray(node)) {
+      for (let i = 0; i < node.length && i < 60; i++) walk(node[i], path + "[" + i + "]", depth + 1);
+      return;
+    }
+    for (const k of Object.keys(node)) {
+      if (KEY_RE.test(k)) {
+        hits.push({ path: (path + "." + k).replace(/^\./, ""), keyMatch: true,
+          sample: JSON.stringify(node[k]).slice(0, 140) });
+      }
+      walk(node[k], path + "." + k, depth + 1);
+    }
+  };
+  walk(root, "", 0);
+  return hits.slice(0, 40);
+}
+
 function isFinished(data) {
   return safe(function () {
     return !!(data.header && data.header.status && data.header.status.finished) ||
@@ -489,7 +523,8 @@ export async function GET(request) {
       }).slice(0, 600),
     };
   }, null) : null;
-  const payload = debug ? { ok: true, details, _shape: shape } : { ok: true, details };
+  const broadcast = debug ? safe(function () { return scanBroadcast(data); }, []) : null;
+  const payload = debug ? { ok: true, details, _shape: shape, _broadcast: broadcast } : { ok: true, details };
 
   if (!debug) {
     // Finished matches are immutable — cache them for a day; live/upcoming

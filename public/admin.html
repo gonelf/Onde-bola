@@ -226,6 +226,13 @@
               "\n  h2h sample: " + (s.h2h_sample || "") +
               "\n  motm: " + (s.motm_candidates || "");
           }
+          // Broadcast scan: does the per-match FotMob payload carry ANY TV /
+          // channel / "Sport TV" data the day-bulk endpoint misses?
+          var b = j._broadcast || [];
+          line += "\n  broadcast scan: " + b.length + " hit(s)";
+          b.forEach(function (h) {
+            line += "\n      " + h.path + (h.value ? " = " + h.value : (h.sample ? " → " + h.sample : ""));
+          });
           return line;
         } },
       { id: "sofatv", label: "SofaScore (api/sofatv)", needs: ["date", "home", "away"],

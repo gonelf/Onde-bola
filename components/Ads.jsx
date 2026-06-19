@@ -7,7 +7,7 @@
  * pattern this codebase already uses for JSON-LD and the SEO page scripts) so the
  * network's loader behaves exactly as shipped.
  *
- * The list of loaders is managed from the admin page (/admin.html) and stored in
+ * The list of loaders is managed from the admin page (/admin) and stored in
  * KV (lib/ads-store); it falls back to built-in defaults when nothing is saved.
  *
  * Mounted on the fixtures list (home) and the per-game detail pages.

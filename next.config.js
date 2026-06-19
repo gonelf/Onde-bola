@@ -4,6 +4,16 @@ const nextConfig = {
   compress: true,
   poweredByHeader: false,
 
+  // Serve the admin console at the clean /admin path (the page itself lives in
+  // public/admin.html). Old /admin.html links 308 to /admin so there's a single
+  // canonical endpoint.
+  async rewrites() {
+    return [{ source: "/admin", destination: "/admin.html" }];
+  },
+  async redirects() {
+    return [{ source: "/admin.html", destination: "/admin", permanent: true }];
+  },
+
   async headers() {
     return [
       {
@@ -22,7 +32,7 @@ const nextConfig = {
         headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
       },
       {
-        source: "/admin.html",
+        source: "/admin",
         headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
       },
       {

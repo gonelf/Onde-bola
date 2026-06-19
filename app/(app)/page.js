@@ -8,6 +8,11 @@
 import GamesBrowser from "@/components/GamesBrowser";
 import Ads from "@/components/Ads";
 
+// ISR: the page chrome is static, but <Ads> reads the admin-managed ad list, so
+// regenerate periodically to pick up changes (admin saves also bust it via the
+// "ads" cache tag for a near-immediate refresh).
+export const revalidate = 300;
+
 // Evergreen internal links to the most-searched competitions' league hubs.
 // Server-rendered so crawlers and LLMs get real, linkable content even though
 // the live fixtures list below is a client island.

@@ -1,63 +1,32 @@
 /*
  * Ads — third-party ad-network loader snippets.
  *
- * These are the self-inserting IIFE loaders provided by the ad network: each
- * creates its own <script> and inserts it next to the currently-last script on
- * the page. They're rendered verbatim as inline scripts (the same
- * dangerouslySetInnerHTML pattern this codebase already uses for JSON-LD and
- * the SEO page scripts) so the network's loader behaves exactly as shipped.
+ * The loaders are self-inserting IIFEs provided by the ad network: each creates
+ * its own <script> and inserts it next to the currently-last script on the page.
+ * They're rendered verbatim as inline scripts (the same dangerouslySetInnerHTML
+ * pattern this codebase already uses for JSON-LD and the SEO page scripts) so the
+ * network's loader behaves exactly as shipped.
+ *
+ * The list of loaders is managed from the admin page (/admin.html) and stored in
+ * KV (lib/ads-store); it falls back to built-in defaults when nothing is saved.
  *
  * Mounted on the fixtures list (home) and the per-game detail pages.
  */
 
-const AD_LOADERS = [
-  `(function(jdbll){
-var d = document,
-    s = d.createElement('script'),
-    l = d.scripts[d.scripts.length - 1];
-s.settings = jdbll || {};
-s.src = "//massivesalad.com/b.X/VZs/d/GClx0jY_W_ch/gebml9Yu-ZtUIlLk/PDTwcbxfNvDIkQ5xNwjpE/tFNvziEi0tO/TVkd2jNiQh";
-s.async = true;
-s.referrerPolicy = 'no-referrer-when-downgrade';
-l.parentNode.insertBefore(s, l);
-})({})`,
-  `(function(jdbll){
-var d = document,
-    s = d.createElement('script'),
-    l = d.scripts[d.scripts.length - 1];
-s.settings = jdbll || {};
-s.src = "//massivesalad.com/bGXBVas/d.G/lL0zYdWgcx/UeVm_9_uKZiULlPkhPET/cexRNGDukV5eN/Dpk/tzNSzgEZ0cO/TqkU1vMAwy";
-s.async = true;
-s.referrerPolicy = 'no-referrer-when-downgrade';
-l.parentNode.insertBefore(s, l);
-})({})`,
-  `(function(gzsj){
-var d = document,
-    s = d.createElement('script'),
-    l = d.scripts[d.scripts.length - 1];
-s.settings = gzsj || {};
-s.src = "//massivesalad.com/bpXFVpsYd.Gfl/0NYSWGcC/EeQme9PuqZgUmlDkIPtTsccxDN/Dhk/5dNoj/ENtaNAzrEb0_OhTPkr2BN_Qh";
-s.async = true;
-s.referrerPolicy = 'no-referrer-when-downgrade';
-l.parentNode.insertBefore(s, l);
-})({})`,
-  `(function(gzsj){
-var d = document,
-    s = d.createElement('script'),
-    l = d.scripts[d.scripts.length - 1];
-s.settings = gzsj || {};
-s.src = "//massivesalad.com/btXTV.sLd/G/lx0yYlWQcD/EeWmQ9RuRZFUJlhkPPfTucwxRNdD/kw5/NRDBk-tlNZzaEo0TOeTSk/1qM/wh";
-s.async = true;
-s.referrerPolicy = 'no-referrer-when-downgrade';
-l.parentNode.insertBefore(s, l);
-})({})`,
-];
+import { activeAdSrcs, loaderScript, DEFAULT_AD_SRCS } from "@/lib/ads-store";
 
-export default function Ads() {
+export default async function Ads() {
+  let srcs;
+  try {
+    srcs = await activeAdSrcs();
+  } catch (e) {
+    // Never let an ad-config read break the page — fall back to the defaults.
+    srcs = DEFAULT_AD_SRCS;
+  }
   return (
     <>
-      {AD_LOADERS.map((js, i) => (
-        <script key={i} dangerouslySetInnerHTML={{ __html: js }} />
+      {srcs.map((src, i) => (
+        <script key={i} dangerouslySetInnerHTML={{ __html: loaderScript(src) }} />
       ))}
     </>
   );

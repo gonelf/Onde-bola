@@ -605,6 +605,7 @@ body {
   padding: 16px 0 36px;
 }
 .footer-bottom p { margin: 0; font-size: 0.8rem; }
+.footer-bottom .footer-credits { margin-top: 6px; color: var(--text-dim); }
 .site-footer a { color: var(--accent); text-decoration: none; }
 .site-footer a:hover { text-decoration: underline; }
 

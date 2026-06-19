@@ -482,6 +482,7 @@ export default function GamesBrowser() {
     setText("#footer-site-title", t("footerSite"));
     setText("#ad-prefs", t("adPrefs"));
     setText("#footer-copy", t("footerCopy").replace("{year}", new Date().getFullYear()));
+    setHtml("#footer-credits", t("footerCredits"));
     // SEO intro block (server-rendered English by default for crawlers).
     setText("#seo-h1", t("seoH1"));
     setText("#seo-intro-title", t("seoIntroTitle"));

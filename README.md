@@ -50,7 +50,27 @@ and the data sources are Next.js route handlers under `app/api/`.
   Slack, etc. unfurls a "what's on today?" card. `?date=YYYY-MM-DD` shares a
   specific day and `?n=1..6` controls how many games are shown. A small tool
   page at **`/image`** lets you pick any date, preview the card and **download
-  the PNG** (named `hojehabola-top-games-<date>.png`) ready to post.
+  the PNG** (named `hojehabola-top-games-<date>.png`) ready to post. For
+  automated posting, the finished card is also served directly as a PNG at
+  **`/image/landscape`**, **`/image/square`** and **`/image/portrait`**.
+- **Daily games as a text post** — **`/text`** returns a ready-to-post plain-text
+  version of the same ranked selection, for WhatsApp / X / Instagram captions:
+
+  ```
+  ⚽ Jogos de hoje! 🏆
+
+  🇨🇿 República Checa 1-0 🇿🇦 África do Sul (a decorrer) na SIC
+  🇨🇭 Suíça vs 🇧🇦 Bósnia às 20h na SIC
+  🇨🇦 Canadá vs 🇶🇦 Qatar às 23h na Sport TV 5
+
+  Vê todos os jogos e onde ver na TV 👉 hojehabola.com
+  ```
+
+  Each game carries a **flag per team** (national sides resolve via
+  `lib/country-flags`; club sides render with none) and **one Portuguese TV
+  channel** — free-to-air if available, otherwise the cheapest cable option,
+  resolved from the same TV feeds the site uses. `?date=YYYY-MM-DD`, `?n=1..20`
+  and `?lang=pt|en` (default Portuguese) are honoured.
 - **Date navigation** — jump to previous/next day or back to today.
 - **Live scores & status** — in-play matches show the current score, the
   minute (e.g. `67'`) or `HT`, and a pulsing live badge; finished games show
@@ -93,6 +113,8 @@ app/
   (seo)/today/page.js            Shareable "today's top games" digest page
   (seo)/image/page.js            Download tool for the digest image (date picker + buttons)
   og/[[...seg]]/route.js         Preview images: /og, /og/<id>, /og/today (1200×630 PNG, next/og, edge)
+  image/{landscape,square,portrait}/route.js  Ready-to-post PNGs of the day's games (delegate to /og/today)
+  text/route.js                  Ready-to-post plain-text digest of the day's games (/text)
   sitemap.xml/route.js           Sitemap from the KV URL registry (live-sweep fallback)
   api/fixtures/route.js          Cached FotMob fixtures-by-date proxy (long-term/DB-backed)
   api/tv/route.js                Cached proxy for TheSportsDB TV listings
@@ -117,6 +139,9 @@ lib/kv.js                        Vercel KV (Upstash Redis REST) client, shared b
 lib/cardinfo.js                  Rebuilds a game's share-card data from its match id (FotMob + KV cache)
 lib/seo-render.js                Renders the /g per-game + league HTML pages (metadata, JSON-LD, body)
 lib/digest-render.js             Renders the /today and /image pages
+lib/digest-image-endpoint.js     Factory for the /image/{landscape,square,portrait} ready-to-post PNGs
+lib/digest-text.js               Builds the /text plain-text digest (ranking, flags, one PT channel per game)
+lib/country-flags.js             National-team name → flag emoji (EN + PT names) for the text digest
 lib/sitemap-sweep.js             Builds the canonical SEO URL map for the sitemap + its cron
 assets/styles.css                Styling (imported by the app layout)
 public/admin.html                Connections debugger (live-tests every source, noindex)

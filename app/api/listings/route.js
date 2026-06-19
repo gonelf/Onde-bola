@@ -45,17 +45,21 @@ export async function GET(request) {
 
   // Background revalidation for today / future dates only (past days are final).
   // Acquire a NX+EX lock so only one visitor per window triggers a rebuild.
+  // `refreshing` tells the client a fresh build was kicked, so it can show a
+  // banner and re-fetch shortly to pick up the updated store.
   const today = new Date().toISOString().slice(0, 10);
+  let refreshing = false;
   if (kvConfigured && !FM_DISABLED && date >= today) {
     const got = await kv(["SET", `tv:rich:lock:${date}`, "1", "NX", "EX", String(REVALIDATE_LOCK_SEC)]);
     if (got) {
+      refreshing = true;
       after(async () => {
         try { await buildListingsForDate(date, { sofaBudget: VISIT_SOFA_BUDGET }); } catch (e) {}
       });
     }
   }
 
-  return Response.json({ matches }, {
+  return Response.json({ matches, refreshing }, {
     headers: { "X-Cache": raw ? "HIT" : "EMPTY", "Cache-Control": swr },
   });
 }

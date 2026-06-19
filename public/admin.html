@@ -210,7 +210,11 @@
           if (!j) return "no response";
           var tv = (j.tvevent || []).length; var d = j._debug || {};
           var pt = d.countries && d.countries.PT;
-          return tv + " channels · event " + (d.matchedEventId || "—") +
+          // dayIndex = how many events SofaScore's scheduled-events returned. 0
+          // means the upstream is blocked/empty (so SofaScore can't help at all);
+          // a positive number with event "—" means the match wasn't found/matched.
+          return tv + " channels · dayIndex " + (d.dayIndexSize != null ? d.dayIndexSize : "?") +
+            " · event " + (d.matchedEventId || "—") +
             " · resolved " + (d.resolved || 0) + "/" + (d.totalPairs || 0) +
             (pt != null ? " · PT raw " + pt : " · no PT");
         } }

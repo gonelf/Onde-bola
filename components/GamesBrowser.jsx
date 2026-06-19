@@ -434,6 +434,8 @@ export default function GamesBrowser() {
   const [primaryCountry, setPrimaryCountry] = useState("Portugal");
   const [highlightsById, setHighlightsById] = useState({});
   const [status, setStatus] = useState(null); // { kind, badge, text, tvCount, updated }
+  const [refreshingTv, setRefreshingTv] = useState(false); // background listings build in flight
+  const tvFollowup = useRef(false); // guards the one-shot re-fetch after a build
   const [detailId, setDetailId] = useState(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -569,7 +571,8 @@ export default function GamesBrowser() {
       let fx = res[0] || [];
       const tv = res[1];
       const dayMaps = res[2] || [];
-      const rich = res[3] || {}; // accumulated cron store, keyed by FotMob match id
+      const rich = res[3] || {};            // { matches, refreshing } from /api/listings
+      const richMatches = rich.matches || {}; // accumulated store, keyed by FotMob match id
       attachTv(fx, tv);
 
       if (dayMaps.length) {
@@ -590,9 +593,23 @@ export default function GamesBrowser() {
 
       // Accumulated daily store (cron-listings): exact id join, richest source.
       fx.forEach((f) => {
-        const r = f.fmid && rich[String(f.fmid)];
+        const r = f.fmid && richMatches[String(f.fmid)];
         if (r && r.rows && r.rows.length) f.tv = mergeTv(f.tv, r.rows);
       });
+
+      // When the store is being rebuilt in the background, show a banner and
+      // re-fetch once shortly after so the freshly merged channels appear without
+      // a manual reload. The server's per-window lock makes the follow-up return
+      // refreshing=false, so this fires at most once (no loop).
+      if (rich.refreshing) {
+        setRefreshingTv(true);
+        if (!tvFollowup.current) {
+          tvFollowup.current = true;
+          setTimeout(() => { tvFollowup.current = false; loadRef.current && loadRef.current(true); }, 9000);
+        }
+      } else {
+        setRefreshingTv(false);
+      }
 
       fx.forEach((f) => {
         if (loadedTv[f.id]) { f.tv = mergeTv(f.tv, loadedTv[f.id]); f._tvLoaded = true; }
@@ -627,6 +644,11 @@ export default function GamesBrowser() {
       prefetchListings(token, fx, day);
     });
   }, [t, locale, prefetchListings]);
+
+  // Stable handle to the latest loader, so the post-build follow-up timer can
+  // re-fetch without being a dependency of the callback that schedules it.
+  const loadRef = useRef(loadFixtures);
+  useEffect(() => { loadRef.current = loadFixtures; }, [loadFixtures]);
 
   // ---- Highlights ----
   const refreshHighlights = useCallback(() => {
@@ -891,6 +913,13 @@ export default function GamesBrowser() {
           </div>
         </div>
       </section>
+
+      {refreshingTv ? (
+        <div className="status refreshing" role="status" aria-live="polite">
+          <span className="badge">⏳</span>
+          {t("refreshingTv")}
+        </div>
+      ) : null}
 
       {status ? (
         <div className={"status" + (status.kind === "error" ? " error" : "")}>

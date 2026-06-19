@@ -91,6 +91,32 @@
     </div>
   </div>
 
+  <div class="card" id="ovCard">
+    <div style="font-weight:600; margin-bottom:2px;">🔒 Manual TV override</div>
+    <div class="sub" style="margin-bottom:10px;">
+      Add broadcasters a free feed missed (e.g. Sport TV for a match FotMob skips).
+      Saved server-side and merged into the listings like any source. Admin login required
+      (set <code>ADMIN_USER</code> / <code>ADMIN_PASSWORD</code> in the env).
+    </div>
+    <div class="row">
+      <div>
+        <label for="ovCountry">Country</label>
+        <input id="ovCountry" type="text" value="Portugal" />
+      </div>
+      <div>
+        <label for="ovChannels">Channels (comma-separated)</label>
+        <input id="ovChannels" type="text" placeholder="e.g. Sport TV 5" />
+      </div>
+    </div>
+    <div class="toolbar">
+      <button id="ovSave">Save override</button>
+      <button class="secondary" id="ovReload">Show overrides for date</button>
+      <button class="secondary" id="ovRemove">Remove for this match</button>
+      <span class="pill" id="ovHint">pick a match first</span>
+    </div>
+    <pre id="ovList">—</pre>
+  </div>
+
   <div class="tests" id="tests"></div>
 
   <script>
@@ -406,6 +432,58 @@
     $("date").addEventListener("change", loadFixtures); // reload picker when date changes
     $("runAll").addEventListener("click", runAll);
     $("copyReport").addEventListener("click", copyReport);
+
+    // ---- Manual overrides (admin) ----
+    // The page is behind HTTP Basic Auth, so the browser attaches the admin
+    // credentials to these same-origin /api/overrides calls automatically.
+    function ovErr(r) {
+      if (r.status === 401) throw new Error("unauthorized — reload the page and log in");
+      return r.json();
+    }
+    function ovSave(e) {
+      if (e) e.preventDefault();
+      var p = params();
+      if (!p.fmid) { $("ovHint").textContent = "pick a match (need its id) first"; return; }
+      var country = $("ovCountry").value.trim();
+      var channels = $("ovChannels").value.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+      if (!country || !channels.length) { $("ovHint").textContent = "country + at least one channel"; return; }
+      var rows = channels.map(function (ch) { return { country: country, channel: ch }; });
+      $("ovHint").textContent = "saving…";
+      fetch("/api/overrides", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fmid: p.fmid, date: p.date, home: p.home, away: p.away, rows: rows }),
+      }).then(ovErr).then(function (j) {
+        $("ovHint").textContent = j && j.ok ? "saved ✓ (reload the app to see it)" : ((j && j.error) || "error");
+        ovReload();
+      }).catch(function (err) { $("ovHint").textContent = String(err.message || err); });
+    }
+    function ovReload(e) {
+      if (e) e.preventDefault();
+      var p = params();
+      fetch("/api/overrides?date=" + encodeURIComponent(p.date)).then(ovErr).then(function (j) {
+        var ov = (j && j.overrides) || [];
+        if (!ov.length) { $("ovList").textContent = "no overrides for " + p.date; return; }
+        $("ovList").textContent = ov.map(function (o) {
+          return o.fmid + "  " + (o.home || "?") + " vs " + (o.away || "?") + "\n  " +
+            (o.rows || []).map(function (r) { return r.country + ": " + r.channel; }).join(", ");
+        }).join("\n\n");
+      }).catch(function (err) { $("ovList").textContent = String(err.message || err); });
+    }
+    function ovRemove(e) {
+      if (e) e.preventDefault();
+      var p = params();
+      if (!p.fmid) { $("ovHint").textContent = "pick a match first"; return; }
+      fetch("/api/overrides?fmid=" + encodeURIComponent(p.fmid), { method: "DELETE" })
+        .then(ovErr).then(function () { $("ovHint").textContent = "removed"; ovReload(); })
+        .catch(function (err) { $("ovHint").textContent = String(err.message || err); });
+    }
+    $("ovSave").addEventListener("click", ovSave);
+    $("ovReload").addEventListener("click", ovReload);
+    $("ovRemove").addEventListener("click", ovRemove);
+    $("match").addEventListener("change", function () {
+      var p = params();
+      $("ovHint").textContent = p.fmid ? ("match " + p.fmid + " — fill channel + Save") : "pick a match first";
+    });
 
     render();
     runTest(TESTS[0]); // health on open

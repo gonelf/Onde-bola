@@ -98,7 +98,8 @@ app/
   api/tv/route.js                Cached proxy for TheSportsDB TV listings
   api/fmtv/route.js              Unofficial FotMob TV proxy (free day-bulk, Portugal-first)
   api/sofatv/route.js            Unofficial SofaScore TV proxy (on-demand fallback)
-  api/listings/route.js          Serves tv:rich:<date>; revalidates it in the background on visit (Next after())
+  api/listings/route.js          Serves tv:rich:<date>; revalidates on visit (Next after()); folds in manual overrides
+  api/overrides/route.js         Admin CRUD for manual TV overrides (Basic Auth: ADMIN_USER / ADMIN_PASSWORD)
   api/matchdetails/route.js      Per-match FotMob detail (venue, timeline, lineups, h2h, stats)
   api/highlights/route.js        Reads the collected highlights back as a feed
   api/cron-listings/route.js     Daily pre-warm of the upcoming window (shares lib/listings-build.js with on-visit refresh)
@@ -122,6 +123,7 @@ public/admin.html                Connections debugger (live-tests every source, 
 public/assets/og-image.svg       Default social share / Open Graph card
 public/robots.txt                Crawl rules (allows the site, disallows admin.html + /api)
 public/llms.txt                  Site summary for LLM/AI crawlers
+middleware.js                    Edge HTTP Basic Auth gating /admin.html + /api/overrides (ADMIN_USER / ADMIN_PASSWORD)
 vercel.json                      Crons → /api/cron-sitemap + /api/cron-listings (both daily; listings also revalidates on visit)
 next.config.js                   Next.js config
 package.json                     next, react, @vercel/og, @vercel/analytics
@@ -249,9 +251,19 @@ for every visible match, so they appear on the cards without a click.
    Env: `LISTINGS_SOFA_BUDGET` (40, cron), `LISTINGS_VISIT_SOFA_BUDGET` (12,
    on-visit), `LISTINGS_REVALIDATE_SEC` (1800). Inspect it in `/admin.html` via
    the **Merged store (api/listings)** test.
+6. **Manual overrides** (`lib/overrides.js`, `app/api/overrides/route.js`) — the
+   highest-trust source, for the rare match no free feed covers in a country
+   (e.g. FotMob's PT feed occasionally omits a single World Cup game while
+   carrying all the others, and SofaScore is blocked from the server). The owner
+   adds broadcasters by hand in `/admin.html` (the **Manual TV override** card);
+   they're stored in KV under `tv:overrides` and merged into the listings store
+   (at build) and `/api/listings` (instantly, so they show without waiting for a
+   rebuild). The admin surface is gated by HTTP Basic Auth — set `ADMIN_USER` /
+   `ADMIN_PASSWORD` in the env (see `middleware.js`). Until those are set the
+   debug page stays open but overrides can't be written (fail-closed).
 
-There is no curated/guessed fallback — if no source has a listing, the match
-shows *“No TV listing yet”*.
+There is no automatic guessed fallback — if no source (or override) has a
+listing, the match shows *“No TV listing yet”*.
 
 > Note: **API-Football** (api-sports.io) was evaluated but has **no
 > broadcaster/TV data** (fixtures, scores, odds, stats only), so it can't add

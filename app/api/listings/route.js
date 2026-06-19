@@ -20,6 +20,7 @@
 import { after } from "next/server";
 import { kv, kvConfigured } from "@/lib/kv";
 import { buildListingsForDate, FM_DISABLED } from "@/lib/listings-build";
+import { loadOverrides } from "@/lib/overrides";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -42,6 +43,24 @@ export async function GET(request) {
   const raw = await kv(["GET", `tv:rich:${date}`]);
   let matches = {};
   if (raw) { try { matches = JSON.parse(raw) || {}; } catch (e) { matches = {}; } }
+
+  // Fold in admin overrides for this date so they show immediately, before the
+  // next build merges them into the store. Creates a match entry if the store
+  // doesn't have one yet (e.g. a game no free feed listed at all).
+  const overrides = await loadOverrides();
+  for (const fmid of Object.keys(overrides)) {
+    const o = overrides[fmid];
+    if (!o || o.date !== date || !Array.isArray(o.rows) || !o.rows.length) continue;
+    const rec = matches[fmid] ||
+      { home: o.home, away: o.away, kickoff: null, leagueId: null, rows: [] };
+    const seen = {};
+    rec.rows.forEach((r) => { seen[r.country + "|" + r.channel] = true; });
+    for (const r of o.rows) {
+      const k = r.country + "|" + r.channel;
+      if (r.country && r.channel && !seen[k]) { seen[k] = true; rec.rows.push({ channel: r.channel, country: r.country }); }
+    }
+    matches[fmid] = rec;
+  }
 
   // Background revalidation for today / future dates only (past days are final).
   // Acquire a NX+EX lock so only one visitor per window triggers a rebuild.

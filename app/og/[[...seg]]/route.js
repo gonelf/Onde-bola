@@ -19,6 +19,7 @@
 import { ImageResponse } from "next/og";
 import { getCard } from "@/lib/cardinfo";
 import { isKnownCompetition } from "@/lib/digest-select";
+import { forwardAuthHeaders } from "@/lib/forward-auth";
 
 export const runtime = "edge";
 
@@ -458,22 +459,6 @@ async function fetchDayFixtures(origin, date, auth) {
   if (!fx || !fx.length) fx = await tryOnce("&all=1");
   if (!fx || !fx.length) fx = await tryOnce("");
   return fx || [];
-}
-
-// The subset of the incoming request's headers that authenticate a same-origin
-// call: the cookie (Vercel preview protection sets `_vercel_jwt`) and the
-// explicit protection-bypass header/secret. Everything else is dropped so the
-// internal fetch stays a clean JSON request.
-function forwardAuthHeaders(reqHeaders) {
-  const out = {};
-  if (!reqHeaders || typeof reqHeaders.get !== "function") return out;
-  const cookie = reqHeaders.get("cookie");
-  if (cookie) out.cookie = cookie;
-  const bypass = reqHeaders.get("x-vercel-protection-bypass");
-  if (bypass) out["x-vercel-protection-bypass"] = bypass;
-  const set = reqHeaders.get("x-vercel-set-bypass-cookie");
-  if (set) out["x-vercel-set-bypass-cookie"] = set;
-  return out;
 }
 
 async function renderToday(url, reqHeaders) {

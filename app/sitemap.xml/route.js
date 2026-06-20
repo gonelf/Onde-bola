@@ -6,6 +6,7 @@
 
 import { headers } from "next/headers";
 import { sweep, lisbonYmd, readRegistry } from "@/lib/sitemap-sweep";
+import { forwardAuthHeaders } from "@/lib/forward-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,7 @@ export async function GET() {
   let entries = await readRegistry();
 
   if (!Object.keys(entries).length) {
-    const swept = await sweep(origin).catch(() => null);
+    const swept = await sweep(origin, forwardAuthHeaders(h)).catch(() => null);
     if (swept && swept.map) entries = swept.map;
   }
 

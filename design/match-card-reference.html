@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Match card — kickoff/score disambiguation reference</title>
+<!--
+  Canonical visual reference for the match-card change (see the Claude Code brief
+  "fix kickoff-time vs score ambiguity in match images").
+
+  THE RULE the generators implement:
+    • The centre slot BETWEEN the two teams only ever holds the matchup state —
+      "vs" before kick-off, the score once there is one. Never a time.
+    • The kickoff time / minute moves to an EYEBROW line directly above the
+      matchup, so a time can never be misread as a score (and vice-versa).
+
+  Info hierarchy (by size):  1) team names + crests, 2) kickoff time, 3) result.
+
+  This file is a static mock-up, not wired to data. The live renderers are:
+    • app/og/[[...seg]]/route.js  — @vercel/og (Satori) digest rows + hero, and
+      the single-match /og/<id> share card. Backs /image/portrait|landscape|square.
+    • lib/digest-render.js        — the <canvas> renderer for the /image tool.
+  Tokens below are the 1080px-width reference the brief specifies.
+-->
+<style>
+  :root{
+    --bg:#0E1A24; --card:#1A2531; --line:rgba(255,255,255,.08);
+    --white:#F2F6FA; --muted:#8593A2; --muted2:#5E6B79;
+    --green:#22D67E; --red:#F0524B;
+    --eyebrow-time:#DCE6EF; --eyebrow-time-fin:#9FB0BF;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&display=swap');
+  *{box-sizing:border-box}
+  body{margin:0;background:#06090d;color:var(--white);
+    font-family:Montserrat,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    display:flex;flex-direction:column;align-items:center;gap:28px;padding:40px}
+  .frame{width:1080px;max-width:100%;background:var(--bg);border-radius:24px;padding:48px;
+    display:flex;flex-direction:column;gap:22px}
+  .frame h2{margin:0 0 4px;font-size:22px;color:var(--muted);font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+
+  /* ---- list row ------------------------------------------------------- */
+  .row{background:var(--card);border:1px solid var(--line);border-radius:18px;
+    padding:18px 28px;display:flex;flex-direction:column;align-items:center;gap:8px}
+  .eyebrow{display:flex;align-items:center;justify-content:center;gap:9px;height:36px}
+  .eyebrow .time{font-size:31px;font-weight:800;color:var(--eyebrow-time);line-height:1}
+  .eyebrow.finished .time{color:var(--eyebrow-time-fin)}
+  .eyebrow .label{font-size:21px;font-weight:800;color:var(--muted)}
+  .eyebrow .minute{font-size:31px;font-weight:800;color:var(--red);line-height:1}
+  .eyebrow .dot{width:13px;height:13px;border-radius:50%;background:var(--red)}
+  .eyebrow svg{width:28px;height:28px}
+  .matchup{display:flex;align-items:center;justify-content:space-between;width:100%}
+  .team{display:flex;align-items:center;gap:18px;flex:1;min-width:0}
+  .team.home{justify-content:flex-end;text-align:right}
+  .team.away{justify-content:flex-start}
+  .team .name{font-size:40px;font-weight:800;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .crest{width:62px;height:62px;border-radius:50%;background:#0c151d;border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;color:var(--muted);flex:none}
+  .centre{width:200px;display:flex;align-items:center;justify-content:center;flex:none}
+  .centre .vs{font-size:26px;font-weight:800;color:var(--muted2);letter-spacing:.18em}
+  .centre .score{font-size:42px;font-weight:900;color:var(--white);letter-spacing:.04em}
+  .row.finished .team .name{color:#cdd6df}
+
+  /* ---- hero card ------------------------------------------------------ */
+  .hero{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:40px;
+    display:flex;flex-direction:column;align-items:center;gap:14px}
+  .hero .comp{font-size:26px;font-weight:600;color:var(--muted)}
+  .hero .eyebrow .time{font-size:48px}
+  .hero .eyebrow .minute{font-size:48px}
+  .hero .eyebrow svg{width:44px;height:44px}
+  .hero .matchup{align-items:flex-start}
+  .hero .hteam{flex:1;display:flex;flex-direction:column;align-items:center;gap:18px}
+  .hero .hcrest{width:158px;height:158px;border-radius:50%;background:#0c151d;border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-size:64px;font-weight:800;color:var(--muted)}
+  .hero .hname{font-size:50px;font-weight:800;text-align:center}
+  .hero .hcentre{display:flex;align-items:center;justify-content:center;padding-top:48px}
+  .hero .hcentre .vs{font-size:38px;font-weight:800;color:var(--muted2);letter-spacing:.18em}
+  .hero .hcentre .score{font-size:64px;font-weight:900;letter-spacing:.04em}
+</style>
+</head>
+<body>
+
+  <!-- clock glyph reused by the scheduled eyebrows -->
+  <svg width="0" height="0" style="position:absolute"><symbol id="clock" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/>
+    <path d="M12 7.5 L12 12 L15 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol></svg>
+
+  <div class="frame">
+    <h2>List rows — one of each state</h2>
+
+    <!-- scheduled: clock + HH:MM eyebrow, "vs" centre -->
+    <div class="row scheduled">
+      <div class="eyebrow scheduled">
+        <svg style="color:var(--eyebrow-time)"><use href="#clock"/></svg>
+        <span class="time">20:00</span>
+      </div>
+      <div class="matchup">
+        <div class="team home"><span class="name">Benfica</span><span class="crest">B</span></div>
+        <div class="centre"><span class="vs">VS</span></div>
+        <div class="team away"><span class="crest">P</span><span class="name">FC Porto</span></div>
+      </div>
+    </div>
+
+    <!-- live: red dot + minute eyebrow, score centre -->
+    <div class="row live">
+      <div class="eyebrow live">
+        <span class="dot"></span><span class="minute">45'</span>
+      </div>
+      <div class="matchup">
+        <div class="team home"><span class="name">Sporting CP</span><span class="crest">S</span></div>
+        <div class="centre"><span class="score">1 - 0</span></div>
+        <div class="team away"><span class="crest">B</span><span class="name">Braga</span></div>
+      </div>
+    </div>
+
+    <!-- finished: dimmed HH:MM · Fim eyebrow, score centre -->
+    <div class="row finished">
+      <div class="eyebrow finished">
+        <span class="time">17:30</span><span class="label">· Fim</span>
+      </div>
+      <div class="matchup">
+        <div class="team home"><span class="name">Real Madrid</span><span class="crest">R</span></div>
+        <div class="centre"><span class="score">2 - 1</span></div>
+        <div class="team away"><span class="crest">B</span><span class="name">Barcelona</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="frame">
+    <h2>Hero / featured card — time banner on top, vs/score between crests</h2>
+    <div class="hero scheduled">
+      <div class="comp">UEFA Champions League</div>
+      <div class="eyebrow scheduled">
+        <svg style="color:var(--eyebrow-time)"><use href="#clock"/></svg>
+        <span class="time">20:00</span>
+      </div>
+      <div class="matchup">
+        <div class="hteam"><div class="hcrest">B</div><div class="hname">Benfica</div></div>
+        <div class="hcentre"><span class="vs">VS</span></div>
+        <div class="hteam"><div class="hcrest">P</div><div class="hname">FC Porto</div></div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

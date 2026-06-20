@@ -33,6 +33,11 @@ const COLOR = {
   muted: "#93a4b8",
   accent: "#16d27a",
   live: "#ff5470",
+  // Eyebrow palette (kickoff time / minute line above the matchup). Kept distinct
+  // from the score so a time can never be mistaken for a score, and vice-versa.
+  eyebrowTime: "#dce6ef", // scheduled / live kickoff time
+  eyebrowTimeFin: "#9fb0bf", // finished kickoff time (dimmed)
+  vs: "#5e6b79", // the "VS" word in an unplayed centre cell (muted2)
 };
 
 // Hyperscript helper so we can build the tree without JSX. Satori reads
@@ -152,8 +157,9 @@ const FORMATS = {
     brandDot: 26, brandFont: 30, titleFont: 40, dateFont: 30, tagFont: 22, headGap: 18,
     rowPad: "11px 22px", rowGap: 10, rowName: 28, rowCrest: 48, rowScore: 30,
     rowBadge: 36, rowCompCol: 44, rowScoreCol: 150, rowNameCap: 22,
+    rowVs: 20, rowEyebrow: 22, rowEyebrowLabel: 15, rowEyebrowGap: 4,
     heroPad: "18px 30px", heroCompFont: 22, heroName: 38, heroCrest: 96,
-    heroScore: 72, heroStatusFont: 22, heroBadge: 34, heroNameCap: 24, heroGap: 18,
+    heroScore: 64, heroVs: 34, heroEyebrow: 32, heroEyebrowLabel: 21, heroBadge: 34, heroNameCap: 24, heroGap: 18,
     maxN: 6,
   },
   square: {
@@ -161,17 +167,19 @@ const FORMATS = {
     brandDot: 30, brandFont: 34, titleFont: 50, dateFont: 30, tagFont: 24, headGap: 22,
     rowPad: "15px 26px", rowGap: 13, rowName: 32, rowCrest: 56, rowScore: 34,
     rowBadge: 40, rowCompCol: 50, rowScoreCol: 160, rowNameCap: 20,
+    rowVs: 23, rowEyebrow: 26, rowEyebrowLabel: 18, rowEyebrowGap: 5,
     heroPad: "26px 36px", heroCompFont: 26, heroName: 46, heroCrest: 130,
-    heroScore: 92, heroStatusFont: 26, heroBadge: 42, heroNameCap: 22, heroGap: 24,
+    heroScore: 84, heroVs: 40, heroEyebrow: 40, heroEyebrowLabel: 26, heroBadge: 42, heroNameCap: 22, heroGap: 24,
     maxN: 7,
   },
   story: {
     W: 1080, H: 1920, accentH: 16, pad: "90px 64px",
     brandDot: 36, brandFont: 42, titleFont: 66, dateFont: 38, tagFont: 30, headGap: 30,
-    rowPad: "22px 32px", rowGap: 18, rowName: 40, rowCrest: 68, rowScore: 46,
+    rowPad: "22px 32px", rowGap: 18, rowName: 40, rowCrest: 68, rowScore: 44,
     rowBadge: 50, rowCompCol: 66, rowScoreCol: 190, rowNameCap: 22,
+    rowVs: 26, rowEyebrow: 31, rowEyebrowLabel: 21, rowEyebrowGap: 6,
     heroPad: "42px 46px", heroCompFont: 32, heroName: 60, heroCrest: 184,
-    heroScore: 124, heroStatusFont: 32, heroBadge: 56, heroNameCap: 24, heroGap: 30,
+    heroScore: 112, heroVs: 52, heroEyebrow: 48, heroEyebrowLabel: 30, heroBadge: 56, heroNameCap: 24, heroGap: 30,
     maxN: 12,
   },
 };
@@ -209,63 +217,104 @@ function fmtDate(ymd) {
   } catch (e) { return ymd; }
 }
 
-// A status pill's text + colour: the live minute (or "AO VIVO") while playing,
-// "FIM" once finished, nothing for an upcoming game.
-function statusPill(f) {
+// The single state that drives what the centre cell and eyebrow show. Derived
+// from status + score so the renderer never has to re-derive it inline:
+//   scheduled — not kicked off; live — under way; finished — full time.
+function matchState(f) {
   const ph = phase(f);
-  if (ph === 0) return { t: clamp(f.status, 6) || "AO VIVO", c: COLOR.live };
-  if (ph === 2) return { t: "FIM", c: COLOR.muted };
-  return null;
+  if (ph === 0) return "live";
+  if (ph === 2) return "finished";
+  return "scheduled";
 }
 
-// The center value for a game: its live/final score once under way, otherwise
-// the scheduled kickoff time. Upstream can report a premature 0-0 for a game
-// that hasn't kicked off, so we only trust the score once the status says the
-// game is live or finished (phase !== 1) — an upcoming game shows its time.
-function centerValue(f) {
+// The score string ("1 - 0") once it can be trusted, else "". Upstream can
+// report a premature 0-0 before kickoff, so a score only counts once the game
+// is live or finished (phase !== 1) — a scheduled game never shows a score.
+function scoreText(f) {
   const hasScore = f.homeScore != null && f.homeScore !== "" &&
     f.awayScore != null && f.awayScore !== "";
-  if (phase(f) !== 1 && hasScore) {
-    return { big: `${f.homeScore} - ${f.awayScore}`, isScore: true };
-  }
-  return { big: fmtTime(f.kickoff) || "—", isScore: false };
+  return phase(f) !== 1 && hasScore ? `${f.homeScore} - ${f.awayScore}` : "";
 }
 
-// Center cell of a digest row: the score (live/finished) or the kickoff time.
-function scoreCell(f, S) {
-  const { big } = centerValue(f);
-  const pill = statusPill(f);
+// A small clock glyph, inlined as SVG (Satori has no icon font). Stroke-only so
+// it tints to the eyebrow colour.
+function clockIcon(size, color) {
   return h(
-    "div",
-    { style: { display: "flex", flexDirection: "column", alignItems: "center", width: S.rowScoreCol } },
+    "svg",
+    { width: size, height: size, viewBox: "0 0 24 24", style: { display: "flex" } },
     [
-      h("div", { style: { display: "flex", fontSize: S.rowScore, fontWeight: 800, color: COLOR.text } }, big),
-      pill
-        ? h(
-            "div",
-            {
-              style: {
-                display: "flex", marginTop: 4, padding: "1px 11px", borderRadius: 12,
-                backgroundColor: pill.c, color: COLOR.bg, fontSize: Math.round(S.rowScore * 0.44), fontWeight: 800,
-              },
-            },
-            pill.t
-          )
-        : h("div", { style: { display: "flex" } }, ""),
+      h("circle", { cx: 12, cy: 12, r: 9, fill: "none", stroke: color, strokeWidth: 2 }),
+      h("path", { d: "M12 7.5 L12 12 L15 14", fill: "none", stroke: color, strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" }),
     ]
   );
 }
 
-function gameRow(f, S) {
+// The eyebrow line that sits directly ABOVE the matchup: it carries the time /
+// minute that used to be misread as a score, and never appears between the
+// teams. scheduled → clock + HH:MM; live → red dot + minute; finished → dimmed
+// HH:MM · Fim. `dot`/`gap` scale the markers with the font size.
+function eyebrowLine(f, timeFont, labelFont, opts) {
+  const o = opts || {};
+  const state = matchState(f);
+  const time = fmtTime(f.kickoff);
+  const row = (kids) =>
+    h(
+      "div",
+      {
+        style: {
+          display: "flex", flexDirection: "row", alignItems: "center",
+          justifyContent: "center", height: Math.round(timeFont * 1.15),
+          marginBottom: o.marginBottom || 0,
+        },
+      },
+      kids
+    );
+
+  if (state === "live") {
+    const dot = Math.round(timeFont * 0.42);
+    const minute = clamp(f.status, 6) || "AO VIVO";
+    return row([
+      h("div", { style: { display: "flex", width: dot, height: dot, borderRadius: dot, backgroundColor: COLOR.live, marginRight: Math.round(timeFont * 0.34) } }, ""),
+      h("div", { style: { display: "flex", fontSize: timeFont, fontWeight: 800, color: COLOR.live } }, minute),
+    ]);
+  }
+  if (state === "finished") {
+    return row(
+      time
+        ? [
+            h("div", { style: { display: "flex", fontSize: timeFont, fontWeight: 800, color: COLOR.eyebrowTimeFin } }, time),
+            h("div", { style: { display: "flex", marginLeft: Math.round(labelFont * 0.5), fontSize: labelFont, fontWeight: 800, color: COLOR.muted } }, "· Fim"),
+          ]
+        : [h("div", { style: { display: "flex", fontSize: labelFont, fontWeight: 800, color: COLOR.muted } }, "Fim")]
+    );
+  }
+  // scheduled
+  if (!time) return row([h("div", { style: { display: "flex" } }, "")]);
+  return row([
+    h("div", { style: { display: "flex", marginRight: Math.round(timeFont * 0.34), alignItems: "center" } }, clockIcon(Math.round(timeFont * 0.92), COLOR.eyebrowTime)),
+    h("div", { style: { display: "flex", fontSize: timeFont, fontWeight: 800, color: COLOR.eyebrowTime } }, time),
+  ]);
+}
+
+// Centre cell BETWEEN the two teams: only ever the matchup state — "VS" before
+// kick-off, the score once there is one. Never a time (that lives in the
+// eyebrow), so it can't be misread as a score.
+function centreCell(f, S) {
+  const score = scoreText(f);
+  const child = score
+    ? h("div", { style: { display: "flex", fontSize: S.rowScore, fontWeight: 900, color: COLOR.text, letterSpacing: "1px" } }, score)
+    : h("div", { style: { display: "flex", fontSize: S.rowVs, fontWeight: 800, color: COLOR.vs, letterSpacing: "3px" } }, "VS");
   return h(
     "div",
-    {
-      style: {
-        display: "flex", flexDirection: "row", alignItems: "center",
-        backgroundColor: COLOR.panel, border: `1px solid ${COLOR.border}`,
-        borderRadius: 16, padding: S.rowPad, marginBottom: S.rowGap,
-      },
-    },
+    { style: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: S.rowScoreCol } },
+    [child]
+  );
+}
+
+function gameRow(f, S) {
+  const matchup = h(
+    "div",
+    { style: { display: "flex", flexDirection: "row", alignItems: "center" } },
     [
       h(
         "div",
@@ -278,20 +327,31 @@ function gameRow(f, S) {
         "div",
         { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-end", flexGrow: 1 } },
         [
-          h("div", { style: { display: "flex", fontSize: S.rowName, fontWeight: 700, color: COLOR.text, marginRight: 16, textAlign: "right" } }, clamp(f.home, S.rowNameCap)),
+          h("div", { style: { display: "flex", fontSize: S.rowName, fontWeight: 800, color: COLOR.text, marginRight: 16, textAlign: "right" } }, clamp(f.home, S.rowNameCap)),
           crest(f._homeBadge, f.home, S.rowCrest),
         ]
       ),
-      scoreCell(f, S),
+      centreCell(f, S),
       h(
         "div",
         { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-start", flexGrow: 1 } },
         [
           crest(f._awayBadge, f.away, S.rowCrest),
-          h("div", { style: { display: "flex", fontSize: S.rowName, fontWeight: 700, color: COLOR.text, marginLeft: 16 } }, clamp(f.away, S.rowNameCap)),
+          h("div", { style: { display: "flex", fontSize: S.rowName, fontWeight: 800, color: COLOR.text, marginLeft: 16 } }, clamp(f.away, S.rowNameCap)),
         ]
       ),
     ]
+  );
+  return h(
+    "div",
+    {
+      style: {
+        display: "flex", flexDirection: "column",
+        backgroundColor: COLOR.panel, border: `1px solid ${COLOR.border}`,
+        borderRadius: 16, padding: S.rowPad, marginBottom: S.rowGap,
+      },
+    },
+    [eyebrowLine(f, S.rowEyebrow, S.rowEyebrowLabel, { marginBottom: S.rowEyebrowGap }), matchup]
   );
 }
 
@@ -307,7 +367,7 @@ function heroTeam(uri, name, S) {
         {
           style: {
             display: "flex", justifyContent: "center", textAlign: "center",
-            marginTop: 18, fontSize: S.heroName, fontWeight: 700, lineHeight: 1.1, color: COLOR.text,
+            marginTop: 18, fontSize: S.heroName, fontWeight: 800, lineHeight: 1.1, color: COLOR.text,
           },
         },
         clamp(name, S.heroNameCap)
@@ -316,33 +376,23 @@ function heroTeam(uri, name, S) {
   );
 }
 
-// Center of the hero card: a large score/kickoff with the status pill beneath.
+// Centre of the hero card: only the matchup state — "VS" before kick-off, the
+// score once there is one. The kickoff time lives in the eyebrow above, never
+// here, so it can never read as a score.
 function heroCenter(f, S) {
-  const { big, isScore } = centerValue(f);
-  const pill = statusPill(f);
+  const score = scoreText(f);
+  const child = score
+    ? h("div", { style: { display: "flex", fontSize: S.heroScore, fontWeight: 900, color: COLOR.text, letterSpacing: "2px" } }, score)
+    : h("div", { style: { display: "flex", fontSize: S.heroVs, fontWeight: 800, color: COLOR.vs, letterSpacing: "4px" } }, "VS");
   return h(
     "div",
     { style: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" } },
-    [
-      h("div", { style: { display: "flex", fontSize: S.heroScore, fontWeight: 800, color: COLOR.text, letterSpacing: isScore ? "2px" : "0px" } }, big),
-      pill
-        ? h(
-            "div",
-            {
-              style: {
-                display: "flex", marginTop: 12, padding: "6px 18px", borderRadius: 18,
-                backgroundColor: pill.c, color: COLOR.bg, fontSize: S.heroStatusFont, fontWeight: 800,
-              },
-            },
-            pill.t
-          )
-        : h("div", { style: { display: "flex" } }, ""),
-    ]
+    [child]
   );
 }
 
-// The featured game: a prominent card above the list (competition on top, then
-// the two teams flanking the big score/kickoff).
+// The featured game: a prominent card above the list — competition, then a time
+// banner (eyebrow), then the two teams flanking the big VS/score.
 function heroCard(f, S) {
   return h(
     "div",
@@ -357,7 +407,7 @@ function heroCard(f, S) {
       f.competition || f._compBadge
         ? h(
             "div",
-            { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 14 } },
+            { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 10 } },
             [
               f._compBadge
                 ? h("img", { src: f._compBadge, width: S.heroBadge, height: S.heroBadge, style: { width: S.heroBadge, height: S.heroBadge, objectFit: "contain", marginRight: 12 } })
@@ -366,6 +416,7 @@ function heroCard(f, S) {
             ]
           )
         : h("div", { style: { display: "flex" } }, ""),
+      eyebrowLine(f, S.heroEyebrow, S.heroEyebrowLabel, { marginBottom: 14 }),
       h(
         "div",
         { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between" } },
@@ -578,44 +629,59 @@ export async function GET(req, ctx) {
     toDataUri((card && card.leagueBadge) || g("cb")),
   ]);
 
-  const centerMain = score || status || "VS";
+  // Centre slot holds ONLY the matchup state — score once there is one, else
+  // "VS". The kickoff time / minute moves to the eyebrow above (built below), so
+  // a time can never be misread as a score between the two crests.
+  const cardState = (card && card.state) || (score ? "finished" : "scheduled");
+  const cardTime = clamp((card && card.time) || "", 10);
+  const cardMinute = clamp((card && card.minute) || "", 12);
   const center = h(
     "div",
     { style: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" } },
     [
-      h(
-        "div",
-        {
-          style: {
-            display: "flex",
-            fontSize: score ? 96 : 64,
-            fontWeight: 800,
-            color: COLOR.text,
-            letterSpacing: score ? "2px" : "0px",
-          },
-        },
-        centerMain
-      ),
-      status && (score || centerMain !== status)
-        ? h(
-            "div",
-            {
-              style: {
-                display: "flex",
-                marginTop: 18,
-                padding: "8px 20px",
-                borderRadius: 22,
-                backgroundColor: COLOR.accent,
-                color: COLOR.bg,
-                fontSize: 26,
-                fontWeight: 800,
-              },
-            },
-            status
-          )
-        : h("div", { style: { display: "flex" } }, ""),
+      score
+        ? h("div", { style: { display: "flex", fontSize: 96, fontWeight: 900, color: COLOR.text, letterSpacing: "2px" } }, score)
+        : h("div", { style: { display: "flex", fontSize: 56, fontWeight: 800, color: COLOR.vs, letterSpacing: "6px" } }, "VS"),
     ]
   );
+
+  // Eyebrow above the matchup: clock + kickoff for a scheduled game, a red dot +
+  // minute while live, a dimmed kickoff + "· Fim" once finished. Falls back to
+  // the legacy `status` string when only query params are available.
+  let eyebrow;
+  if (cardState === "live") {
+    eyebrow = h(
+      "div",
+      { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center" } },
+      [
+        h("div", { style: { display: "flex", width: 18, height: 18, borderRadius: 18, backgroundColor: COLOR.live, marginRight: 14 } }, ""),
+        h("div", { style: { display: "flex", fontSize: 40, fontWeight: 800, color: COLOR.live } }, cardMinute || clamp(status, 10) || "AO VIVO"),
+      ]
+    );
+  } else if (cardState === "finished") {
+    eyebrow = cardTime
+      ? h(
+          "div",
+          { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center" } },
+          [
+            h("div", { style: { display: "flex", fontSize: 40, fontWeight: 800, color: COLOR.eyebrowTimeFin } }, cardTime),
+            h("div", { style: { display: "flex", marginLeft: 16, fontSize: 30, fontWeight: 800, color: COLOR.muted } }, "· Fim"),
+          ]
+        )
+      : h("div", { style: { display: "flex", fontSize: 36, fontWeight: 800, color: COLOR.muted } }, cardMinute || "Fim");
+  } else {
+    const t = cardTime || clamp(status, 10);
+    eyebrow = t
+      ? h(
+          "div",
+          { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center" } },
+          [
+            h("div", { style: { display: "flex", marginRight: 14, alignItems: "center" } }, clockIcon(40, COLOR.eyebrowTime)),
+            h("div", { style: { display: "flex", fontSize: 44, fontWeight: 800, color: COLOR.eyebrowTime } }, t),
+          ]
+        )
+      : h("div", { style: { display: "flex" } }, "");
+  }
 
   const tree = h(
     "div",
@@ -690,8 +756,15 @@ export async function GET(req, ctx) {
           ),
           h(
             "div",
-            { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between" } },
-            [teamColumn(homeBadge, home), center, teamColumn(awayBadge, away)]
+            { style: { display: "flex", flexDirection: "column", alignItems: "center" } },
+            [
+              h("div", { style: { display: "flex", justifyContent: "center", marginBottom: 18 } }, eyebrow),
+              h(
+                "div",
+                { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" } },
+                [teamColumn(homeBadge, home), center, teamColumn(awayBadge, away)]
+              ),
+            ]
           ),
           h(
             "div",

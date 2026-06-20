@@ -7,6 +7,8 @@
  * inline <style>).
  */
 
+import AdDebug from "@/components/AdDebug";
+
 const SITE_URL = "https://hojehabola.com";
 
 export const metadata = {
@@ -20,7 +22,11 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Opt-in (?addebug=1) live panel for diagnosing ad-loading issues. */}
+        <AdDebug />
+      </body>
     </html>
   );
 }

@@ -127,6 +127,7 @@ app/
   api/sofatv/route.js            Unofficial SofaScore TV proxy (on-demand fallback)
   api/listings/route.js          Serves tv:rich:<date>; revalidates on visit (Next after()); folds in manual overrides
   api/overrides/route.js         Admin CRUD for manual TV overrides (Basic Auth: ADMIN_USER / ADMIN_PASSWORD)
+  api/ads/route.js               Admin CRUD for the ad units list (lib/ads-store.js), consumed by <AdSlot> (Basic Auth)
   api/matchdetails/route.js      Per-match FotMob detail (venue, timeline, lineups, h2h, stats)
   api/highlights/route.js        Reads the collected highlights back as a feed
   api/cron-listings/route.js     Daily pre-warm of the upcoming window (shares lib/listings-build.js with on-visit refresh)
@@ -136,11 +137,15 @@ app/
   api/geo/route.js               Visitor country (Vercel edge header) for the default listings country
   api/health/route.js            Read-only config/KV diagnostics for the admin page
 components/GamesBrowser.jsx      The interactive games browser (client island): date nav, country picker, league filter, search, cards, detail modal
+components/AdSlot.jsx             Server component: renders the admin-managed ad units assigned to one layout slot
+components/AdUnits.jsx            Client component: injects parsed ad markup/scripts after mount (avoids hydration mismatches from self-placing loaders)
+components/AdDebug.jsx            Opt-in (?addebug=1) on-page panel: watches script loads/errors and ad-blocker signals for live debugging
 lib/app-data.js                  Client data layer: fetch/merge fixtures + TV, match details, highlights, ordering
 lib/format.js                    Shared helpers (dates, slugs, status, share links)
 lib/i18n.js                      EN/PT translation table + language helpers
 lib/broadcasters.js              Free-to-air channel classifier (green vs amber)
-lib/ads.js                       AdSense slot configuration
+lib/ads-store.js                 Ad unit store (KV-backed): admin-managed snippets + slot assignment, read by <AdSlot> and /api/ads
+lib/ads.js                       Legacy AdSense config — unused; superseded by lib/ads-store.js + /admin/ads
 lib/kv.js                        Vercel KV (Upstash Redis REST) client, shared by the data routes
 lib/cardinfo.js                  Rebuilds a game's share-card data from its match id (FotMob + KV cache)
 lib/seo-render.js                Renders the /g per-game + league HTML pages (metadata, JSON-LD, body)
@@ -151,7 +156,7 @@ lib/digest-text.js               Builds the /text plain-text digest (ranking, fl
 lib/country-flags.js             National-team name → flag emoji (EN + PT names) for the text digest
 lib/sitemap-sweep.js             Builds the canonical SEO URL map + KV registry helpers, shared by the sitemap, its cron and /api/seo
 assets/styles.css                Styling (imported by the app layout)
-public/admin/                    Admin console (noindex): /admin connections debugger, /admin/overrides, /admin/seo, /admin/ads
+public/admin/                    Admin console (noindex): /admin connections debugger, /admin/overrides, /admin/seo, /admin/ads, /admin/ad-test
 public/assets/og-image.svg       Default social share / Open Graph card
 public/robots.txt                Crawl rules (allows the site, disallows /admin + /api)
 public/llms.txt                  Site summary for LLM/AI crawlers

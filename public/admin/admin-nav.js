@@ -12,6 +12,7 @@
     { href: "/admin/overrides", label: "TV overrides" },
     { href: "/admin/seo", label: "pSEO / sitemap" },
     { href: "/admin/ads", label: "Manage ads" },
+    { href: "/admin/ad-test", label: "Ad script tester" },
   ];
 
   var path = location.pathname.replace(/\/+$/, "") || "/admin";

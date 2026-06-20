@@ -16,13 +16,16 @@
   <div class="card" id="loaderCard">
     <div style="font-weight:600; margin-bottom:2px;">📢 Manage ads</div>
     <div class="sub" style="margin-bottom:10px;">
-      Paste the full snippet the ad network gives you (a <code>&lt;script&gt;…&lt;/script&gt;</code>
-      and/or banner markup) into a unit, pick where it should show, and Save.
-      Use <b>Preview</b> to render a unit in a sandbox. Stored server-side (needs
-      <code>ADMIN_USER</code> / <code>ADMIN_PASSWORD</code> and KV configured);
-      live within a few minutes. <i>Self-placing formats (popunder / social bar)
-      won't show in Preview, and ad blockers suppress previews — disable shields
-      to preview real ads.</i>
+      Add a unit, pick where it should show, and Save. For a "key + size" iframe
+      banner (e.g. highperformanceformat.com), switch the unit to <b>Banner ad</b>
+      and fill in just the key and size — the script is generated for you, so
+      there's nothing to paste wrong. For anything else, leave it as
+      <b>Custom snippet</b> and paste the full <code>&lt;script&gt;…&lt;/script&gt;</code>
+      the network gives you. Use <b>Preview</b> to render a unit in a sandbox.
+      Stored server-side (needs <code>ADMIN_USER</code> / <code>ADMIN_PASSWORD</code>
+      and KV configured); live within a few minutes. <i>Self-placing formats
+      (popunder / social bar) won't show in Preview, and ad blockers suppress
+      previews — disable shields to preview real ads.</i>
     </div>
     <div id="loaderRows"></div>
     <div class="toolbar">
@@ -65,6 +68,39 @@
       return sel;
     }
 
+    function kindSelect(selected) {
+      var sel = document.createElement("select");
+      sel.className = "loader-kind";
+      [["snippet", "Custom snippet"], ["banner", "Banner ad (key + size)"]].forEach(function (pair) {
+        var o = document.createElement("option");
+        o.value = pair[0]; o.textContent = pair[1];
+        if (pair[0] === selected) o.selected = true;
+        sel.appendChild(o);
+      });
+      return sel;
+    }
+
+    // Mirrors lib/ads-store.js#bannerSnippet — only used client-side for Preview.
+    function bannerSnippet(key, width, height) {
+      var closeTag = "<" + "/script>";
+      var k = String(key || "");
+      var w = Number(width) || 468;
+      var h = Number(height) || 60;
+      return "<script>\natOptions = {\n  'key' : " + JSON.stringify(k) + ",\n  'format' : 'iframe',\n" +
+        "  'height' : " + h + ",\n  'width' : " + w + ",\n  'params' : {}\n};\n" + closeTag +
+        "\n<script src=\"https://www.highperformanceformat.com/" + encodeURIComponent(k) + "/invoke.js\">" + closeTag;
+    }
+
+    function bannerField(cls, labelText, value, type) {
+      var wrap = document.createElement("div");
+      var lab = document.createElement("label");
+      lab.textContent = labelText;
+      var inp = document.createElement("input");
+      inp.className = cls; inp.type = type || "text"; inp.value = value;
+      wrap.appendChild(lab); wrap.appendChild(inp);
+      return wrap;
+    }
+
     function makeRow(unit) {
       unit = unit || {};
       var row = document.createElement("div");
@@ -81,6 +117,9 @@
       onLabel.appendChild(chk);
       onLabel.appendChild(document.createTextNode("on"));
 
+      var isBanner = !!(unit.banner && unit.banner.key);
+      var kind = kindSelect(isBanner ? "banner" : "snippet");
+
       var sel = slotSelect(unit.slot || "global");
 
       var del = document.createElement("button");
@@ -88,12 +127,32 @@
       del.title = "Remove";
       del.addEventListener("click", function () { row.remove(); refreshEmpty(); });
 
-      head.appendChild(onLabel); head.appendChild(sel); head.appendChild(del);
+      head.appendChild(onLabel); head.appendChild(kind); head.appendChild(sel); head.appendChild(del);
 
+      // Custom-snippet view: paste the network's full <script> markup verbatim.
+      var snippetView = document.createElement("div");
+      snippetView.className = "loader-snippet-view";
       var script = document.createElement("textarea");
       script.className = "loader-src"; script.rows = 4;
       script.placeholder = "<script>…</" + "script>  or  banner HTML";
       script.value = unit.script || "";
+      snippetView.appendChild(script);
+
+      // Banner view: just the bits that differ per placement — the real
+      // snippet is generated server-side from these on save (see /api/ads).
+      var bannerView = document.createElement("div");
+      bannerView.className = "loader-banner-view row";
+      bannerView.appendChild(bannerField("loader-key", "Key", (unit.banner && unit.banner.key) || "", "text"));
+      bannerView.appendChild(bannerField("loader-width", "Width", (unit.banner && unit.banner.width) || 468, "number"));
+      bannerView.appendChild(bannerField("loader-height", "Height", (unit.banner && unit.banner.height) || 60, "number"));
+
+      function syncKind() {
+        var isB = kind.value === "banner";
+        snippetView.style.display = isB ? "none" : "";
+        bannerView.style.display = isB ? "" : "none";
+      }
+      kind.addEventListener("change", syncKind);
+      syncKind();
 
       var label = document.createElement("input");
       label.type = "text"; label.className = "loader-label";
@@ -112,7 +171,8 @@
       box.className = "loader-preview-box";
 
       row.appendChild(head);
-      row.appendChild(script);
+      row.appendChild(snippetView);
+      row.appendChild(bannerView);
       row.appendChild(label);
       row.appendChild(actions);
       row.appendChild(box);
@@ -123,7 +183,14 @@
     function togglePreview(row) {
       var box = row.querySelector(".loader-preview-box");
       if (box.firstChild) { box.innerHTML = ""; return; } // toggle off
-      var snippet = row.querySelector(".loader-src").value;
+      var isBanner = row.querySelector(".loader-kind").value === "banner";
+      var snippet = isBanner
+        ? bannerSnippet(
+            row.querySelector(".loader-key").value,
+            row.querySelector(".loader-width").value,
+            row.querySelector(".loader-height").value
+          )
+        : row.querySelector(".loader-src").value;
       if (!snippet.trim()) { box.textContent = "(empty)"; return; }
       var frame = document.createElement("iframe");
       frame.className = "loader-preview-frame";
@@ -155,14 +222,26 @@
     function collect() {
       var out = [];
       rowsEl.querySelectorAll(".loader-row").forEach(function (row) {
-        var script = row.querySelector(".loader-src").value.trim();
-        if (!script) return; // skip blank units
-        out.push({
-          script: script,
+        var common = {
           label: row.querySelector(".loader-label").value.trim(),
           enabled: row.querySelector(".loader-on").checked,
           slot: row.querySelector(".loader-slot").value,
-        });
+        };
+        if (row.querySelector(".loader-kind").value === "banner") {
+          var key = row.querySelector(".loader-key").value.trim();
+          if (!key) return; // skip blank units
+          common.banner = {
+            key: key,
+            width: Number(row.querySelector(".loader-width").value) || 468,
+            height: Number(row.querySelector(".loader-height").value) || 60,
+          };
+          out.push(common);
+          return;
+        }
+        var script = row.querySelector(".loader-src").value.trim();
+        if (!script) return; // skip blank units
+        common.script = script;
+        out.push(common);
       });
       return out;
     }

@@ -28,6 +28,8 @@ input, select, button {
               margin-bottom: 10px; background: var(--panel2); }
 .loader-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .loader-head .loader-slot { flex: 1 1 auto; }
+.loader-head .loader-kind { flex: none; width: auto; }
+.loader-banner-view { margin-bottom: 8px; }
 .loader-onlabel { display: flex; align-items: center; gap: 6px; width: auto; flex: none;
                   font-size: 13px; color: var(--text); white-space: nowrap; }
 .loader-onlabel input { width: auto; }

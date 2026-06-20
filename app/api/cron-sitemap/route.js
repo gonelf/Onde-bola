@@ -5,16 +5,14 @@
  * If CRON_SECRET is set, send it as `Authorization: Bearer <secret>` or `?key=`.
  */
 
-import { kv, kvConfigured } from "@/lib/kv";
-import { sweep, addDays } from "@/lib/sitemap-sweep";
+import { kvConfigured } from "@/lib/kv";
+import { sweep, writeRegistry, pruneRegistry, readRegistry } from "@/lib/sitemap-sweep";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const DISABLED = process.env.FOTMOB_DISABLED === "1";
 const SECRET = process.env.CRON_SECRET || "";
-const REGISTRY = "seo:urls";
-const PRUNE_DAYS = Math.max(30, Number(process.env.SITEMAP_PRUNE_DAYS) || 400);
 
 function authorized(request, key) {
   if (!SECRET) return true;
@@ -42,23 +40,11 @@ export async function GET(request) {
 
   const { map, today } = await sweep(origin);
 
-  const paths = Object.keys(map);
-  let added = 0;
-  if (paths.length) {
-    const args = ["HSET", REGISTRY];
-    paths.forEach((p) => args.push(p, map[p]));
-    await kv(args);
-    added = paths.length;
-  }
+  const added = await writeRegistry(map);
 
   // Prune entries older than the window's tail.
-  const cutoff = addDays(today, -PRUNE_DAYS);
-  const raw = await kv(["HGETALL", REGISTRY]);
-  const reg = {};
-  if (Array.isArray(raw)) { for (let i = 0; i < raw.length; i += 2) reg[raw[i]] = raw[i + 1]; }
-  else if (raw && typeof raw === "object") Object.assign(reg, raw);
-  const stale = Object.keys(reg).filter((p) => String(reg[p]) < cutoff);
-  if (stale.length) await kv(["HDEL", REGISTRY].concat(stale));
+  const reg = await readRegistry();
+  const stale = await pruneRegistry(today, reg);
 
   return Response.json(
     { ok: true, swept: added, pruned: stale.length, total: Object.keys(reg).length - stale.length },

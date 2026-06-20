@@ -5,12 +5,10 @@
  */
 
 import { headers } from "next/headers";
-import { kv } from "@/lib/kv";
-import { sweep, lisbonYmd } from "@/lib/sitemap-sweep";
+import { sweep, lisbonYmd, readRegistry } from "@/lib/sitemap-sweep";
 
 export const dynamic = "force-dynamic";
 
-const REGISTRY = "seo:urls";
 const MAX_URLS = 45000;
 
 function xesc(s) {
@@ -32,10 +30,7 @@ export async function GET() {
   const origin = `${proto}://${host}`;
   const today = lisbonYmd(new Date());
 
-  let entries = {};
-  const raw = await kv(["HGETALL", REGISTRY]);
-  if (Array.isArray(raw)) { for (let i = 0; i < raw.length; i += 2) entries[raw[i]] = raw[i + 1]; }
-  else if (raw && typeof raw === "object") Object.assign(entries, raw);
+  let entries = await readRegistry();
 
   if (!Object.keys(entries).length) {
     const swept = await sweep(origin).catch(() => null);

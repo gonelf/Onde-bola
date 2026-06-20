@@ -10,6 +10,7 @@
   var PAGES = [
     { href: "/admin", label: "Connections debug" },
     { href: "/admin/overrides", label: "TV overrides" },
+    { href: "/admin/seo", label: "pSEO / sitemap" },
     { href: "/admin/ads", label: "Manage ads" },
   ];
 

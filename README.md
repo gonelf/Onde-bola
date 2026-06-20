@@ -132,6 +132,7 @@ app/
   api/cron-listings/route.js     Daily pre-warm of the upcoming window (shares lib/listings-build.js with on-visit refresh)
   api/cron-highlights/route.js   Background sweep: collects highlights for finished games into KV (external cron)
   api/cron-sitemap/route.js      Daily sweep: records canonical SEO URLs into the KV registry (Vercel cron)
+  api/seo/route.js               Admin endpoint to inspect/sweep/prune the pSEO sitemap registry (Basic Auth)
   api/geo/route.js               Visitor country (Vercel edge header) for the default listings country
   api/health/route.js            Read-only config/KV diagnostics for the admin page
 components/GamesBrowser.jsx      The interactive games browser (client island): date nav, country picker, league filter, search, cards, detail modal
@@ -148,13 +149,13 @@ lib/digest-select.js             Shared "day's top games" selection (well-known 
 lib/digest-image-endpoint.js     Factory for the /image/{landscape,square,portrait} ready-to-post PNGs
 lib/digest-text.js               Builds the /text plain-text digest (ranking, flags, one PT channel per game)
 lib/country-flags.js             National-team name → flag emoji (EN + PT names) for the text digest
-lib/sitemap-sweep.js             Builds the canonical SEO URL map for the sitemap + its cron
+lib/sitemap-sweep.js             Builds the canonical SEO URL map + KV registry helpers, shared by the sitemap, its cron and /api/seo
 assets/styles.css                Styling (imported by the app layout)
-public/admin/                    Admin console (noindex): /admin connections debugger, /admin/overrides, /admin/ads
+public/admin/                    Admin console (noindex): /admin connections debugger, /admin/overrides, /admin/seo, /admin/ads
 public/assets/og-image.svg       Default social share / Open Graph card
 public/robots.txt                Crawl rules (allows the site, disallows /admin + /api)
 public/llms.txt                  Site summary for LLM/AI crawlers
-middleware.js                    Edge HTTP Basic Auth gating /admin + /api/overrides + /api/ads (ADMIN_USER / ADMIN_PASSWORD)
+middleware.js                    Edge HTTP Basic Auth gating /admin + /api/overrides + /api/ads + /api/seo (ADMIN_USER / ADMIN_PASSWORD)
 vercel.json                      Crons → /api/cron-sitemap + /api/cron-listings (both daily; listings also revalidates on visit)
 next.config.js                   Next.js config
 package.json                     next, react, @vercel/og, @vercel/analytics
@@ -166,6 +167,26 @@ package.json                     next, react, @vercel/og, @vercel/analytics
 > to serve several pages) are now the `app/(seo)/…` pages and `app/api/…` route
 > handlers; the sitemap is `app/sitemap.xml/route.js`. Shared logic stays in
 > `lib/` so it's imported, not duplicated per route.
+
+## Programmatic SEO (the `/g/…` pages + sitemap)
+
+The per-game (`/g/<id>`, `/g/<date>/<slug>`) and league-hub (`/g/<league>`)
+pages are server-rendered **programmatic SEO** (pSEO): `lib/seo-render.js` builds
+each one from the live fixtures feed and only marks it **indexable** when it has
+real data for a *notable* competition (`index, follow` then, `noindex, follow`
+otherwise — so empty/obscure pages never enter the index). Their canonical URLs
+are collected into a KV registry (`seo:urls`) that `/sitemap.xml` serves;
+`app/api/cron-sitemap` refreshes it daily (with `lib/sitemap-sweep` providing the
+sweep and the registry read/write/prune helpers).
+
+**Managing it — `/admin/seo`** (and its API, `/api/seo`, Basic-Auth gated like
+the rest of the admin surface). The page shows the registry status (total URLs,
+hubs vs match pages, lastmod range), and lets the owner **sweep** on demand
+(same scan as the cron), **rebuild** (clear + sweep), **prune** stale entries
+(older than `SITEMAP_PRUNE_DAYS`), browse/filter the registered URLs by prefix,
+or remove a single URL / clear everything — useful to confirm the pSEO pages are
+being registered without waiting for the daily cron. Needs KV connected to
+persist; needs the fixtures feed reachable for a sweep to find anything.
 
 > **Share previews need the Node/Vercel runtime.** `/og` runs on the edge
 > runtime via `next/og` (`@vercel/og`) — so the custom images render on a Vercel

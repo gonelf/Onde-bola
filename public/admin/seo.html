@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Hoje Há Bola — pSEO / sitemap</title>
+<link rel="stylesheet" href="/admin/admin.css" />
+</head>
+<body>
+  <div class="sub">Inspect and manage the programmatic-SEO sitemap registry (KV
+    <code>seo:urls</code>) that <code>/sitemap.xml</code> serves and the daily
+    <code>/api/cron-sitemap</code> maintains. Use it to confirm the <code>/g/…</code>
+    league and match pages are being registered, sweep on demand, or prune.</div>
+
+  <div class="card">
+    <div style="font-weight:600; margin-bottom:2px;">Registry status</div>
+    <div class="sub" style="margin-bottom:10px;">
+      Counts of league/edition hubs vs per-match pages, and the lastmod range.
+      Admin login required (set <code>ADMIN_USER</code> / <code>ADMIN_PASSWORD</code>
+      in the env). Needs KV connected to persist anything.
+    </div>
+    <div class="toolbar">
+      <button id="refresh">Refresh status</button>
+      <a class="secondary" id="openSitemap" href="/sitemap.xml" target="_blank" rel="noopener">Open /sitemap.xml ↗</a>
+      <span class="pill" id="statHint">loading…</span>
+    </div>
+    <pre id="stats">—</pre>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:600; margin-bottom:2px;">Rebuild the registry</div>
+    <div class="sub" style="margin-bottom:10px;">
+      <b>Sweep</b> scans the fixtures window (back <code>SITEMAP_DAYS_BACK</code>,
+      ahead <code>SITEMAP_DAYS_AHEAD</code>) and upserts canonical URLs for notable
+      competitions — same as the daily cron. <b>Rebuild</b> clears first, then sweeps.
+      <b>Prune</b> drops entries older than <code>SITEMAP_PRUNE_DAYS</code>.
+    </div>
+    <div class="toolbar">
+      <button id="sweep">Sweep ▶</button>
+      <button class="secondary" id="rebuild">Rebuild (clear + sweep)</button>
+      <button class="secondary" id="prune">Prune stale</button>
+      <span class="pill" id="actionHint">sweep needs the fixtures feed reachable</span>
+    </div>
+    <pre id="actionOut">—</pre>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:600; margin-bottom:2px;">Browse / remove URLs</div>
+    <div class="sub" style="margin-bottom:10px;">
+      List registered URLs (optionally filtered by path prefix), or remove a single
+      one / clear everything.
+    </div>
+    <div class="row">
+      <div>
+        <label for="prefix">Path prefix (optional)</label>
+        <input id="prefix" type="text" placeholder="e.g. /g/champions-league" />
+      </div>
+      <div>
+        <label for="delPath">Path to remove</label>
+        <input id="delPath" type="text" placeholder="e.g. /g/euro-2024/2024-06-14/germany-vs-scotland" />
+      </div>
+    </div>
+    <div class="toolbar">
+      <button id="list">List URLs</button>
+      <button class="secondary" id="remove">Remove path</button>
+      <button class="secondary" id="clear">Clear ALL</button>
+      <span class="pill" id="listHint">read-only until you click</span>
+    </div>
+    <pre id="urls">—</pre>
+  </div>
+
+  <script src="/admin/admin-nav.js"></script>
+  <script src="/admin/admin-common.js"></script>
+  <script>
+  // The page sits behind HTTP Basic Auth, so the browser attaches the admin
+  // credentials to these same-origin /api/seo calls automatically.
+  (function () {
+    "use strict";
+    var $ = AdminCommon.$;
+
+    // Surface the server's real error instead of a generic message.
+    function asJson(r) {
+      return r.json().then(function (j) {
+        if (!r.ok) {
+          var msg = (j && j.error) || ("HTTP " + r.status);
+          if (r.status === 401) msg += " — set ADMIN_USER / ADMIN_PASSWORD, then reload";
+          throw new Error(msg);
+        }
+        return j;
+      }, function () {
+        throw new Error("HTTP " + r.status + " (non-JSON response)");
+      });
+    }
+
+    function showStats(j) {
+      var s = (j && j.stats) || {};
+      var kv = j && j.kv && j.kv.configured;
+      $("statHint").textContent = kv ? "KV ✅ connected" : "KV ❌ not configured — sweeps won't persist";
+      var lines = [
+        "Total URLs:   " + (s.total || 0),
+        "  hubs:       " + (s.hubs || 0) + "  (/g/<league>)",
+        "  matches:    " + (s.matches || 0) + "  (/g/<league>/<date>/<slug>)",
+        "lastmod:      " + (s.oldest || "—") + "  →  " + (s.newest || "—"),
+        "",
+        "Sample (hubs first, newest first):",
+      ];
+      (j.sample || []).forEach(function (e) { lines.push("  " + e.lastmod + "  " + e.path); });
+      if (!(j.sample || []).length) lines.push("  (registry empty — run a Sweep)");
+      $("stats").textContent = lines.join("\n");
+    }
+
+    function refresh() {
+      $("statHint").textContent = "loading…";
+      fetch("/api/seo").then(asJson).then(showStats)
+        .catch(function (err) { $("statHint").textContent = String(err.message || err); $("stats").textContent = "—"; });
+    }
+
+    function act(action, btn) {
+      var old = btn.textContent; btn.disabled = true; btn.textContent = "Working…";
+      $("actionHint").textContent = action + "…";
+      fetch("/api/seo", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: action }),
+      }).then(asJson).then(function (j) {
+        $("actionHint").textContent = "done ✓";
+        $("actionOut").textContent = JSON.stringify(j, null, 2);
+        refresh();
+      }).catch(function (err) {
+        $("actionHint").textContent = String(err.message || err);
+        $("actionOut").textContent = String(err.message || err);
+      }).then(function () { btn.disabled = false; btn.textContent = old; });
+    }
+
+    function list() {
+      var prefix = ($("prefix").value || "").trim();
+      $("listHint").textContent = "loading…";
+      fetch("/api/seo?list=1" + (prefix ? "&prefix=" + encodeURIComponent(prefix) : ""))
+        .then(asJson).then(function (j) {
+          var urls = (j && j.urls) || [];
+          $("listHint").textContent = (j.count || 0) + " URL(s)" + (prefix ? " under " + prefix : "");
+          if (!urls.length) { $("urls").textContent = "no URLs" + (prefix ? " under " + prefix : "") + " yet"; return; }
+          $("urls").textContent = urls.map(function (u) {
+            return (u.hub ? "[hub]   " : "[match] ") + u.lastmod + "  " + u.path;
+          }).join("\n");
+        }).catch(function (err) { $("listHint").textContent = String(err.message || err); });
+    }
+
+    function remove() {
+      var path = ($("delPath").value || "").trim();
+      if (!path) { $("listHint").textContent = "enter a path to remove"; return; }
+      fetch("/api/seo?path=" + encodeURIComponent(path), { method: "DELETE" })
+        .then(asJson).then(function () { $("listHint").textContent = "removed " + path; list(); refresh(); })
+        .catch(function (err) { $("listHint").textContent = String(err.message || err); });
+    }
+
+    function clearAll() {
+      if (!window.confirm("Clear the ENTIRE sitemap registry? The next sweep/cron will rebuild it.")) return;
+      fetch("/api/seo?all=1", { method: "DELETE" })
+        .then(asJson).then(function () { $("listHint").textContent = "registry cleared"; $("urls").textContent = "—"; refresh(); })
+        .catch(function (err) { $("listHint").textContent = String(err.message || err); });
+    }
+
+    $("refresh").addEventListener("click", refresh);
+    $("sweep").addEventListener("click", function () { act("sweep", this); });
+    $("rebuild").addEventListener("click", function () {
+      if (!window.confirm("Rebuild clears the registry first, then sweeps. Continue?")) return;
+      act("rebuild", this);
+    });
+    $("prune").addEventListener("click", function () { act("prune", this); });
+    $("list").addEventListener("click", list);
+    $("remove").addEventListener("click", remove);
+    $("clear").addEventListener("click", clearAll);
+
+    refresh();
+  })();
+  </script>
+
+  <!-- Vercel Web Analytics -->
+  <script>
+    window.va = window.va || function () { (window.vai = window.vai || []).push(arguments); };
+  </script>
+  <script defer src="/_vercel/insights/script.js"></script>
+</body>
+</html>

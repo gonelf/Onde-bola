@@ -19,6 +19,9 @@
   .at-row.warn { color: var(--warn); }
   .at-row.script { color: var(--muted); }
   .at-row.net { color: var(--accent); }
+  .at-row.box-ok { color: var(--ok); }
+  .at-row.box-warn { color: var(--warn); }
+  .at-row.box-error { color: var(--bad); }
   .at-row .ts { color: var(--muted); margin-right: 6px; }
   select#slot, select#example { width: auto; }
   textarea#snippet { min-height: 140px; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; }
@@ -251,7 +254,14 @@
         case "error": addRow("error", d.detail); break;
         case "snapshot":
           lastBlocked = d.detail.blocked;
-          addRow("warn", "preview box: " + d.detail.childCount + " node(s), " + d.detail.height + "px tall" + (d.detail.blocked ? " · blocker bait hidden" : ""));
+          var hasContent = d.detail.childCount > 0 && d.detail.height > 0;
+          var snapKind = d.detail.blocked ? "box-error" : hasContent ? "box-ok" : "box-warn";
+          var snapMsg = d.detail.blocked
+            ? "preview box: " + d.detail.childCount + " node(s), " + d.detail.height + "px tall · blocker bait hidden — an ad/content blocker looks active"
+            : hasContent
+            ? "preview box: " + d.detail.childCount + " node(s), " + d.detail.height + "px tall — content present"
+            : "preview box: empty (" + d.detail.childCount + " node(s), " + d.detail.height + "px) — nothing rendered yet";
+          addRow(snapKind, snapMsg);
           break;
         case "resources":
           (d.detail || []).forEach(function (r) {

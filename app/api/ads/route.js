@@ -4,8 +4,13 @@
  * Gated by HTTP Basic Auth (ADMIN_USER / ADMIN_PASSWORD), both at the edge
  * (middleware.js) and here (defence in depth, fail-closed when creds are unset).
  *
- *   GET   -> { ads:[{id,script,label,enabled,slot}], slots:[{id,label}], kvConfigured }
- *   POST  { ads:[{script,label?,enabled?,slot?}] }  -> replace the whole list
+ *   GET   -> { ads:[{id,script,label,enabled,slot,banner?}], slots:[{id,label}], kvConfigured }
+ *   POST  { ads:[{script|banner,label?,enabled?,slot?}] }  -> replace the whole list
+ *
+ * A unit is either a hand-pasted `script` snippet or a `banner` shape
+ * ({key,width,height,format}) — the server generates `script` from the
+ * latter (see lib/ads-store#bannerSnippet) so a "key + size" banner ad never
+ * needs a raw paste.
  *
  * Each unit is rendered at its slot's place in the layout by <AdSlot>. On save
  * we revalidate the "ads" cache tag so the change is picked up promptly.
@@ -14,7 +19,7 @@
 import { revalidateTag } from "next/cache";
 import { isAdmin, adminCredsConfigured } from "@/lib/admin-auth";
 import { kvConfigured } from "@/lib/kv";
-import { loadAds, saveAds, ADS_TAG, AD_SLOTS, isValidSlot, DEFAULT_SLOT } from "@/lib/ads-store";
+import { loadAds, saveAds, ADS_TAG, AD_SLOTS, isValidSlot, DEFAULT_SLOT, isValidBannerKey } from "@/lib/ads-store";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +51,25 @@ export async function POST(request) {
   const ads = [];
   for (let i = 0; i < body.ads.length; i++) {
     const item = body.ads[i] || {};
+    const common = {
+      id: String(item.id || "").trim() || undefined,
+      label: String(item.label || "").trim(),
+      enabled: item.enabled !== false,
+      slot: isValidSlot(item.slot) ? item.slot : DEFAULT_SLOT,
+    };
+
+    const bannerKey = item.banner && typeof item.banner === "object" ? String(item.banner.key || "").trim() : "";
+    if (bannerKey) {
+      if (!isValidBannerKey(bannerKey)) {
+        return Response.json(
+          { error: `row ${i + 1}: key must be 6-64 letters, digits, "-" or "_"` },
+          { status: 400, headers: noStore }
+        );
+      }
+      ads.push({ ...common, banner: { key: bannerKey, width: item.banner.width, height: item.banner.height, format: item.banner.format } });
+      continue;
+    }
+
     const script = String(item.script || "").trim();
     if (!script) {
       return Response.json({ error: `row ${i + 1}: script is empty` }, { status: 400, headers: noStore });
@@ -53,13 +77,7 @@ export async function POST(request) {
     if (script.length > MAX_SNIPPET) {
       return Response.json({ error: `row ${i + 1}: script too long` }, { status: 400, headers: noStore });
     }
-    ads.push({
-      id: String(item.id || "").trim() || undefined,
-      script,
-      label: String(item.label || "").trim(),
-      enabled: item.enabled !== false,
-      slot: isValidSlot(item.slot) ? item.slot : DEFAULT_SLOT,
-    });
+    ads.push({ ...common, script });
   }
 
   if (!kvConfigured) {

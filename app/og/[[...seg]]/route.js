@@ -432,13 +432,18 @@ function heroCard(f, S) {
 // turn a day full of games into the "no games" card. Try ?all=1 with a timeout,
 // retry once, then fall back to the default (major) feed — which shares the same
 // KV cache/backup, so it usually answers even when upstream is momentarily down.
-async function fetchDayFixtures(origin, date) {
+//
+// `auth` carries the incoming request's protection headers (cookie / Vercel
+// bypass) so the same-origin call survives Deployment Protection on preview
+// deployments — without them the fetch hits the auth wall and the card would
+// render an empty "no games" state even on a day full of fixtures.
+async function fetchDayFixtures(origin, date, auth) {
   const tryOnce = async (qs) => {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 5500);
     try {
       const r = await fetch(`${origin}/api/fixtures?date=${date}${qs}`, {
-        headers: { Accept: "application/json" }, signal: ctrl.signal,
+        headers: Object.assign({ Accept: "application/json" }, auth || {}), signal: ctrl.signal,
       });
       if (!r.ok) return null;
       const j = await r.json();
@@ -455,7 +460,23 @@ async function fetchDayFixtures(origin, date) {
   return fx || [];
 }
 
-async function renderToday(url) {
+// The subset of the incoming request's headers that authenticate a same-origin
+// call: the cookie (Vercel preview protection sets `_vercel_jwt`) and the
+// explicit protection-bypass header/secret. Everything else is dropped so the
+// internal fetch stays a clean JSON request.
+function forwardAuthHeaders(reqHeaders) {
+  const out = {};
+  if (!reqHeaders || typeof reqHeaders.get !== "function") return out;
+  const cookie = reqHeaders.get("cookie");
+  if (cookie) out.cookie = cookie;
+  const bypass = reqHeaders.get("x-vercel-protection-bypass");
+  if (bypass) out["x-vercel-protection-bypass"] = bypass;
+  const set = reqHeaders.get("x-vercel-set-bypass-cookie");
+  if (set) out["x-vercel-set-bypass-cookie"] = set;
+  return out;
+}
+
+async function renderToday(url, reqHeaders) {
   const sp = url.searchParams;
   const date = /^\d{4}-\d{2}-\d{2}$/.test(sp.get("date") || "") ? sp.get("date") : todayYmd();
   const S = FORMATS[sp.get("format")] || FORMATS.landscape;
@@ -474,7 +495,7 @@ async function renderToday(url) {
   // Every competition for the date (?all=1), so the digest ranks the marquee
   // games itself (below) and doesn't depend on the fixtures "major leagues"
   // allow-list, which can miss the only competition on off-season days.
-  let fixtures = await fetchDayFixtures(url.origin, date);
+  let fixtures = await fetchDayFixtures(url.origin, date, forwardAuthHeaders(reqHeaders));
 
   // Keep only well-known competitions, so the card stays a "big games" digest.
   fixtures = fixtures.filter(isKnownCompetition);
@@ -608,7 +629,7 @@ export async function GET(req, ctx) {
 
   // Digest card: /og/today.
   if (routeId === "today" || searchParams.get("today") != null || g("id") === "today") {
-    return renderToday(url);
+    return renderToday(url, req.headers);
   }
 
   // Short form: /og/<id>. Rebuild the game's display from the match id via

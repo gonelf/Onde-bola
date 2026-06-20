@@ -10,7 +10,8 @@
  *     ?date=YYYY-MM-DD (default today, Lisbon); ?n (how many games, clamped per
  *     format); ?format=landscape|square|story (1200×630 / 1080×1080 / 1080×1920,
  *     default landscape); ?highlight=<fmid> to feature one game in a hero card
- *     above the list (then ?n is how many more to list). Copy is Portuguese.
+ *     above the list, or ?highlight=auto to feature the day's top game (then ?n
+ *     is how many more to list). Copy is Portuguese.
  *
  * Runs on the edge runtime (required by @vercel/og).
  */
@@ -461,8 +462,11 @@ async function renderToday(url) {
 
   // ?highlight=<fmid> features one game in a hero card above the list; ?n is
   // then how many *more* games to list (and how many total when nothing is
-  // highlighted). Clamp per format — a story fits far more than a 1.91:1 card.
+  // highlighted). ?highlight=auto (or top) features the day's top-ranked game
+  // without naming it — used by /image/square, which assumes a highlight.
+  // Clamp per format — a story fits far more than a 1.91:1 card.
   const highlightId = (sp.get("highlight") || "").replace(/^fm:/, "").trim();
+  const highlightAuto = /^(auto|top)$/i.test(highlightId);
   let n = parseInt(sp.get("n") || "5", 10);
   if (!Number.isFinite(n)) n = 5;
   n = Math.max(1, Math.min(S.maxN, n));
@@ -483,11 +487,14 @@ async function renderToday(url) {
     return String(a.kickoff || "").localeCompare(String(b.kickoff || ""));
   });
 
-  // Lift the highlighted game out of the list so it isn't shown twice.
+  // Lift the highlighted game out of the list so it isn't shown twice. A named
+  // ?highlight=<fmid> wins; ?highlight=auto just takes the top-ranked game.
   let hero = null;
   if (/^\d+$/.test(highlightId)) {
     const i = fixtures.findIndex((f) => String(f.fmid) === highlightId);
     if (i !== -1) hero = fixtures.splice(i, 1)[0];
+  } else if (highlightAuto && fixtures.length) {
+    hero = fixtures.shift();
   }
   const top = fixtures.slice(0, n);
 

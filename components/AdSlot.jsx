@@ -7,13 +7,16 @@
  * JSX here — see that file for why.
  *
  * Placed at each layout position by the home and per-game pages. Renders nothing
- * when no enabled unit targets the slot.
+ * when no enabled unit targets the slot, or when the "ads" feature flag
+ * (lib/flags.js, toggled at /admin/flags) is off.
  */
 
 import { activeUnits, parseSnippet } from "@/lib/ads-store";
+import { isEnabled } from "@/lib/flags";
 import AdUnits from "@/components/AdUnits";
 
 export default async function AdSlot({ name }) {
+  if (!(await isEnabled("ads"))) return null;
   let units = [];
   try {
     const all = await activeUnits();

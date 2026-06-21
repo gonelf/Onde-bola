@@ -164,7 +164,10 @@ function GameCard({ fx, t, locale, primaryCountry, highlightsById, onOpen, onSha
         <ShareIcon />
       </button>
       <a className="match-link" href={href} aria-label={fx.home + " vs " + fx.away} onClick={onClick}>
-        <div className="match-time"><TimeCell fx={fx} t={t} locale={locale} /></div>
+        <div className="match-time">
+          <TimeCell fx={fx} t={t} locale={locale} />
+          {fx.group ? <span className="match-group">{t("group") + " " + fx.group}</span> : null}
+        </div>
         <div className="teams">
           <div className="team">
             <Badge url={fx.homeBadge} name={fx.home} />
@@ -951,16 +954,9 @@ export default function GamesBrowser() {
           <>
           {visibleOrder.map((comp) => {
             const games = grouped.groups[comp].slice().sort((a, b) =>
-              (a.group || "").localeCompare(b.group || "") || new Date(a.kickoff) - new Date(b.kickoff));
+              new Date(a.kickoff) - new Date(b.kickoff));
             const badged = games.filter((g) => g.leagueBadgeUrl)[0];
             const badgeUrl = badged ? badged.leagueBadgeUrl : "";
-            const buckets = {}, groupOrder = [];
-            games.forEach((g) => {
-              const k = g.group || "";
-              if (!buckets[k]) { buckets[k] = []; groupOrder.push(k); }
-              buckets[k].push(g);
-            });
-            const multiGroup = groupOrder.length > 1 || (groupOrder.length === 1 && groupOrder[0]);
             return (
               <section className="competition" key={comp}>
                 <h2 className="competition-head">
@@ -968,14 +964,9 @@ export default function GamesBrowser() {
                   <span className="competition-name">{comp}</span>
                   <span className="count">{games.length}</span>
                 </h2>
-                {groupOrder.map((k) => (
-                  <div key={k || "_"}>
-                    {multiGroup && k ? <h3 className="group-head">{t("group") + " " + k}</h3> : null}
-                    {buckets[k].map((g) => (
-                      <GameCard key={g.id} fx={g} t={t} locale={locale} primaryCountry={primaryCountry}
-                        highlightsById={highlightsById} onOpen={openDetails} onShare={onShare} />
-                    ))}
-                  </div>
+                {games.map((g) => (
+                  <GameCard key={g.id} fx={g} t={t} locale={locale} primaryCountry={primaryCountry}
+                    highlightsById={highlightsById} onOpen={openDetails} onShare={onShare} />
                 ))}
               </section>
             );

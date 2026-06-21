@@ -303,15 +303,6 @@ body {
   letter-spacing: 0.04em;
 }
 .competition-head .competition-name { color: var(--text); }
-.group-head {
-  margin: 14px 0 8px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.group-head:first-child { margin-top: 0; }
 .competition-head .count {
   font-weight: 600;
   color: var(--text-dim);
@@ -414,6 +405,19 @@ body {
   animation: pulse 1.6s infinite;
 }
 .match-time .ft { font-size: 0.7rem; color: var(--text-dim); font-weight: 700; }
+.match-time .match-group {
+  display: inline-block;
+  margin-top: 4px;
+  color: var(--text-dim);
+  background: var(--bg-elev);
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
 
 .teams { display: flex; flex-direction: column; gap: 6px; min-width: 0; }

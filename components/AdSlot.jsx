@@ -25,6 +25,7 @@ export default async function AdSlot({ name }) {
   const parsed = units.map((u) => ({ id: u.id, ...parseSnippet(u.script) }));
   return (
     <div className={`ad-slot ad-slot-${name}`} data-ad-slot={name}>
+      <span className="ad-label">Ad</span>
       <AdUnits units={parsed} />
     </div>
   );

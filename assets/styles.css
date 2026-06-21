@@ -1128,4 +1128,5 @@ body {
    slots collapse to nothing. (Visitor ad blockers may hide these — expected.) */
 .ad-slot { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 16px auto; }
 .ad-slot:empty { display: none; margin: 0; }
-.ad-slot .ad-unit { max-width: 100%; }
+.ad-slot .ad-unit { max-width: 100%; overflow-x: auto; }
+.ad-slot .ad-unit iframe, .ad-slot .ad-unit img { max-width: 100%; }

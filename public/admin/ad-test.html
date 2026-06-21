@@ -185,8 +185,15 @@
       "html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;}" +
       ".container{max-width:880px;margin:0 auto;padding:16px;}" +
       ".ad-slot{display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin:0 auto;position:relative;padding:10px;" +
-      "background:var(--bg-elev);border:1px solid var(--line);border-radius:12px;min-height:90px;flex-direction:column;align-items:center;overflow:hidden;}" +
-      ".ad-slot .ad-unit{max-width:100%;}" +
+      "background:var(--bg-elev);border:1px solid var(--line);border-radius:12px;min-height:90px;flex-direction:column;align-items:center;overflow-x:auto;overflow-y:hidden;max-width:100%;}" +
+      ".ad-slot .ad-label{position:absolute;top:6px;left:10px;font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-dim);}" +
+      ".ad-slot .ad-unit{max-width:100%;overflow-x:auto;}" +
+      ".ad-slot .ad-unit iframe,.ad-slot .ad-unit img{max-width:100%;}" +
+      // The pasted snippet here sits directly in .ad-slot (no .ad-unit wrapper,
+      // unlike the real site's AdUnits-injected markup), so also catch bare
+      // iframes/images one level up — same fix, just at the actual depth this
+      // preview uses.
+      ".ad-slot iframe,.ad-slot img{max-width:100%;}" +
       ".ad-slot .adsbygoogle{width:100%;display:block;}";
 
     function buildDoc(snippet, slotName) {
@@ -196,6 +203,7 @@
         harnessScript() +
         "</head><body>" +
         "<div class='container'><div id='preview-root' class='ad-slot ad-slot-" + slotName + "' data-ad-slot='" + slotName + "'>" +
+        "<span class='ad-label'>Ad</span>" +
         snippet +
         "</div></div>" +
         "</body></html>"

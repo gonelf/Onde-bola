@@ -11,12 +11,17 @@
   <div class="sub">Toggle app behavior on/off without a deploy.</div>
 
   <div class="card" id="flagsCard">
-    <div style="font-weight:600; margin-bottom:2px;">🚩 Feature flags</div>
+    <div style="font-weight:600; margin-bottom:2px;">
+      🚩 Feature flags <span class="pill" id="flagEnv" style="margin-left:6px;">env: …</span>
+    </div>
     <div class="sub" style="margin-bottom:10px;">
       Each flag below is read by the live site; flip it and Save to change
       behavior within a few minutes (same cache/refresh window as ads and
       overrides). Stored server-side (needs <code>ADMIN_USER</code> /
-      <code>ADMIN_PASSWORD</code> and KV configured).
+      <code>ADMIN_PASSWORD</code> and KV configured). Overrides are
+      <strong>per environment</strong> — this page edits the
+      <strong id="flagEnvName">current</strong> deployment's flags. New features
+      default <em>on in staging, off in production</em>.
     </div>
     <div id="flagRows"></div>
     <div class="toolbar">
@@ -104,10 +109,17 @@
       });
     }
 
+    function setEnv(env) {
+      var e = env || "current";
+      var pill = $("flagEnv"); if (pill) pill.textContent = "env: " + e;
+      var name = $("flagEnvName"); if (name) name.textContent = e;
+    }
+
     function load() {
       setHint("loading…");
       fetch("/api/flags").then(handle).then(function (j) {
         var flags = (j && Array.isArray(j.flags)) ? j.flags : [];
+        setEnv(j && j.env);
         setRows(flags);
         var note = (j && j.kvConfigured) ? "" : " · ⚠️ KV not configured — saves won’t persist";
         setHint("loaded · " + flags.length + " flag" + (flags.length === 1 ? "" : "s") + note);
@@ -121,7 +133,7 @@
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ flags: flags }),
       }).then(handle).then(function (j) {
-        if (j && j.ok) { setRows(j.flags); setHint("saved ✓ (live within a few minutes)"); }
+        if (j && j.ok) { setEnv(j.env); setRows(j.flags); setHint("saved ✓ (live within a few minutes)"); }
         else { setHint((j && j.error) || "error"); }
       }).catch(function (err) { setHint(String(err.message || err)); });
     }

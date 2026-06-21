@@ -146,7 +146,8 @@ lib/format.js                    Shared helpers (dates, slugs, status, share lin
 lib/i18n.js                      EN/PT translation table + language helpers
 lib/broadcasters.js              Free-to-air channel classifier (green vs amber)
 lib/ads-store.js                 Ad unit store (KV-backed): admin-managed snippets + slot assignment, read by <AdSlot> and /api/ads
-lib/flags.js                     Feature flags (KV-backed): on/off switches read via isEnabled(), e.g. <AdSlot>'s "ads" flag — see "Feature flags" below
+lib/env.js                       Environment detection (staging vs production) from APP_ENV or STAGING_HOST — see "Staging environment" below
+lib/flags.js                     Feature flags (KV-backed, per-environment): on/off switches read via isEnabled(), e.g. <AdSlot>'s "ads" flag — see "Feature flags" below
 lib/ads.js                       Legacy AdSense config — unused; superseded by lib/ads-store.js + /admin/ads
 lib/kv.js                        Vercel KV (Upstash Redis REST) client, shared by the data routes
 lib/cardinfo.js                  Rebuilds a game's share-card data from its match id (FotMob + KV cache)
@@ -433,11 +434,50 @@ days (and today once all games are finished) are cached permanently, future days
 > TV listings are crowd-sourced and can vary by region, platform and individual
 > match. Always confirm with your provider.
 
+## Staging environment
+
+There are two deployments of the same codebase:
+
+- **Production** — `hojehabola.com`.
+- **Staging** — **`hojehabola.cfd`** (a throwaway domain for testing before
+  things go live).
+
+`lib/env.js` decides which one a request is running against and returns
+`"staging"` or `"production"`. Detection, in priority order:
+
+1. **`APP_ENV`** (or `NEXT_PUBLIC_APP_ENV`) `= staging | production` — an
+   explicit per-deployment override. Set `APP_ENV=staging` in the staging
+   deployment's Vercel env. **This is the recommended setup**: it needs no
+   request, so flag-gated pages stay static/ISR. (With `APP_ENV` unset the home
+   page falls back to host detection, which reads the request host and so renders
+   dynamically.)
+2. **Host match** — if `APP_ENV` is unset, the request host is compared against
+   **`STAGING_HOST`** (default `hojehabola.cfd`). The staging domain is an env
+   var, so it can change without a code edit.
+3. **Vercel preview** deployments (`VERCEL_ENV=preview`) are treated as staging.
+
+It defaults to **production** when nothing matches — fail safe, so a new feature
+never lights up in production by accident. `/admin` (Health → `/api/health`)
+reports the detected environment, `STAGING_HOST` and the env-var signals.
+
 ## Feature flags
 
 `lib/flags.js` is a small KV-backed store of on/off switches the owner can flip
 from **`/admin/flags`** without a deploy — no env var, no redeploy, live within
-a few minutes (same cache/refresh window as ads/overrides). Current flags:
+a few minutes (same cache/refresh window as ads/overrides). Overrides are stored
+**per environment** (production and staging each have their own KV key), so the
+admin page served on the staging domain manages staging's flags and the one on
+production manages production's.
+
+**New feature = on in staging, off in production.** Every new feature ships
+behind a flag whose default is **on in staging, off in production** — so it's
+live for testing on `hojehabola.cfd` the moment it merges, and dark in production
+until the owner flips it on at `/admin/flags`. Express that by giving the flag
+`default: NEW_FEATURE_DEFAULT` (i.e. `{ staging: true, production: false }`); a
+`default` may also be a plain boolean (same in both environments) like the two
+flags below.
+
+Current flags:
 
 - **`ads`** — site-wide ad slots (`<AdSlot>`: list-top, list-bottom, detail,
   global). A kill switch independent of the ad-unit list in `/admin/ads` —
@@ -449,13 +489,16 @@ a few minutes (same cache/refresh window as ads/overrides). Current flags:
 **Adding a new flag, every time:**
 
 1. Add one entry to `FLAG_DEFS` in `lib/flags.js`: `{ id, label, description,
-   default }`. `/api/flags` and `/admin/flags` read this list, so the new flag
-   shows up there automatically — no other admin-surface changes needed.
+   default }`. For a new feature use `default: NEW_FEATURE_DEFAULT` (on in
+   staging, off in production); use a plain boolean only for cross-environment
+   switches like `ads`. `/api/flags` and `/admin/flags` read this list, so the
+   new flag shows up there automatically — no other admin-surface changes needed.
 2. At the point you want to gate, check it:
    ```js
    import { isEnabled } from "@/lib/flags";
    if (!(await isEnabled("your-flag-id"))) return null; // or skip the branch
    ```
-   `isEnabled()` is cached and fails closed to `false` on any error (KV down,
+   `isEnabled()` resolves against the current environment (staging vs
+   production), is cached, and fails closed to `false` on any error (KV down,
    misconfigured, etc.), so it's safe to call from a server component without
    extra error handling.

@@ -181,6 +181,23 @@
       return row;
     }
 
+    // Minimal copy of the real .ad-slot / .ad-unit rules (assets/styles.css) —
+    // same wrapper the live site and the Ad script tester use — so this
+    // preview shows the unit the way it'll actually look once placed.
+    var SITE_CSS =
+      ":root{--bg:#0f1722;--bg-elev:#182433;--line:#26384c;--text:#e8eef5;--text-dim:#93a4b8;}" +
+      "html,body{margin:0;background:var(--bg);color:var(--text);font:13px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;}" +
+      ".ad-slot{display:flex;justify-content:center;flex-wrap:wrap;gap:8px;position:relative;padding:10px;" +
+      "background:var(--bg-elev);border:1px solid var(--line);border-radius:10px;min-height:60px;" +
+      "flex-direction:column;align-items:center;overflow-x:auto;overflow-y:hidden;max-width:100%;box-sizing:border-box;}" +
+      ".ad-slot .ad-label{position:absolute;top:6px;left:10px;font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-dim);}" +
+      ".ad-slot .ad-unit{max-width:100%;overflow-x:auto;}" +
+      ".ad-slot .ad-unit iframe,.ad-slot .ad-unit img{max-width:100%;}" +
+      // The snippet sits directly in .ad-slot here (no .ad-unit wrapper), so
+      // also catch bare iframes/images one level up — same fix as ad-test.html.
+      ".ad-slot iframe,.ad-slot img{max-width:100%;}" +
+      ".ad-slot .adsbygoogle{width:100%;display:block;}";
+
     // Render the unit's snippet in a sandboxed iframe so it can't touch the page.
     function togglePreview(row) {
       var box = row.querySelector(".loader-preview-box");
@@ -194,12 +211,18 @@
           )
         : row.querySelector(".loader-src").value;
       if (!snippet.trim()) { box.textContent = "(empty)"; return; }
+      var slotName = row.querySelector(".loader-slot").value;
       var frame = document.createElement("iframe");
       frame.className = "loader-preview-frame";
       frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox");
       frame.srcdoc = "<!doctype html><html><head><meta charset='utf-8'><base target='_blank'>" +
-        "<style>html,body{margin:0}body{font:13px/1.4 sans-serif;color:#555;padding:8px}</style>" +
-        "</head><body>" + snippet + "</body></html>";
+        "<style>" + SITE_CSS + "</style>" +
+        "</head><body>" +
+        "<div class='ad-slot ad-slot-" + slotName + "' data-ad-slot='" + slotName + "'>" +
+        "<span class='ad-label'>Ad</span>" +
+        snippet +
+        "</div>" +
+        "</body></html>";
       box.appendChild(frame);
     }
 

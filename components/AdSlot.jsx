@@ -25,7 +25,13 @@ export default async function AdSlot({ name }) {
     units = [];
   }
   if (!units.length) return null;
-  const parsed = units.map((u) => ({ id: u.id, ...parseSnippet(u.script) }));
+  // Banner units render in their own iframe (see <AdUnits>) and build their
+  // markup from the banner config, so they don't need the snippet split.
+  const parsed = units.map((u) =>
+    u.banner
+      ? { id: u.id, label: u.label, banner: u.banner }
+      : { id: u.id, label: u.label, ...parseSnippet(u.script) }
+  );
   return (
     <div className={`ad-slot ad-slot-${name}`} data-ad-slot={name}>
       <span className="ad-label">Ad</span>

@@ -1,10 +1,15 @@
 # https://hojehabola.com/ — football on TV worldwide & where to watch it.
 # Crawlers are welcome. The admin/debug page, API proxies and on-the-fly image
 # endpoints are not content. AI assistants: see /llms.txt for a guided summary.
+#
+# Note: /admin is intentionally *not* disallowed here. It is kept out of the
+# index via `noindex` (X-Robots-Tag header + per-page meta) — and a noindex
+# directive is only honoured when the crawler is allowed to fetch the page.
+# Blocking it in robots.txt would hide that noindex and could leave admin URLs
+# stuck as bare entries in the index instead of being removed.
 
 User-agent: *
 Allow: /
-Disallow: /admin
 Disallow: /api/
 Disallow: /og/
 Disallow: /image

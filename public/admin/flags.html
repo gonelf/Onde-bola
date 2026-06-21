@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="/admin/admin.css" />
 </head>
 <body>
-  <div class="sub">Toggle app behavior on/off without a deploy.</div>
+  <div class="sub">Set app behavior per environment without a deploy.</div>
 
   <div class="card" id="flagsCard">
     <div style="font-weight:600; margin-bottom:2px;">🚩 Feature flags</div>
@@ -47,19 +47,25 @@
       var head = document.createElement("div");
       head.className = "loader-head";
 
-      var onLabel = document.createElement("label");
-      onLabel.className = "loader-onlabel";
-      var chk = document.createElement("input");
-      chk.type = "checkbox"; chk.className = "flag-on";
-      chk.checked = !!flag.enabled;
-      onLabel.appendChild(chk);
-      onLabel.appendChild(document.createTextNode("on"));
+      var sel = document.createElement("select");
+      sel.className = "flag-value";
+      [
+        ["off", "Off"],
+        ["staging", "Staging (only staging, no production)"],
+        ["production", "Production (staging included)"],
+      ].forEach(function (opt) {
+        var o = document.createElement("option");
+        o.value = opt[0];
+        o.textContent = opt[1];
+        sel.appendChild(o);
+      });
+      sel.value = flag.value || "off";
 
       var name = document.createElement("strong");
       name.textContent = flag.label || flag.id || "";
       name.style.marginLeft = "8px";
 
-      head.appendChild(onLabel);
+      head.appendChild(sel);
       head.appendChild(name);
 
       var desc = document.createElement("div");
@@ -85,7 +91,7 @@
     function collect() {
       var out = [];
       rowsEl.querySelectorAll(".loader-row").forEach(function (row) {
-        out.push({ id: row.dataset.flagId, enabled: row.querySelector(".flag-on").checked });
+        out.push({ id: row.dataset.flagId, value: row.querySelector(".flag-value").value });
       });
       return out;
     }

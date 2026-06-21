@@ -13,6 +13,7 @@
     { href: "/admin/seo", label: "pSEO / sitemap" },
     { href: "/admin/ads", label: "Manage ads" },
     { href: "/admin/ad-test", label: "Ad script tester" },
+    { href: "/admin/flags", label: "Feature flags" },
   ];
 
   var path = location.pathname.replace(/\/+$/, "") || "/admin";

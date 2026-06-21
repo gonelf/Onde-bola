@@ -22,6 +22,7 @@
   .at-row.box-ok { color: var(--ok); }
   .at-row.box-warn { color: var(--warn); }
   .at-row.box-error { color: var(--bad); }
+  .at-row.frame { color: var(--accent); }
   .at-row .ts { color: var(--muted); margin-right: 6px; }
   select#slot, select#example { width: auto; }
   textarea#snippet { min-height: 140px; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; }
@@ -142,13 +143,22 @@
         "      el.addEventListener('error', function(){ post('error', 'FAILED to load ' + src + ' \\u2014 blocked / 404 / network error'); });\n" +
         "    }\n" +
         "  }\n" +
+        "  var seenFrames = (typeof WeakSet !== 'undefined') ? new WeakSet() : { has:function(){return false;}, add:function(){} };\n" +
+        "  function watchFrame(el){\n" +
+        "    if (seenFrames.has(el)) return; seenFrames.add(el);\n" +
+        "    var w = el.getAttribute('width') || el.offsetWidth || '?';\n" +
+        "    var h = el.getAttribute('height') || el.offsetHeight || '?';\n" +
+        "    post('frame', { src: el.getAttribute('src') || '', w: String(w), h: String(h) });\n" +
+        "  }\n" +
         "  document.querySelectorAll('script').forEach(watch);\n" +
+        "  document.querySelectorAll('iframe').forEach(watchFrame);\n" +
         "  new MutationObserver(function(muts){\n" +
         "    muts.forEach(function(m){\n" +
         "      Array.prototype.forEach.call(m.addedNodes, function(n){\n" +
         "        if (!n.tagName) return;\n" +
         "        if (n.tagName === 'SCRIPT') watch(n);\n" +
-        "        else if (n.querySelectorAll) Array.prototype.forEach.call(n.querySelectorAll('script'), watch);\n" +
+        "        else if (n.tagName === 'IFRAME') watchFrame(n);\n" +
+        "        else if (n.querySelectorAll) { Array.prototype.forEach.call(n.querySelectorAll('script'), watch); Array.prototype.forEach.call(n.querySelectorAll('iframe'), watchFrame); }\n" +
         "      });\n" +
         "    });\n" +
         "  }).observe(document.documentElement, {childList:true, subtree:true});\n" +
@@ -168,7 +178,7 @@
         "      blocked = (bait.offsetParent === null) || style.display === 'none' || style.visibility === 'hidden';\n" +
         "    }\n" +
         "    post('snapshot', { height: box ? box.offsetHeight : 0, childCount: box ? box.children.length : 0, blocked: blocked });\n" +
-        "    var res = performance.getEntriesByType('resource').map(function(r){ return { name:r.name, ms:Math.round(r.duration), bytes:r.transferSize||0 }; });\n" +
+        "    var res = performance.getEntriesByType('resource').map(function(r){ return { name:r.name, ms:Math.round(r.duration), bytes:r.transferSize||0, it:r.initiatorType }; });\n" +
         "    post('resources', res);\n" +
         "  }\n" +
         "  setTimeout(snapshot, 700); setTimeout(snapshot, 2200); setTimeout(snapshot, 5000);\n" +
@@ -215,6 +225,30 @@
     var resourceRows = [];
     var lastBlocked = null;
 
+    // Self-placing heuristic: a banner serves its creative inside its own
+    // (cross-origin) iframe, so the only top-level script/pixel our document
+    // sees should be on a host the pasted snippet itself named. A script/beacon
+    // fired at some *other* host is the fingerprint of a popunder / social bar /
+    // push / direct-link loader — it runs for its side effect and paints no
+    // visible banner. We flag the first hit per foreign host. (Creative iframes
+    // and images are exempt; those foreign hosts are the ad itself, not a loader.)
+    var declaredHosts = {};
+    var flaggedHosts = {};
+    function hostOf(u) { try { return new URL(u, location.href).host; } catch (e) { return ""; } }
+    function computeDeclaredHosts(snippet) {
+      var hosts = {}; hosts[location.host] = true;
+      var re = /(?:src|href)\s*=\s*["']([^"']+)["']/gi, m;
+      while ((m = re.exec(snippet))) { var h = hostOf(m[1]); if (h) hosts[h] = true; }
+      return hosts;
+    }
+    function checkForeign(url, it) {
+      if (it === "iframe" || it === "img" || it === "css" || it === "link" || it === "video" || it === "audio") return;
+      var h = hostOf(url);
+      if (!h || declaredHosts[h] || flaggedHosts[h]) return;
+      flaggedHosts[h] = true;
+      addRow("warn", "⚠ contacted 3rd-party host '" + h + "' that isn't in your pasted snippet — the signature of a self-placing / redirect format (popunder, social bar, push, direct link). These run for their side effect and don't render a visible banner here or on the site.");
+    }
+
     function resetLog() {
       events = []; resourceRows = []; lastBlocked = null;
       $("log").innerHTML = "";
@@ -247,6 +281,7 @@
       ];
       if (lastBlocked === true) bits.push('<span style="color:var(--bad)">⚠ bait element hidden — blocker active</span>');
       if (lastBlocked === false) bits.push('<span style="color:var(--ok)">no cosmetic blocker detected</span>');
+      if (Object.keys(flaggedHosts).length) bits.push('<span style="color:var(--warn)">⚠ self-placing / redirect behavior detected — won\'t show a banner</span>');
       $("summary").innerHTML = bits.map(function (b) { return "<span>" + b + "</span>"; }).join("");
       $("logHint").textContent = events.length + " event(s)";
     }
@@ -271,8 +306,12 @@
             : "preview box: empty (" + d.detail.childCount + " node(s), " + d.detail.height + "px) — nothing rendered yet";
           addRow(snapKind, snapMsg);
           break;
+        case "frame":
+          addRow("frame", "+ <iframe" + (d.detail.src ? ' src="' + d.detail.src + '"' : "") + "> inserted — " + d.detail.w + "×" + d.detail.h + " creative slot. If it shows blank, the network returned no ad (no-fill) — an ad-network/zone issue, not a code or placement problem.");
+          break;
         case "resources":
           (d.detail || []).forEach(function (r) {
+            checkForeign(r.name, r.it);
             var key = r.name;
             if (resourceRows.indexOf(key) !== -1) return;
             resourceRows.push(key);
@@ -286,6 +325,8 @@
       var snippet = $("snippet").value;
       if (!snippet.trim()) { $("frameHint").textContent = "Paste a snippet first."; return; }
       resetLog();
+      declaredHosts = computeDeclaredHosts(snippet);
+      flaggedHosts = {};
       var slotName = $("slot").value || "global";
       var old = $("frame");
       var frame = document.createElement("iframe");

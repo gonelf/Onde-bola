@@ -128,6 +128,7 @@ app/
   api/listings/route.js          Serves tv:rich:<date>; revalidates on visit (Next after()); folds in manual overrides
   api/overrides/route.js         Admin CRUD for manual TV overrides (Basic Auth: ADMIN_USER / ADMIN_PASSWORD)
   api/ads/route.js               Admin CRUD for the ad units list (lib/ads-store.js), consumed by <AdSlot> (Basic Auth)
+  api/flags/route.js             Admin CRUD for feature flags (lib/flags.js), consumed via isEnabled() (Basic Auth)
   api/matchdetails/route.js      Per-match FotMob detail (venue, timeline, lineups, h2h, stats)
   api/highlights/route.js        Reads the collected highlights back as a feed
   api/cron-listings/route.js     Daily pre-warm of the upcoming window (shares lib/listings-build.js with on-visit refresh)
@@ -145,6 +146,7 @@ lib/format.js                    Shared helpers (dates, slugs, status, share lin
 lib/i18n.js                      EN/PT translation table + language helpers
 lib/broadcasters.js              Free-to-air channel classifier (green vs amber)
 lib/ads-store.js                 Ad unit store (KV-backed): admin-managed snippets + slot assignment, read by <AdSlot> and /api/ads
+lib/flags.js                     Feature flags (KV-backed): on/off switches read via isEnabled(), e.g. <AdSlot>'s "ads" flag — see "Feature flags" below
 lib/ads.js                       Legacy AdSense config — unused; superseded by lib/ads-store.js + /admin/ads
 lib/kv.js                        Vercel KV (Upstash Redis REST) client, shared by the data routes
 lib/cardinfo.js                  Rebuilds a game's share-card data from its match id (FotMob + KV cache)
@@ -156,11 +158,11 @@ lib/digest-text.js               Builds the /text plain-text digest (ranking, fl
 lib/country-flags.js             National-team name → flag emoji (EN + PT names) for the text digest
 lib/sitemap-sweep.js             Builds the canonical SEO URL map + KV registry helpers, shared by the sitemap, its cron and /api/seo
 assets/styles.css                Styling (imported by the app layout)
-public/admin/                    Admin console (noindex): /admin connections debugger, /admin/overrides, /admin/seo, /admin/ads, /admin/ad-test
+public/admin/                    Admin console (noindex): /admin connections debugger, /admin/overrides, /admin/seo, /admin/ads, /admin/ad-test, /admin/flags
 public/assets/og-image.svg       Default social share / Open Graph card
 public/robots.txt                Crawl rules (allows the site, disallows /admin + /api)
 public/llms.txt                  Site summary for LLM/AI crawlers
-middleware.js                    Edge HTTP Basic Auth gating /admin + /api/overrides + /api/ads + /api/seo (ADMIN_USER / ADMIN_PASSWORD)
+middleware.js                    Edge HTTP Basic Auth gating /admin + /api/overrides + /api/ads + /api/seo + /api/flags (ADMIN_USER / ADMIN_PASSWORD)
 vercel.json                      Crons → /api/cron-sitemap + /api/cron-listings (both daily; listings also revalidates on visit)
 next.config.js                   Next.js config
 package.json                     next, react, @vercel/og, @vercel/analytics
@@ -430,3 +432,30 @@ days (and today once all games are finished) are cached permanently, future days
 
 > TV listings are crowd-sourced and can vary by region, platform and individual
 > match. Always confirm with your provider.
+
+## Feature flags
+
+`lib/flags.js` is a small KV-backed store of on/off switches the owner can flip
+from **`/admin/flags`** without a deploy — no env var, no redeploy, live within
+a few minutes (same cache/refresh window as ads/overrides). Current flags:
+
+- **`ads`** — site-wide ad slots (`<AdSlot>`: list-top, list-bottom, detail,
+  global). A kill switch independent of the ad-unit list in `/admin/ads` —
+  off hides every placement immediately. Defaults **on**.
+- **`homepage-debug-banner`** — a hardcoded test banner in the homepage
+  footer that bypasses the ads manager entirely, for checking whether a real
+  ad creative renders outside the ad-units pipeline. Defaults **off**.
+
+**Adding a new flag, every time:**
+
+1. Add one entry to `FLAG_DEFS` in `lib/flags.js`: `{ id, label, description,
+   default }`. `/api/flags` and `/admin/flags` read this list, so the new flag
+   shows up there automatically — no other admin-surface changes needed.
+2. At the point you want to gate, check it:
+   ```js
+   import { isEnabled } from "@/lib/flags";
+   if (!(await isEnabled("your-flag-id"))) return null; // or skip the branch
+   ```
+   `isEnabled()` is cached and fails closed to `false` on any error (KV down,
+   misconfigured, etc.), so it's safe to call from a server component without
+   extra error handling.

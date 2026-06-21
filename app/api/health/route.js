@@ -5,6 +5,8 @@
  * exposing any secret values (only booleans / non-sensitive config).
  */
 
+import { currentEnv, STAGING_HOST } from "@/lib/env";
+
 export const dynamic = "force-dynamic";
 
 const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
@@ -50,6 +52,12 @@ export async function GET() {
     {
       ok: true,
       time: new Date().toISOString(),
+      environment: {
+        env: await currentEnv(),
+        stagingHost: STAGING_HOST,
+        appEnv: process.env.APP_ENV || process.env.NEXT_PUBLIC_APP_ENV || null,
+        vercelEnv: process.env.VERCEL_ENV || null,
+      },
       kv,
       thesportsdb: { premiumKey: !!process.env.THESPORTSDB_KEY },
       sofascore: { enabled: process.env.SOFASCORE_DISABLED !== "1" },

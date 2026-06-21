@@ -4,8 +4,12 @@
  * Gated by HTTP Basic Auth (ADMIN_USER / ADMIN_PASSWORD), both at the edge
  * (middleware.js) and here (defence in depth, fail-closed when creds are unset).
  *
- *   GET   -> { flags:[{id,label,description,default,enabled}], kvConfigured }
+ *   GET   -> { flags:[{id,label,description,default,enabled}], kvConfigured, env }
  *   POST  { flags:[{id,enabled}] }  -> replace the stored overrides
+ *
+ * Flags are read/written for the *current* environment (production vs staging —
+ * see lib/env.js), so the admin page served on the staging domain manages the
+ * staging overrides and the one on production manages production's.
  *
  * On save we revalidate the "flags" cache tag so isEnabled() picks up the
  * change promptly.
@@ -15,6 +19,7 @@ import { revalidateTag } from "next/cache";
 import { isAdmin, adminCredsConfigured } from "@/lib/admin-auth";
 import { kvConfigured } from "@/lib/kv";
 import { loadFlags, saveFlags, isValidFlag, FLAGS_TAG } from "@/lib/flags";
+import { currentEnv } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -29,8 +34,9 @@ function deny() {
 
 export async function GET(request) {
   if (!isAdmin(request)) return deny();
-  const flags = await loadFlags();
-  return Response.json({ flags, kvConfigured }, { headers: noStore });
+  const env = await currentEnv();
+  const flags = await loadFlags(env);
+  return Response.json({ flags, kvConfigured, env }, { headers: noStore });
 }
 
 export async function POST(request) {
@@ -56,7 +62,8 @@ export async function POST(request) {
     );
   }
 
-  const flags = await saveFlags(body.flags);
+  const env = await currentEnv();
+  const flags = await saveFlags(body.flags, env);
   revalidateTag(FLAGS_TAG);
-  return Response.json({ ok: true, flags, kvConfigured }, { headers: noStore });
+  return Response.json({ ok: true, flags, kvConfigured, env }, { headers: noStore });
 }

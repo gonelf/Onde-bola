@@ -19,6 +19,7 @@
 
 import { kvConfigured } from "@/lib/kv";
 import { isAdmin, adminCredsConfigured } from "@/lib/admin-auth";
+import { forwardAuthHeaders } from "@/lib/forward-auth";
 import {
   sweep,
   lisbonYmd,
@@ -139,7 +140,7 @@ export async function POST(request) {
 
   // sweep + rebuild both re-scan the fixtures window.
   if (action === "rebuild") await clearRegistry();
-  const { map } = await sweep(originOf(request));
+  const { map } = await sweep(originOf(request), forwardAuthHeaders(request.headers));
   const swept = await writeRegistry(map);
   const stale = await pruneRegistry(today);
   const reg = await readRegistry();

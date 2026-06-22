@@ -130,22 +130,55 @@ function CardChannels({ fx, t, primaryCountry }) {
 
 // ---- Game card ----------------------------------------------------------
 
+// Kickoff clock with the hour stacked on top of the minutes (left-aligned).
+// We split via Intl parts so 24h locales render "18 / 00" and 12h locales keep
+// their AM/PM marker without it leaking into the minutes line.
 function TimeCell({ fx, t, locale }) {
   const st = statusOf(fx, t);
-  const clock = formatClock(new Date(fx.kickoff), locale);
+  const parts = new Intl.DateTimeFormat(locale || [], { hour: "2-digit", minute: "2-digit" })
+    .formatToParts(new Date(fx.kickoff));
+  const part = (type) => (parts.find((p) => p.type === type) || {}).value || "";
+  const hh = part("hour");
+  const mm = part("minute");
+  const ap = part("dayPeriod");
   return (
     <>
-      <div className="clock">{clock}</div>
+      <div className="clock">
+        <span className="hh">{hh}</span>
+        <span className="mm">{mm}{ap ? <span className="ap"> {ap}</span> : null}</span>
+      </div>
       {st.state === "live" ? <span className="live">{st.label || "LIVE"}</span> : null}
       {st.state === "finished" ? <span className="ft">{st.label || "FT"}</span> : null}
     </>
   );
 }
 
-function Score({ fx, side, t }) {
-  if (!hasScore(fx)) return null;
-  if (statusOf(fx, t).state === "upcoming") return null;
-  return <span className="score">{side === "home" ? fx.homeScore : fx.awayScore}</span>;
+// Centre slot between the crests: the score once a game is under way, "vs"
+// before kickoff.
+function MatchResult({ fx, t }) {
+  if (hasScore(fx) && statusOf(fx, t).state !== "upcoming") {
+    return <span className="score">{fx.homeScore} - {fx.awayScore}</span>;
+  }
+  return <span className="vs">{t("vs")}</span>;
+}
+
+// Break long team names onto a second line. A name over 7 characters that has a
+// space wraps at the last space; a long single word is left whole (mid-word
+// breaks read worse than letting the name run).
+function TeamName({ name }) {
+  const n = name || "";
+  if (n.length > 7) {
+    const at = n.lastIndexOf(" ");
+    if (at > 0) {
+      return (
+        <span className="team-name two-line">
+          <span>{n.slice(0, at)}</span>
+          <span>{n.slice(at + 1)}</span>
+        </span>
+      );
+    }
+  }
+  return <span className="team-name">{n}</span>;
 }
 
 function GameCard({ fx, t, locale, primaryCountry, highlightsById, onOpen, onShare }) {
@@ -168,16 +201,18 @@ function GameCard({ fx, t, locale, primaryCountry, highlightsById, onOpen, onSha
           <TimeCell fx={fx} t={t} locale={locale} />
           {fx.group ? <span className="match-group">{t("group") + " " + fx.group}</span> : null}
         </div>
-        <div className="teams">
-          <div className="team">
+        <div className="matchup">
+          <div className="team home">
+            <TeamName name={fx.home} />
             <Badge url={fx.homeBadge} name={fx.home} />
-            <span className="team-name">{fx.home}</span>
-            <Score fx={fx} side="home" t={t} />
           </div>
-          <div className="team">
+          <div className="match-centre">
+            <span className="match-comp">{fx.competition}</span>
+            <MatchResult fx={fx} t={t} />
+          </div>
+          <div className="team away">
             <Badge url={fx.awayBadge} name={fx.away} />
-            <span className="team-name">{fx.away}</span>
-            <Score fx={fx} side="away" t={t} />
+            <TeamName name={fx.away} />
           </div>
         </div>
       </a>
@@ -955,15 +990,8 @@ export default function GamesBrowser() {
           {visibleOrder.map((comp) => {
             const games = grouped.groups[comp].slice().sort((a, b) =>
               new Date(a.kickoff) - new Date(b.kickoff));
-            const badged = games.filter((g) => g.leagueBadgeUrl)[0];
-            const badgeUrl = badged ? badged.leagueBadgeUrl : "";
             return (
               <section className="competition" key={comp}>
-                <h2 className="competition-head">
-                  <LeagueLogo url={badgeUrl} name={comp} />
-                  <span className="competition-name">{comp}</span>
-                  <span className="count">{games.length}</span>
-                </h2>
                 {games.map((g) => (
                   <GameCard key={g.id} fx={g} t={t} locale={locale} primaryCountry={primaryCountry}
                     highlightsById={highlightsById} onOpen={openDetails} onShare={onShare} />

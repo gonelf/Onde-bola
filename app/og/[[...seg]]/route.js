@@ -158,8 +158,8 @@ const FORMATS = {
     W: 1200, H: 630, accentH: 10, pad: "26px 56px",
     brandDot: 26, brandFont: 30, titleFont: 40, dateFont: 30, tagFont: 22, headGap: 18,
     rowPad: "11px 22px", rowGap: 10, rowName: 28, rowCrest: 48, rowScore: 30,
-    rowBadge: 36, rowCompCol: 44, rowScoreCol: 150, rowNameCap: 22,
-    rowVs: 20, rowEyebrow: 22, rowEyebrowLabel: 15, rowEyebrowGap: 4,
+    rowBadge: 36, rowCompCol: 44, rowScoreCol: 150, rowNameCap: 22, rowTimeCol: 104,
+    rowVs: 20, rowEyebrow: 26, rowEyebrowLabel: 16, rowEyebrowGap: 2,
     heroPad: "18px 30px", heroCompFont: 22, heroName: 38, heroCrest: 96,
     heroScore: 64, heroVs: 34, heroEyebrow: 32, heroEyebrowLabel: 21, heroBadge: 34, heroNameCap: 24, heroGap: 18,
     maxN: 6,
@@ -168,8 +168,8 @@ const FORMATS = {
     W: 1080, H: 1080, accentH: 12, pad: "44px 56px",
     brandDot: 30, brandFont: 34, titleFont: 50, dateFont: 30, tagFont: 24, headGap: 22,
     rowPad: "15px 26px", rowGap: 13, rowName: 32, rowCrest: 56, rowScore: 34,
-    rowBadge: 40, rowCompCol: 50, rowScoreCol: 160, rowNameCap: 20,
-    rowVs: 23, rowEyebrow: 26, rowEyebrowLabel: 18, rowEyebrowGap: 5,
+    rowBadge: 40, rowCompCol: 50, rowScoreCol: 160, rowNameCap: 20, rowTimeCol: 120,
+    rowVs: 23, rowEyebrow: 30, rowEyebrowLabel: 18, rowEyebrowGap: 3,
     heroPad: "26px 36px", heroCompFont: 26, heroName: 46, heroCrest: 130,
     heroScore: 84, heroVs: 40, heroEyebrow: 40, heroEyebrowLabel: 26, heroBadge: 42, heroNameCap: 22, heroGap: 24,
     maxN: 7,
@@ -178,8 +178,8 @@ const FORMATS = {
     W: 1080, H: 1920, accentH: 16, pad: "90px 64px",
     brandDot: 36, brandFont: 42, titleFont: 66, dateFont: 38, tagFont: 30, headGap: 30,
     rowPad: "22px 32px", rowGap: 18, rowName: 40, rowCrest: 68, rowScore: 44,
-    rowBadge: 50, rowCompCol: 66, rowScoreCol: 190, rowNameCap: 22,
-    rowVs: 26, rowEyebrow: 31, rowEyebrowLabel: 21, rowEyebrowGap: 6,
+    rowBadge: 50, rowCompCol: 66, rowScoreCol: 190, rowNameCap: 22, rowTimeCol: 156,
+    rowVs: 26, rowEyebrow: 38, rowEyebrowLabel: 21, rowEyebrowGap: 4,
     heroPad: "42px 46px", heroCompFont: 32, heroName: 60, heroCrest: 184,
     heroScore: 112, heroVs: 52, heroEyebrow: 48, heroEyebrowLabel: 30, heroBadge: 56, heroNameCap: 24, heroGap: 30,
     maxN: 12,
@@ -313,18 +313,42 @@ function centreCell(f, S) {
   );
 }
 
+// Left rail (TV-guide style): the kickoff time, live minute or finished time
+// runs down the left edge with its label beneath, so the row reads like a
+// listings schedule — "when" on the left, the matchup on the right.
+function timeRail(f, S) {
+  const state = matchState(f);
+  const time = fmtTime(f.kickoff);
+  const col = (kids) =>
+    h(
+      "div",
+      { style: { display: "flex", flexDirection: "column", width: S.rowTimeCol, justifyContent: "center" } },
+      kids
+    );
+  if (state === "live") {
+    const minute = clamp(f.status, 6) || "AO VIVO";
+    return col([
+      h("div", { style: { display: "flex", fontSize: S.rowEyebrow, fontWeight: 800, color: COLOR.live } }, minute),
+      h("div", { style: { display: "flex", marginTop: S.rowEyebrowGap, fontSize: S.rowEyebrowLabel, fontWeight: 800, color: COLOR.live } }, "• AO VIVO"),
+    ]);
+  }
+  if (state === "finished") {
+    return col([
+      h("div", { style: { display: "flex", fontSize: S.rowEyebrow, fontWeight: 800, color: COLOR.eyebrowTimeFin } }, time || "—"),
+      h("div", { style: { display: "flex", marginTop: S.rowEyebrowGap, fontSize: S.rowEyebrowLabel, fontWeight: 800, color: COLOR.muted } }, "FIM"),
+    ]);
+  }
+  // scheduled
+  return col([
+    h("div", { style: { display: "flex", fontSize: S.rowEyebrow, fontWeight: 800, color: COLOR.eyebrowTime } }, time || ""),
+  ]);
+}
+
 function gameRow(f, S) {
   const matchup = h(
     "div",
-    { style: { display: "flex", flexDirection: "row", alignItems: "center" } },
+    { style: { display: "flex", flexDirection: "row", alignItems: "center", flexGrow: 1 } },
     [
-      h(
-        "div",
-        { style: { display: "flex", width: S.rowCompCol, alignItems: "center", justifyContent: "center" } },
-        f._compBadge
-          ? h("img", { src: f._compBadge, width: S.rowBadge, height: S.rowBadge, style: { width: S.rowBadge, height: S.rowBadge, objectFit: "contain" } })
-          : h("div", { style: { display: "flex" } }, "")
-      ),
       h(
         "div",
         { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-end", flexGrow: 1 } },
@@ -348,12 +372,12 @@ function gameRow(f, S) {
     "div",
     {
       style: {
-        display: "flex", flexDirection: "column",
+        display: "flex", flexDirection: "row", alignItems: "center",
         backgroundColor: COLOR.panel, border: `1px solid ${COLOR.border}`,
         borderRadius: 16, padding: S.rowPad, marginBottom: S.rowGap,
       },
     },
-    [eyebrowLine(f, S.rowEyebrow, S.rowEyebrowLabel, { marginBottom: S.rowEyebrowGap }), matchup]
+    [timeRail(f, S), matchup]
   );
 }
 

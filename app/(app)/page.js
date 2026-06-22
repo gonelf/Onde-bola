@@ -7,36 +7,6 @@
 
 import GamesBrowser from "@/components/GamesBrowser";
 import AdSlot from "@/components/AdSlot";
-import AdUnits from "@/components/AdUnits";
-import { parseSnippet } from "@/lib/ads-store";
-import { isEnabled } from "@/lib/flags";
-
-// TEMP debug block — bypasses the ads manager (KV store / AdSlot / slot
-// filtering) entirely so this snippet's own behavior on a real top-level
-// page can be checked in isolation from that pipeline. Gated behind the
-// "homepage-debug-banner" flag (toggle at /admin/flags) so it can be turned
-// off without a deploy. Remove the flag and this block once that's confirmed
-// either way.
-const DEBUG_BANNER_SNIPPET = `<script>
-  atOptions = {
-    'key' : '5d707cb606d19e6dbd49df6e0a870c48',
-    'format' : 'iframe',
-    'height' : 60,
-    'width' : 468,
-    'params' : {}
-  };
-</script>
-<script src="https://www.highperformanceformat.com/5d707cb606d19e6dbd49df6e0a870c48/invoke.js"></script>`;
-
-async function DebugBanner() {
-  if (!(await isEnabled("homepage-debug-banner"))) return null;
-  return (
-    <div style={{ padding: "16px", textAlign: "center", border: "1px dashed #16d27a" }}>
-      <p style={{ fontSize: "11px", color: "#93a4b8", margin: "0 0 6px" }}>DEBUG AD TEST (direct, bypasses ads manager)</p>
-      <AdUnits units={[{ id: "debug-direct", ...parseSnippet(DEBUG_BANNER_SNIPPET) }]} />
-    </div>
-  );
-}
 
 // ISR: the page chrome is static, but the ad slots read the admin-managed list,
 // so regenerate periodically to pick up changes (admin saves also bust it via
@@ -163,10 +133,6 @@ export default function HomePage() {
             </p>
           </div>
         </div>
-
-        {/* TEMP debug: raw banner snippet, hardcoded, no ads-manager involved.
-            Off by default — flip "homepage-debug-banner" at /admin/flags. */}
-        <DebugBanner />
       </footer>
 
       <AdSlot name="global" />

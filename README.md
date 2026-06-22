@@ -147,7 +147,6 @@ lib/i18n.js                      EN/PT translation table + language helpers
 lib/broadcasters.js              Free-to-air channel classifier (green vs amber)
 lib/ads-store.js                 Ad unit store (KV-backed): admin-managed snippets + slot assignment, read by <AdSlot> and /api/ads
 lib/flags.js                     Feature flags (KV-backed): on/off switches read via isEnabled(), e.g. <AdSlot>'s "ads" flag — see "Feature flags" below
-lib/ads.js                       Legacy AdSense config — unused; superseded by lib/ads-store.js + /admin/ads
 lib/kv.js                        Vercel KV (Upstash Redis REST) client, shared by the data routes
 lib/cardinfo.js                  Rebuilds a game's share-card data from its match id (FotMob + KV cache)
 lib/seo-render.js                Renders the /g per-game + league HTML pages (metadata, JSON-LD, body)
@@ -442,9 +441,6 @@ a few minutes (same cache/refresh window as ads/overrides). Current flags:
 - **`ads`** — site-wide ad slots (`<AdSlot>`: list-top, list-bottom, detail,
   global). A kill switch independent of the ad-unit list in `/admin/ads` —
   off hides every placement immediately. Defaults **on**.
-- **`homepage-debug-banner`** — a hardcoded test banner in the homepage
-  footer that bypasses the ads manager entirely, for checking whether a real
-  ad creative renders outside the ad-units pipeline. Defaults **off**.
 
 **Adding a new flag, every time:**
 

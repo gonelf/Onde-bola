@@ -157,9 +157,10 @@ const FORMATS = {
   landscape: {
     W: 1200, H: 630, accentH: 10, pad: "26px 56px",
     brandDot: 26, brandFont: 30, titleFont: 40, dateFont: 30, tagFont: 22, headGap: 18,
-    rowPad: "11px 22px", rowGap: 10, rowName: 28, rowCrest: 48, rowScore: 30,
+    rowPad: "14px 28px", rowGap: 10, rowName: 28, rowCrest: 48, rowScore: 30,
     rowBadge: 36, rowCompCol: 44, rowScoreCol: 150, rowNameCap: 22,
     rowVs: 20, rowEyebrow: 22, rowEyebrowLabel: 15, rowEyebrowGap: 4,
+    railCol: 150, railTime: 34, railLabel: 16, railGap: 5,
     heroPad: "18px 30px", heroCompFont: 22, heroName: 38, heroCrest: 96,
     heroScore: 64, heroVs: 34, heroEyebrow: 32, heroEyebrowLabel: 21, heroBadge: 34, heroNameCap: 24, heroGap: 18,
     maxN: 6,
@@ -167,9 +168,10 @@ const FORMATS = {
   square: {
     W: 1080, H: 1080, accentH: 12, pad: "44px 56px",
     brandDot: 30, brandFont: 34, titleFont: 50, dateFont: 30, tagFont: 24, headGap: 22,
-    rowPad: "15px 26px", rowGap: 13, rowName: 32, rowCrest: 56, rowScore: 34,
+    rowPad: "18px 32px", rowGap: 13, rowName: 32, rowCrest: 56, rowScore: 34,
     rowBadge: 40, rowCompCol: 50, rowScoreCol: 160, rowNameCap: 20,
     rowVs: 23, rowEyebrow: 26, rowEyebrowLabel: 18, rowEyebrowGap: 5,
+    railCol: 168, railTime: 40, railLabel: 18, railGap: 6,
     heroPad: "26px 36px", heroCompFont: 26, heroName: 46, heroCrest: 130,
     heroScore: 84, heroVs: 40, heroEyebrow: 40, heroEyebrowLabel: 26, heroBadge: 42, heroNameCap: 22, heroGap: 24,
     maxN: 7,
@@ -177,9 +179,10 @@ const FORMATS = {
   story: {
     W: 1080, H: 1920, accentH: 16, pad: "90px 64px",
     brandDot: 36, brandFont: 42, titleFont: 66, dateFont: 38, tagFont: 30, headGap: 30,
-    rowPad: "22px 32px", rowGap: 18, rowName: 40, rowCrest: 68, rowScore: 44,
+    rowPad: "26px 38px", rowGap: 18, rowName: 40, rowCrest: 68, rowScore: 44,
     rowBadge: 50, rowCompCol: 66, rowScoreCol: 190, rowNameCap: 22,
     rowVs: 26, rowEyebrow: 31, rowEyebrowLabel: 21, rowEyebrowGap: 6,
+    railCol: 210, railTime: 50, railLabel: 22, railGap: 7,
     heroPad: "42px 46px", heroCompFont: 32, heroName: 60, heroCrest: 184,
     heroScore: 112, heroVs: 52, heroEyebrow: 48, heroEyebrowLabel: 30, heroBadge: 56, heroNameCap: 24, heroGap: 30,
     maxN: 12,
@@ -313,18 +316,53 @@ function centreCell(f, S) {
   );
 }
 
+// The left "TV-guide" rail: the kickoff time / minute lives here, in its own
+// column on the far left of the row, so it reads like a listings schedule and
+// can never be confused with the score (which stays between the crests).
+// scheduled → HH:MM; live → red minute + "● AO VIVO"; finished → dimmed HH:MM +
+// "FIM".
+function railColumn(f, S) {
+  const state = matchState(f);
+  const time = fmtTime(f.kickoff);
+  const wrap = (kids) =>
+    h(
+      "div",
+      { style: { display: "flex", flexDirection: "column", width: S.railCol, justifyContent: "center", alignItems: "flex-start" } },
+      kids
+    );
+
+  if (state === "live") {
+    const minute = clamp(f.status, 6) || "AO VIVO";
+    const dot = Math.round(S.railLabel * 0.46);
+    return wrap([
+      h("div", { style: { display: "flex", fontSize: S.railTime, fontWeight: 800, color: COLOR.live, lineHeight: 1 } }, minute),
+      h(
+        "div",
+        { style: { display: "flex", flexDirection: "row", alignItems: "center", marginTop: S.railGap } },
+        [
+          h("div", { style: { display: "flex", width: dot, height: dot, borderRadius: dot, backgroundColor: COLOR.live, marginRight: Math.round(S.railLabel * 0.4) } }, ""),
+          h("div", { style: { display: "flex", fontSize: S.railLabel, fontWeight: 800, color: COLOR.live, letterSpacing: "0.5px" } }, "AO VIVO"),
+        ]
+      ),
+    ]);
+  }
+  if (state === "finished") {
+    return wrap([
+      h("div", { style: { display: "flex", fontSize: S.railTime, fontWeight: 800, color: COLOR.eyebrowTimeFin, lineHeight: 1 } }, time || "—"),
+      h("div", { style: { display: "flex", fontSize: S.railLabel, fontWeight: 800, color: COLOR.muted, marginTop: S.railGap, letterSpacing: "0.5px" } }, "FIM"),
+    ]);
+  }
+  // scheduled
+  return wrap([
+    h("div", { style: { display: "flex", fontSize: S.railTime, fontWeight: 800, color: COLOR.eyebrowTime, lineHeight: 1 } }, time || ""),
+  ]);
+}
+
 function gameRow(f, S) {
   const matchup = h(
     "div",
-    { style: { display: "flex", flexDirection: "row", alignItems: "center" } },
+    { style: { display: "flex", flexDirection: "row", alignItems: "center", flexGrow: 1 } },
     [
-      h(
-        "div",
-        { style: { display: "flex", width: S.rowCompCol, alignItems: "center", justifyContent: "center" } },
-        f._compBadge
-          ? h("img", { src: f._compBadge, width: S.rowBadge, height: S.rowBadge, style: { width: S.rowBadge, height: S.rowBadge, objectFit: "contain" } })
-          : h("div", { style: { display: "flex" } }, "")
-      ),
       h(
         "div",
         { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-end", flexGrow: 1 } },
@@ -348,12 +386,12 @@ function gameRow(f, S) {
     "div",
     {
       style: {
-        display: "flex", flexDirection: "column",
+        display: "flex", flexDirection: "row", alignItems: "center",
         backgroundColor: COLOR.panel, border: `1px solid ${COLOR.border}`,
         borderRadius: 16, padding: S.rowPad, marginBottom: S.rowGap,
       },
     },
-    [eyebrowLine(f, S.rowEyebrow, S.rowEyebrowLabel, { marginBottom: S.rowEyebrowGap }), matchup]
+    [railColumn(f, S), matchup]
   );
 }
 

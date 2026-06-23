@@ -337,22 +337,49 @@ function topPtChannel(rows) {
   return pt[0];
 }
 
-// The channel chip shown beneath the time in the rail. Free-to-air is tinted
-// green (accent), paid stays muted — mirroring the detail page's free/paid cue.
+// Channel-pill palette — the same tokens the website uses for its channel
+// chips: free-to-air green, paid cable amber (with a padlock).
+const CHIP = {
+  free: { fg: COLOR.accent, bg: "rgba(22,210,122,0.14)", border: "rgba(22,210,122,0.25)" },
+  paid: { fg: "#f5b041", bg: "rgba(245,176,65,0.14)", border: "rgba(245,176,65,0.3)" },
+};
+
+// A small padlock glyph (SVG, like clockIcon) for the paid pill, so we don't
+// depend on emoji rendering on the edge.
+function lockIcon(size, color) {
+  return h(
+    "svg",
+    { width: size, height: size, viewBox: "0 0 24 24", style: { display: "flex", marginRight: Math.round(size * 0.26) } },
+    [
+      h("rect", { x: 5, y: 11, width: 14, height: 9, rx: 2, fill: color }),
+      h("path", { d: "M8 11 V8 a4 4 0 0 1 8 0 V11", fill: "none", stroke: color, strokeWidth: 2 }),
+    ]
+  );
+}
+
+// The channel pill shown beneath the time in the rail — styled like the
+// website's chips (rounded, soft tinted fill + border): free-to-air green,
+// paid amber with a padlock.
 function channelLine(f, S) {
   const ch = f._ptChannel ? clamp(f._ptChannel, 16) : "";
   if (!ch) return null;
-  const free = !isPaidChannel(f._ptChannel);
+  const paid = isPaidChannel(f._ptChannel);
+  const c = paid ? CHIP.paid : CHIP.free;
+  const padV = Math.round(S.railChannel * 0.24);
+  const padH = Math.round(S.railChannel * 0.5);
+  const kids = [];
+  if (paid) kids.push(lockIcon(Math.round(S.railChannel * 0.78), c.fg));
+  kids.push(h("div", { style: { display: "flex", fontSize: S.railChannel, fontWeight: 700, color: c.fg } }, ch));
   return h(
     "div",
     {
       style: {
-        display: "flex", fontSize: S.railChannel, fontWeight: 700,
-        color: free ? COLOR.accent : COLOR.muted, marginTop: S.railGap,
-        maxWidth: S.railCol, whiteSpace: "nowrap",
+        display: "flex", flexDirection: "row", alignItems: "center", marginTop: S.railGap,
+        maxWidth: S.railCol, padding: `${padV}px ${padH}px`,
+        borderRadius: Math.round(S.railChannel * 0.5), backgroundColor: c.bg, border: `1px solid ${c.border}`,
       },
     },
-    ch
+    kids
   );
 }
 

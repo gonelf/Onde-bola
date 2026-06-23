@@ -11,8 +11,13 @@
   THE RULE the generators implement:
     • The centre slot BETWEEN the two teams only ever holds the matchup state —
       "vs" before kick-off, the score once there is one. Never a time.
-    • The kickoff time / minute moves to an EYEBROW line directly above the
-      matchup, so a time can never be misread as a score (and vice-versa).
+    • List rows put the kickoff time / minute on a LEFT RAIL (TV-guide style):
+      its own column on the far left of the row, so a time can never be misread
+      as a score (and vice-versa). The featured/hero card keeps the time on an
+      EYEBROW line directly above the matchup.
+    • Below the time, the rail names the top Portuguese channel for the game —
+      the first one shown on its detail page (free-to-air before paid, otherwise
+      feed order; see lib/app-data orderChannels). Green = free-to-air.
 
   Info hierarchy (by size):  1) team names + crests, 2) kickoff time, 3) result.
 
@@ -38,17 +43,25 @@
     display:flex;flex-direction:column;gap:22px}
   .frame h2{margin:0 0 4px;font-size:22px;color:var(--muted);font-weight:700;letter-spacing:.04em;text-transform:uppercase}
 
-  /* ---- list row ------------------------------------------------------- */
+  /* ---- list row (TV-guide: time on a left rail) ----------------------- */
   .row{background:var(--card);border:1px solid var(--line);border-radius:18px;
-    padding:18px 28px;display:flex;flex-direction:column;align-items:center;gap:8px}
-  .eyebrow{display:flex;align-items:center;justify-content:center;gap:9px;height:36px}
-  .eyebrow .time{font-size:31px;font-weight:800;color:var(--eyebrow-time);line-height:1}
-  .eyebrow.finished .time{color:var(--eyebrow-time-fin)}
-  .eyebrow .label{font-size:21px;font-weight:800;color:var(--muted)}
-  .eyebrow .minute{font-size:31px;font-weight:800;color:var(--red);line-height:1}
-  .eyebrow .dot{width:13px;height:13px;border-radius:50%;background:var(--red)}
-  .eyebrow svg{width:28px;height:28px}
-  .matchup{display:flex;align-items:center;justify-content:space-between;width:100%}
+    padding:18px 28px;display:flex;flex-direction:row;align-items:center;gap:8px}
+  .rail{display:flex;flex-direction:column;justify-content:center;gap:5px;
+    width:150px;flex:none}
+  .rail .time{font-size:34px;font-weight:800;color:var(--eyebrow-time);line-height:1}
+  .rail.finished .time{color:var(--eyebrow-time-fin)}
+  .rail .label{font-size:16px;font-weight:800;color:var(--muted);letter-spacing:.04em}
+  .rail .minute{font-size:34px;font-weight:800;color:var(--red);line-height:1}
+  .rail .live-tag{display:flex;align-items:center;gap:7px;font-size:16px;font-weight:800;color:var(--red);letter-spacing:.04em}
+  .rail .dot{width:11px;height:11px;border-radius:50%;background:var(--red)}
+  /* top Portuguese channel (detail-page order) under the time — same pill as the
+     website's channel chips: free-to-air green, paid amber with a padlock */
+  .rail .channel{display:inline-flex;align-items:center;gap:4px;align-self:flex-start;
+    border-radius:9px;padding:4px 9px;font-size:19px;font-weight:700;white-space:nowrap}
+  .rail .channel.free{background:rgba(22,210,122,.14);color:#16d27a;border:1px solid rgba(22,210,122,.25)}
+  .rail .channel.paid{background:rgba(245,176,65,.14);color:#f5b041;border:1px solid rgba(245,176,65,.3)}
+  .rail .channel .lock{font-size:.66em;line-height:1}
+  .matchup{display:flex;align-items:center;justify-content:space-between;flex:1;min-width:0}
   .team{display:flex;align-items:center;gap:18px;flex:1;min-width:0}
   .team.home{justify-content:flex-end;text-align:right}
   .team.away{justify-content:flex-start}
@@ -64,9 +77,13 @@
   .hero{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:40px;
     display:flex;flex-direction:column;align-items:center;gap:14px}
   .hero .comp{font-size:26px;font-weight:600;color:var(--muted)}
-  .hero .eyebrow .time{font-size:48px}
-  .hero .eyebrow .minute{font-size:48px}
+  /* hero kickoff banner: time, then the channel pill to its right */
+  .hero .eyebrow{display:flex;align-items:center;justify-content:center;gap:14px}
+  .hero .eyebrow .time{font-size:48px;font-weight:800;color:var(--eyebrow-time);line-height:1}
+  .hero .eyebrow .minute{font-size:48px;font-weight:800;color:var(--red);line-height:1}
+  .hero .eyebrow .dot{width:18px;height:18px;border-radius:50%;background:var(--red)}
   .hero .eyebrow svg{width:44px;height:44px}
+  .hero .eyebrow .channel{font-size:26px}
   .hero .matchup{align-items:flex-start}
   .hero .hteam{flex:1;display:flex;flex-direction:column;align-items:center;gap:18px}
   .hero .hcrest{width:158px;height:158px;border-radius:50%;background:#0c151d;border:1px solid var(--line);
@@ -88,11 +105,11 @@
   <div class="frame">
     <h2>List rows — one of each state</h2>
 
-    <!-- scheduled: clock + HH:MM eyebrow, "vs" centre -->
+    <!-- scheduled: HH:MM in the left rail, "vs" centre -->
     <div class="row scheduled">
-      <div class="eyebrow scheduled">
-        <svg style="color:var(--eyebrow-time)"><use href="#clock"/></svg>
+      <div class="rail scheduled">
         <span class="time">20:00</span>
+        <span class="channel free">RTP1</span>
       </div>
       <div class="matchup">
         <div class="team home"><span class="name">Benfica</span><span class="crest">B</span></div>
@@ -101,10 +118,12 @@
       </div>
     </div>
 
-    <!-- live: red dot + minute eyebrow, score centre -->
+    <!-- live: red minute + "● AO VIVO" in the left rail, score centre -->
     <div class="row live">
-      <div class="eyebrow live">
-        <span class="dot"></span><span class="minute">45'</span>
+      <div class="rail live">
+        <span class="minute">45'</span>
+        <span class="live-tag"><span class="dot"></span>AO VIVO</span>
+        <span class="channel paid"><span class="lock">🔒</span>Sport TV1</span>
       </div>
       <div class="matchup">
         <div class="team home"><span class="name">Sporting CP</span><span class="crest">S</span></div>
@@ -113,10 +132,12 @@
       </div>
     </div>
 
-    <!-- finished: dimmed HH:MM · Fim eyebrow, score centre -->
+    <!-- finished: dimmed HH:MM + "FIM" in the left rail, score centre -->
     <div class="row finished">
-      <div class="eyebrow finished">
-        <span class="time">17:30</span><span class="label">· Fim</span>
+      <div class="rail finished">
+        <span class="time">17:30</span>
+        <span class="label">FIM</span>
+        <span class="channel paid"><span class="lock">🔒</span>DAZN</span>
       </div>
       <div class="matchup">
         <div class="team home"><span class="name">Real Madrid</span><span class="crest">R</span></div>
@@ -133,6 +154,7 @@
       <div class="eyebrow scheduled">
         <svg style="color:var(--eyebrow-time)"><use href="#clock"/></svg>
         <span class="time">20:00</span>
+        <span class="channel paid"><span class="lock">🔒</span>Sport TV1</span>
       </div>
       <div class="matchup">
         <div class="hteam"><div class="hcrest">B</div><div class="hname">Benfica</div></div>

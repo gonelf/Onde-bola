@@ -19,6 +19,7 @@
 import { ImageResponse } from "next/og";
 import { getCard } from "@/lib/cardinfo";
 import { isKnownCompetition } from "@/lib/digest-select";
+import { isPaidChannel } from "@/lib/broadcasters";
 import { forwardAuthHeaders } from "@/lib/forward-auth";
 
 export const runtime = "edge";
@@ -157,9 +158,10 @@ const FORMATS = {
   landscape: {
     W: 1200, H: 630, accentH: 10, pad: "26px 56px",
     brandDot: 26, brandFont: 30, titleFont: 40, dateFont: 30, tagFont: 22, headGap: 18,
-    rowPad: "11px 22px", rowGap: 10, rowName: 28, rowCrest: 48, rowScore: 30,
+    rowPad: "12px 28px", rowGap: 10, rowName: 28, rowCrest: 48, rowScore: 30,
     rowBadge: 36, rowCompCol: 44, rowScoreCol: 150, rowNameCap: 22,
     rowVs: 20, rowEyebrow: 22, rowEyebrowLabel: 15, rowEyebrowGap: 4,
+    railCol: 150, railTime: 34, railLabel: 16, railChannel: 19, railGap: 5,
     heroPad: "18px 30px", heroCompFont: 22, heroName: 38, heroCrest: 96,
     heroScore: 64, heroVs: 34, heroEyebrow: 32, heroEyebrowLabel: 21, heroBadge: 34, heroNameCap: 24, heroGap: 18,
     maxN: 6,
@@ -167,9 +169,10 @@ const FORMATS = {
   square: {
     W: 1080, H: 1080, accentH: 12, pad: "44px 56px",
     brandDot: 30, brandFont: 34, titleFont: 50, dateFont: 30, tagFont: 24, headGap: 22,
-    rowPad: "15px 26px", rowGap: 13, rowName: 32, rowCrest: 56, rowScore: 34,
+    rowPad: "18px 32px", rowGap: 13, rowName: 32, rowCrest: 56, rowScore: 34,
     rowBadge: 40, rowCompCol: 50, rowScoreCol: 160, rowNameCap: 20,
     rowVs: 23, rowEyebrow: 26, rowEyebrowLabel: 18, rowEyebrowGap: 5,
+    railCol: 168, railTime: 40, railLabel: 18, railChannel: 22, railGap: 6,
     heroPad: "26px 36px", heroCompFont: 26, heroName: 46, heroCrest: 130,
     heroScore: 84, heroVs: 40, heroEyebrow: 40, heroEyebrowLabel: 26, heroBadge: 42, heroNameCap: 22, heroGap: 24,
     maxN: 7,
@@ -177,9 +180,10 @@ const FORMATS = {
   story: {
     W: 1080, H: 1920, accentH: 16, pad: "90px 64px",
     brandDot: 36, brandFont: 42, titleFont: 66, dateFont: 38, tagFont: 30, headGap: 30,
-    rowPad: "22px 32px", rowGap: 18, rowName: 40, rowCrest: 68, rowScore: 44,
+    rowPad: "26px 38px", rowGap: 18, rowName: 40, rowCrest: 68, rowScore: 44,
     rowBadge: 50, rowCompCol: 66, rowScoreCol: 190, rowNameCap: 22,
     rowVs: 26, rowEyebrow: 31, rowEyebrowLabel: 21, rowEyebrowGap: 6,
+    railCol: 210, railTime: 50, railLabel: 22, railChannel: 27, railGap: 7,
     heroPad: "42px 46px", heroCompFont: 32, heroName: 60, heroCrest: 184,
     heroScore: 112, heroVs: 52, heroEyebrow: 48, heroEyebrowLabel: 30, heroBadge: 56, heroNameCap: 24, heroGap: 30,
     maxN: 12,
@@ -313,18 +317,126 @@ function centreCell(f, S) {
   );
 }
 
+// The single Portuguese channel to surface per game: the one shown first on the
+// game's detail page — free-to-air channels before paid, otherwise the feed
+// order (matches lib/app-data orderChannels). `rows` are the {channel,country}
+// listings for the match; returns "" when no Portuguese channel is listed.
+function topPtChannel(rows) {
+  if (!Array.isArray(rows)) return "";
+  const seen = {};
+  const pt = [];
+  for (const r of rows) {
+    if (r && r.country === "Portugal" && r.channel && !seen[r.channel]) {
+      seen[r.channel] = true;
+      pt.push(r.channel);
+    }
+  }
+  if (!pt.length) return "";
+  // Stable sort (V8): free-to-air first, feed order preserved within each group.
+  pt.sort((a, b) => (isPaidChannel(a) ? 1 : 0) - (isPaidChannel(b) ? 1 : 0));
+  return pt[0];
+}
+
+// Channel-pill palette — the same tokens the website uses for its channel
+// chips: free-to-air green, paid cable amber (with a padlock).
+const CHIP = {
+  free: { fg: COLOR.accent, bg: "rgba(22,210,122,0.14)", border: "rgba(22,210,122,0.25)" },
+  paid: { fg: "#f5b041", bg: "rgba(245,176,65,0.14)", border: "rgba(245,176,65,0.3)" },
+};
+
+// A small padlock glyph (SVG, like clockIcon) for the paid pill, so we don't
+// depend on emoji rendering on the edge.
+function lockIcon(size, color) {
+  return h(
+    "svg",
+    { width: size, height: size, viewBox: "0 0 24 24", style: { display: "flex", marginRight: Math.round(size * 0.26) } },
+    [
+      h("rect", { x: 5, y: 11, width: 14, height: 9, rx: 2, fill: color }),
+      h("path", { d: "M8 11 V8 a4 4 0 0 1 8 0 V11", fill: "none", stroke: color, strokeWidth: 2 }),
+    ]
+  );
+}
+
+// The channel pill — styled like the website's chips (rounded, soft tinted
+// fill + border): free-to-air green, paid amber with a padlock. `margin` places
+// it (marginTop in the rail, marginLeft beside the hero's kickoff time).
+function channelPill(channel, fontSize, margin) {
+  const ch = channel ? clamp(channel, 16) : "";
+  if (!ch) return null;
+  const paid = isPaidChannel(channel);
+  const c = paid ? CHIP.paid : CHIP.free;
+  const padV = Math.round(fontSize * 0.24);
+  const padH = Math.round(fontSize * 0.5);
+  const kids = [];
+  if (paid) kids.push(lockIcon(Math.round(fontSize * 0.78), c.fg));
+  kids.push(h("div", { style: { display: "flex", fontSize, fontWeight: 700, color: c.fg } }, ch));
+  return h(
+    "div",
+    {
+      style: Object.assign(
+        {
+          display: "flex", flexDirection: "row", alignItems: "center",
+          padding: `${padV}px ${padH}px`, borderRadius: Math.round(fontSize * 0.5),
+          backgroundColor: c.bg, border: `1px solid ${c.border}`,
+        },
+        margin || {}
+      ),
+    },
+    kids
+  );
+}
+
+// The channel pill shown beneath the time in the rail.
+function channelLine(f, S) {
+  return channelPill(f._ptChannel, S.railChannel, { marginTop: S.railGap, maxWidth: S.railCol });
+}
+
+// The left "TV-guide" rail: the kickoff time / minute lives here, in its own
+// column on the far left of the row, so it reads like a listings schedule and
+// can never be confused with the score (which stays between the crests).
+// scheduled → HH:MM; live → red minute + "● AO VIVO"; finished → dimmed HH:MM +
+// "FIM".
+function railColumn(f, S) {
+  const state = matchState(f);
+  const time = fmtTime(f.kickoff);
+  const kids = [];
+
+  if (state === "live") {
+    const minute = clamp(f.status, 6) || "AO VIVO";
+    const dot = Math.round(S.railLabel * 0.46);
+    kids.push(h("div", { style: { display: "flex", fontSize: S.railTime, fontWeight: 800, color: COLOR.live, lineHeight: 1 } }, minute));
+    kids.push(
+      h(
+        "div",
+        { style: { display: "flex", flexDirection: "row", alignItems: "center", marginTop: S.railGap } },
+        [
+          h("div", { style: { display: "flex", width: dot, height: dot, borderRadius: dot, backgroundColor: COLOR.live, marginRight: Math.round(S.railLabel * 0.4) } }, ""),
+          h("div", { style: { display: "flex", fontSize: S.railLabel, fontWeight: 800, color: COLOR.live, letterSpacing: "0.5px" } }, "AO VIVO"),
+        ]
+      )
+    );
+  } else if (state === "finished") {
+    kids.push(h("div", { style: { display: "flex", fontSize: S.railTime, fontWeight: 800, color: COLOR.eyebrowTimeFin, lineHeight: 1 } }, time || "—"));
+    kids.push(h("div", { style: { display: "flex", fontSize: S.railLabel, fontWeight: 800, color: COLOR.muted, marginTop: S.railGap, letterSpacing: "0.5px" } }, "FIM"));
+  } else {
+    kids.push(h("div", { style: { display: "flex", fontSize: S.railTime, fontWeight: 800, color: COLOR.eyebrowTime, lineHeight: 1 } }, time || ""));
+  }
+
+  const ch = channelLine(f, S);
+  if (ch) kids.push(ch);
+
+  return h(
+    "div",
+    { style: { display: "flex", flexDirection: "column", width: S.railCol, justifyContent: "center", alignItems: "flex-start" } },
+    kids
+  );
+}
+
 function gameRow(f, S) {
   const matchup = h(
     "div",
-    { style: { display: "flex", flexDirection: "row", alignItems: "center" } },
+    { style: { display: "flex", flexDirection: "row", alignItems: "center", flexGrow: 1 } },
     [
-      h(
-        "div",
-        { style: { display: "flex", width: S.rowCompCol, alignItems: "center", justifyContent: "center" } },
-        f._compBadge
-          ? h("img", { src: f._compBadge, width: S.rowBadge, height: S.rowBadge, style: { width: S.rowBadge, height: S.rowBadge, objectFit: "contain" } })
-          : h("div", { style: { display: "flex" } }, "")
-      ),
       h(
         "div",
         { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-end", flexGrow: 1 } },
@@ -348,12 +460,12 @@ function gameRow(f, S) {
     "div",
     {
       style: {
-        display: "flex", flexDirection: "column",
+        display: "flex", flexDirection: "row", alignItems: "center",
         backgroundColor: COLOR.panel, border: `1px solid ${COLOR.border}`,
         borderRadius: 16, padding: S.rowPad, marginBottom: S.rowGap,
       },
     },
-    [eyebrowLine(f, S.rowEyebrow, S.rowEyebrowLabel, { marginBottom: S.rowEyebrowGap }), matchup]
+    [railColumn(f, S), matchup]
   );
 }
 
@@ -418,7 +530,14 @@ function heroCard(f, S) {
             ]
           )
         : h("div", { style: { display: "flex" } }, ""),
-      eyebrowLine(f, S.heroEyebrow, S.heroEyebrowLabel, { marginBottom: 14 }),
+      h(
+        "div",
+        { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 14 } },
+        [
+          eyebrowLine(f, S.heroEyebrow, S.heroEyebrowLabel, {}),
+          channelPill(f._ptChannel, S.heroEyebrowLabel, { marginLeft: Math.round(S.heroEyebrowLabel * 0.7) }),
+        ].filter(Boolean)
+      ),
       h(
         "div",
         { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between" } },
@@ -459,6 +578,26 @@ async function fetchDayFixtures(origin, date, auth) {
   if (!fx || !fx.length) fx = await tryOnce("&all=1");
   if (!fx || !fx.length) fx = await tryOnce("");
   return fx || [];
+}
+
+// The day's accumulated TV listings (lib/listings-build, keyed by FotMob match
+// id), so the card can name the Portuguese channel per game just like the live
+// pages. Best-effort: on any hiccup the rail simply omits the channel.
+async function fetchDayListings(origin, date, auth) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 4500);
+  try {
+    const r = await fetch(`${origin}/api/listings?date=${date}`, {
+      headers: Object.assign({ Accept: "application/json" }, auth || {}), signal: ctrl.signal,
+    });
+    if (!r.ok) return {};
+    const j = await r.json();
+    return (j && j.matches) || {};
+  } catch (e) {
+    return {};
+  } finally {
+    clearTimeout(t);
+  }
 }
 
 async function renderToday(url, reqHeaders) {
@@ -504,15 +643,25 @@ async function renderToday(url, reqHeaders) {
   }
   const top = fixtures.slice(0, n);
 
-  // Inline crests/badges for the chosen games (parallel, best-effort).
-  await Promise.all(
-    (hero ? [hero] : []).concat(top).map(async (f) => {
-      const [hb, ab, cb] = await Promise.all([
-        toDataUri(f.homeBadge), toDataUri(f.awayBadge), toDataUri(f.leagueBadgeUrl),
-      ]);
-      f._homeBadge = hb; f._awayBadge = ab; f._compBadge = cb;
-    })
-  );
+  // The day's TV listings, so each row can name its top Portuguese channel
+  // (matching the order on the game's detail page). Fetched alongside the crests.
+  const chosen = (hero ? [hero] : []).concat(top);
+  const [listings] = await Promise.all([
+    fetchDayListings(url.origin, date, forwardAuthHeaders(reqHeaders)),
+    // Inline crests/badges for the chosen games (parallel, best-effort).
+    Promise.all(
+      chosen.map(async (f) => {
+        const [hb, ab, cb] = await Promise.all([
+          toDataUri(f.homeBadge), toDataUri(f.awayBadge), toDataUri(f.leagueBadgeUrl),
+        ]);
+        f._homeBadge = hb; f._awayBadge = ab; f._compBadge = cb;
+      })
+    ),
+  ]);
+  chosen.forEach((f) => {
+    const rec = f && f.fmid != null ? listings[String(f.fmid)] : null;
+    f._ptChannel = topPtChannel(rec && rec.rows);
+  });
 
   const emptyState = h(
     "div",

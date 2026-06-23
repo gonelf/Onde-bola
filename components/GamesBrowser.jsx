@@ -440,8 +440,9 @@ function passBall(clock, wp, wHome, seed, players, events, maxMin) {
 }
 
 // Shift a team's resting shape toward the current phase: the attacking side
-// pushes up and both sides slide laterally to follow the ball.
-function placePlayers(base, home, atk, ball) {
+// pushes up and both sides slide laterally to follow the ball, with a little
+// per-player idle movement so the shape is never frozen.
+function placePlayers(base, home, atk, ball, clock) {
   const dir = home ? 1 : -1;
   const attacking = atk === (home ? "home" : "away");
   return base.map((p, idx) => {
@@ -451,6 +452,8 @@ function placePlayers(base, home, atk, ball) {
     if (atk) x += attacking ? dir * 13 : -dir * 7;
     y += (ball.y - 50) * 0.22;
     x += (ball.x - x) * 0.05;
+    x += Math.cos(clock * 0.8 + idx * 1.3) * 0.7;
+    y += Math.sin(clock * 0.9 + idx) * 0.9;
     return { x: Math.max(3, Math.min(97, x)), y: Math.max(5, Math.min(95, y)) };
   });
 }
@@ -555,8 +558,8 @@ function MatchReplay({ fx, d, t }) {
   // then the ball is passed between the resulting player positions.
   const field = simState(sim.wp, clock);
   const players = {
-    home: placePlayers(bases.home, true, field.atk, field.ball),
-    away: placePlayers(bases.away, false, field.atk, field.ball),
+    home: placePlayers(bases.home, true, field.atk, field.ball, clock),
+    away: placePlayers(bases.away, false, field.atk, field.ball, clock),
   };
   const ball = passBall(clock, sim.wp, sim.wHome, sim.seed, players, events, maxMin);
 

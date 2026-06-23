@@ -283,6 +283,136 @@ function pitchPos(ev, idx) {
 
 const MARKER_GLYPH = { goal: "⚽", sub: "↔", red: "", yellow: "", other: "" };
 
+// --- Lightweight match simulation ---------------------------------------
+// We have no per-second tracking data, so between the real key events we infer
+// plausible play from what we *do* know: possession share, shot counts and each
+// side's formation. The motion is fully deterministic (seeded RNG, positions are
+// pure functions of the clock) so it's identical on every render and scrubs
+// cleanly. It's an illustrative simulation, not a reconstruction.
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const num = (v) => { const n = parseFloat(String(v == null ? "" : v).replace(/[^\d.]/g, "")); return isFinite(n) ? n : 0; };
+
+function possShare(stats) {
+  const s = (stats || []).find((x) => x.key === "possession");
+  if (!s) return 0.5;
+  const n = num(s.home);
+  return n > 0 ? Math.min(0.85, Math.max(0.15, n / 100)) : 0.5;
+}
+
+// A team's formation as outfield line counts, e.g. "4-3-3" → [4,3,3]. Falls back
+// to the lineup's row lengths, then a default 4-3-3.
+function formationArr(side) {
+  if (side) {
+    const f = String(side.formation || "").split(/[-–]/).map((n) => parseInt(n, 10)).filter((n) => n > 0);
+    if (f.length) return f;
+    if (Array.isArray(side.rows) && side.rows.length > 1) {
+      const r = side.rows.slice(1).map((row) => (Array.isArray(row) ? row.length : 0)).filter((n) => n > 0);
+      if (r.length) return r;
+    }
+  }
+  return [4, 3, 3];
+}
+
+// Resting positions for a team's 11 (GK first), in pitch %. Home keeps to the
+// left half and attacks right; away mirrors.
+function teamBase(formation, home) {
+  const lines = formation && formation.length ? formation : [4, 3, 3];
+  const pts = [{ bx: home ? 4 : 96, by: 50 }]; // GK
+  const L = lines.length;
+  lines.forEach((cnt, li) => {
+    const depth = (li + 1) / (L + 1); // own goal → midfield
+    const x = home ? 9 + depth * 39 : 91 - depth * 39;
+    for (let p = 0; p < cnt; p++) {
+      const y = cnt === 1 ? 50 : 13 + (p / (cnt - 1)) * 74;
+      pts.push({ bx: x, by: y });
+    }
+  });
+  return pts;
+}
+
+// A spot in `team`'s attacking half for a possession phase.
+function attackSpot(team, rng) {
+  const home = team === "home";
+  return { x: home ? 52 + rng() * 36 : 48 - rng() * 36, y: 14 + rng() * 72 };
+}
+
+// Build the ball's path for the whole match: the key events are anchors (the
+// ball passes through each), with possession phases woven in between — weighted
+// toward the side with more possession / shots — and a kickoff reset at centre
+// after every goal.
+function buildWaypoints(events, possHome, shotsHome, shotsAway, maxMin, rng) {
+  const anchors = [{ m: 0, x: 50, y: 50, team: null }];
+  events.forEach((ev, i) => {
+    const p = pitchPos(ev, i);
+    anchors.push({ m: ev._m, x: p.x, y: p.y, team: ev.side !== "away" ? "home" : "away" });
+    if (ev.kind === "goal" || ev.kind === "pengoal" || ev.kind === "owngoal") {
+      anchors.push({ m: Math.min(ev._m + 0.4, maxMin), x: 50, y: 50, team: null });
+    }
+  });
+  anchors.push({ m: maxMin, x: 50, y: 50, team: null });
+  anchors.sort((a, b) => a.m - b.m);
+
+  const shotTot = shotsHome + shotsAway || 1;
+  const wHome = possHome * 0.6 + (shotsHome / shotTot) * 0.4;
+  const wp = [];
+  for (let i = 0; i < anchors.length; i++) {
+    wp.push(anchors[i]);
+    const a = anchors[i], b = anchors[i + 1];
+    if (!b) break;
+    const gap = b.m - a.m;
+    const n = Math.max(0, Math.min(6, Math.round(gap / 4) - 1));
+    for (let k = 1; k <= n; k++) {
+      const m = a.m + gap * (k / (n + 1));
+      const team = rng() < wHome ? "home" : "away";
+      const sp = attackSpot(team, rng);
+      wp.push({ m, x: sp.x, y: sp.y, team });
+    }
+  }
+  wp.sort((a, b) => a.m - b.m);
+  return wp;
+}
+
+// Ball position and the team currently attacking, at a given clock minute.
+function simState(wp, clock) {
+  if (!wp.length) return { ball: { x: 50, y: 50 }, atk: null };
+  if (clock <= wp[0].m) return { ball: { x: wp[0].x, y: wp[0].y }, atk: wp[0].team };
+  for (let i = 0; i < wp.length - 1; i++) {
+    const a = wp[i], b = wp[i + 1];
+    if (clock <= b.m) {
+      const g = b.m - a.m;
+      const f = g > 0 ? (clock - a.m) / g : 1;
+      const e = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2; // easeInOut
+      return { ball: { x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e }, atk: b.team || a.team };
+    }
+  }
+  const l = wp[wp.length - 1];
+  return { ball: { x: l.x, y: l.y }, atk: l.team };
+}
+
+// Shift a team's resting shape toward the current phase: the attacking side
+// pushes up and both sides slide laterally to follow the ball.
+function placePlayers(base, home, atk, ball) {
+  const dir = home ? 1 : -1;
+  const attacking = atk === (home ? "home" : "away");
+  return base.map((p, idx) => {
+    if (idx === 0) return { x: p.bx, y: 50 + (ball.y - 50) * 0.12 }; // GK
+    let x = p.bx;
+    let y = p.by;
+    if (atk) x += attacking ? dir * 13 : -dir * 7;
+    y += (ball.y - 50) * 0.22;
+    x += (ball.x - x) * 0.05;
+    return { x: Math.max(3, Math.min(97, x)), y: Math.max(5, Math.min(95, y)) };
+  });
+}
+
 // An interactive "replay" of a finished match built entirely from the data we
 // already fetch: the event timeline (chronology) and the aggregate stats. A
 // classic top-down pitch shows each event in its (inferred) spot as the virtual
@@ -304,6 +434,23 @@ function MatchReplay({ fx, d, t }) {
     events.forEach((e) => { if (e._m > m) m = e._m; });
     return Math.ceil(m);
   }, [events]);
+
+  // Deterministic ball path + resting formations for the in-between simulation.
+  const waypoints = useMemo(() => {
+    const sr = (stats || []).find((x) => x.key === "shots") || {};
+    const seed = (events.length * 131 + Math.round(maxMin) * 7 +
+      (events[0] ? Math.round(events[0]._m * 13) : 0)) >>> 0;
+    return buildWaypoints(events, possShare(stats), num(sr.home) || 1, num(sr.away) || 1,
+      maxMin, mulberry32(seed || 1));
+  }, [events, stats, maxMin]);
+  const bases = useMemo(() => ({
+    home: teamBase(formationArr(d.lineups && d.lineups.home), true),
+    away: teamBase(formationArr(d.lineups && d.lineups.away), false),
+  }), [d]);
+  const kit = {
+    home: (d.lineups && d.lineups.home && d.lineups.home.kit && d.lineups.home.kit.shirt) || "#4a90d9",
+    away: (d.lineups && d.lineups.away && d.lineups.away.kit && d.lineups.away.kit.shirt) || "#e8554e",
+  };
 
   // Default to full time — the modal shows the real final result; the replay
   // (re)starts from kick-off only when the user hits play.
@@ -358,8 +505,14 @@ function MatchReplay({ fx, d, t }) {
   }, [shown.length]);
 
   const last = shown.length ? shown[shown.length - 1] : null;
-  const ball = last ? last.pos : { x: 50, y: 50 };
   const goalFlash = last && last.type === "goal" ? last : null;
+
+  // Continuous simulated play between the key events.
+  const { ball, atk } = simState(waypoints, clock);
+  const players = {
+    home: placePlayers(bases.home, true, atk, ball),
+    away: placePlayers(bases.away, false, atk, ball),
+  };
 
   const atEnd = clock >= maxMin;
   const minNum = Math.floor(clock);
@@ -385,6 +538,14 @@ function MatchReplay({ fx, d, t }) {
           <div className="pitch-box right" />
           <div className="pitch-goal left" />
           <div className="pitch-goal right" />
+          {players.home.map((p, i) => (
+            <span key={"ph" + i} className="pitch-player"
+              style={{ left: p.x + "%", top: p.y + "%", background: kit.home }} />
+          ))}
+          {players.away.map((p, i) => (
+            <span key={"pa" + i} className="pitch-player"
+              style={{ left: p.x + "%", top: p.y + "%", background: kit.away }} />
+          ))}
           {shown.map((r) => {
             const active = r === last;
             return (

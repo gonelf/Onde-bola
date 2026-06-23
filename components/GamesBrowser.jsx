@@ -397,6 +397,48 @@ function simState(wp, clock) {
   return { ball: { x: l.x, y: l.y }, atk: l.team };
 }
 
+// A stable 0..1 hash for a (seed, index) pair — used to pick pass receivers
+// deterministically so the ball's route is identical on every render.
+function hashRng(seed, i) {
+  let t = (seed + Math.imul(i, 0x9e3779b9)) >>> 0;
+  t = Math.imul(t ^ (t >>> 15), 1 | t);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+// One pass roughly every PASS_MIN simulated minutes.
+const PASS_MIN = 1.5;
+
+// Place the ball by passing it between actual players: the holder for pass p is
+// a player on whichever side is attacking (possession-weighted when nobody is),
+// and the ball travels from this holder to the next. Near a real event it
+// converges onto that event's spot so shots/goals land where the marker is.
+function passBall(clock, wp, wHome, seed, players, events, maxMin) {
+  const holderPos = (pi) => {
+    const tp = Math.max(0, Math.min(maxMin, pi * PASS_MIN));
+    let team = simState(wp, tp).atk;
+    if (!team) team = hashRng(seed, pi * 2 + 1) < wHome ? "home" : "away";
+    const arr = players[team];
+    const n = arr.length;
+    if (n <= 1) return arr[0] || { x: 50, y: 50 };
+    const idx = 1 + Math.floor(hashRng(seed, pi * 7 + (team === "home" ? 3 : 11)) * (n - 1));
+    return arr[Math.min(idx, n - 1)] || arr[0];
+  };
+  const p = Math.floor(clock / PASS_MIN);
+  const f0 = (clock - p * PASS_MIN) / PASS_MIN;
+  const f = f0 < 0.5 ? 2 * f0 * f0 : 1 - Math.pow(-2 * f0 + 2, 2) / 2; // easeInOut
+  const A = holderPos(p), B = holderPos(p + 1);
+  let x = A.x + (B.x - A.x) * f;
+  let y = A.y + (B.y - A.y) * f;
+  let ev = null, evi = -1, best = 1.0;
+  for (let i = 0; i < events.length; i++) {
+    const dd = Math.abs(events[i]._m - clock);
+    if (dd < best) { best = dd; ev = events[i]; evi = i; }
+  }
+  if (ev) { const ep = pitchPos(ev, evi); const w = 1 - best; x += (ep.x - x) * w; y += (ep.y - y) * w; }
+  return { x, y };
+}
+
 // Shift a team's resting shape toward the current phase: the attacking side
 // pushes up and both sides slide laterally to follow the ball.
 function placePlayers(base, home, atk, ball) {
@@ -435,13 +477,15 @@ function MatchReplay({ fx, d, t }) {
     return Math.ceil(m);
   }, [events]);
 
-  // Deterministic ball path + resting formations for the in-between simulation.
-  const waypoints = useMemo(() => {
+  // Deterministic possession model + resting formations for the simulation.
+  const sim = useMemo(() => {
     const sr = (stats || []).find((x) => x.key === "shots") || {};
-    const seed = (events.length * 131 + Math.round(maxMin) * 7 +
-      (events[0] ? Math.round(events[0]._m * 13) : 0)) >>> 0;
-    return buildWaypoints(events, possShare(stats), num(sr.home) || 1, num(sr.away) || 1,
-      maxMin, mulberry32(seed || 1));
+    const sh = num(sr.home) || 1, sa = num(sr.away) || 1;
+    const poss = possShare(stats);
+    const wHome = poss * 0.6 + (sh / (sh + sa)) * 0.4;
+    const seed = ((events.length * 131 + Math.round(maxMin) * 7 +
+      (events[0] ? Math.round(events[0]._m * 13) : 0)) >>> 0) || 1;
+    return { wp: buildWaypoints(events, poss, sh, sa, maxMin, mulberry32(seed)), wHome, seed };
   }, [events, stats, maxMin]);
   const bases = useMemo(() => ({
     home: teamBase(formationArr(d.lineups && d.lineups.home), true),
@@ -507,12 +551,14 @@ function MatchReplay({ fx, d, t }) {
   const last = shown.length ? shown[shown.length - 1] : null;
   const goalFlash = last && last.type === "goal" ? last : null;
 
-  // Continuous simulated play between the key events.
-  const { ball, atk } = simState(waypoints, clock);
+  // Continuous simulated play: a coarse "play location" shapes the formation,
+  // then the ball is passed between the resulting player positions.
+  const field = simState(sim.wp, clock);
   const players = {
-    home: placePlayers(bases.home, true, atk, ball),
-    away: placePlayers(bases.away, false, atk, ball),
+    home: placePlayers(bases.home, true, field.atk, field.ball),
+    away: placePlayers(bases.away, false, field.atk, field.ball),
   };
+  const ball = passBall(clock, sim.wp, sim.wHome, sim.seed, players, events, maxMin);
 
   const atEnd = clock >= maxMin;
   const minNum = Math.floor(clock);

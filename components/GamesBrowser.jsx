@@ -208,12 +208,12 @@ function FormPills({ arr, t }) {
   });
 }
 
-function EventRow({ ev, scoreStr }) {
+function EventRow({ ev, scoreStr, active }) {
   const kindCls = (ev.kind === "yellow" || ev.kind === "red") ? "card "
     : ev.kind === "sub" ? "sub " : "goal ";
   const side = ev.side === "away" ? "away" : "home";
   return (
-    <div className={"event-row " + side}>
+    <div className={"event-row " + side + (active ? " active" : "")}>
       <span className="event-min">{ev.min || ""}</span>
       <span className={"event-icon " + kindCls + ev.kind}>
         {EVENT_ICON[ev.kind] || "•"}
@@ -250,13 +250,46 @@ function parseStat(v) {
   return { ok: true, raw, num: parseFloat(m[1]), dec, suffix: m[2] || "" };
 }
 
+// Map an event kind to the marker style used on the pitch.
+function markerType(kind) {
+  if (kind === "goal" || kind === "pengoal" || kind === "owngoal") return "goal";
+  if (kind === "red") return "red";
+  if (kind === "yellow") return "yellow";
+  if (kind === "sub") return "sub";
+  return "other";
+}
+
+// FotMob events carry no pitch coordinates, so we infer a plausible spot from
+// the kind and side for an FM-style top-down view. Coordinate space: x 0% = the
+// home goal (left), x 100% = the away goal (right); home attacks right, away
+// attacks left. A deterministic per-index jitter keeps stacked events apart.
+function pitchPos(ev, idx) {
+  const home = ev.side !== "away";
+  const j = ((idx * 41) % 30) - 15; // -15..14, stable per index
+  const kind = ev.kind;
+  if (kind === "goal" || kind === "pengoal") {
+    return { x: home ? 94 : 6, y: 50 + j * 0.4 };
+  }
+  if (kind === "owngoal") {
+    // Ball goes into the scorer's OWN net.
+    return { x: home ? 6 : 94, y: 50 + j * 0.4 };
+  }
+  if (kind === "sub") {
+    return { x: home ? 24 : 76, y: idx % 2 ? 8 : 92 }; // by a touchline
+  }
+  // Cards (and anything else): in the offending team's half.
+  return { x: home ? 36 : 64, y: 50 + j };
+}
+
+const MARKER_GLYPH = { goal: "⚽", sub: "↔", red: "", yellow: "", other: "" };
+
 // An interactive "replay" of a finished match built entirely from the data we
-// already fetch: the event timeline (chronology) and the aggregate stats. A play
-// control runs a virtual clock across the 90'+ — events pop in as the clock
-// reaches them, the scoreline ticks up, and the stat bars fill toward their
-// final split. It's a CSS-driven visual, not a true minute-by-minute feed
-// (we don't have per-minute stats), so the bars grow proportionally to elapsed
-// time and settle on the real full-time values.
+// already fetch: the event timeline (chronology) and the aggregate stats. A
+// classic top-down pitch shows each event in its (inferred) spot as the virtual
+// match clock reaches it — the ball glides from event to event, goals flash —
+// while the chronology scrolls below and the stat bars fill toward full time.
+// It's a stylised visual: we have no per-minute or positional data, so spots
+// are inferred from kind/side and stat bars grow proportionally to elapsed time.
 const REPLAY_DURATION_MS = 14000;
 
 function MatchReplay({ fx, d, t }) {
@@ -278,6 +311,7 @@ function MatchReplay({ fx, d, t }) {
   const [playing, setPlaying] = useState(false);
   const rafRef = useRef(0);
   const lastRef = useRef(0);
+  const feedRef = useRef(null);
 
   useEffect(() => {
     if (!playing) return undefined;
@@ -315,8 +349,17 @@ function MatchReplay({ fx, d, t }) {
       if (scoresHome) hs++; else as++;
       scoreStr = hs + "–" + as;
     }
-    shown.push({ ev, scoreStr, i });
+    shown.push({ ev, scoreStr, i, type: markerType(ev.kind), pos: pitchPos(ev, i) });
   });
+
+  // Keep the chronology feed scrolled to the latest revealed event.
+  useEffect(() => {
+    if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
+  }, [shown.length]);
+
+  const last = shown.length ? shown[shown.length - 1] : null;
+  const ball = last ? last.pos : { x: 50, y: 50 };
+  const goalFlash = last && last.type === "goal" ? last : null;
 
   const atEnd = clock >= maxMin;
   const minNum = Math.floor(clock);
@@ -334,6 +377,32 @@ function MatchReplay({ fx, d, t }) {
       </div>
       <div className="rb-clock">{clockLabel}</div>
 
+      {events.length ? (
+        <div className="replay-pitch">
+          <div className="pitch-line center" />
+          <div className="pitch-circle" />
+          <div className="pitch-box left" />
+          <div className="pitch-box right" />
+          <div className="pitch-goal left" />
+          <div className="pitch-goal right" />
+          {shown.map((r) => {
+            const active = r === last;
+            return (
+              <span key={r.i}
+                className={"pitch-marker " + r.type + (active ? " active" : "")}
+                style={{ left: r.pos.x + "%", top: r.pos.y + "%" }}>
+                <span className="marker-glyph">{MARKER_GLYPH[r.type]}</span>
+                {active && r.ev.player ? (
+                  <span className="marker-label">{r.ev.player}{r.ev.min ? " " + r.ev.min : ""}</span>
+                ) : null}
+              </span>
+            );
+          })}
+          <span className="pitch-ball" style={{ left: ball.x + "%", top: ball.y + "%" }} />
+          {goalFlash ? <div className="pitch-flash" key={"f" + goalFlash.i}>{t("mdGoal")}</div> : null}
+        </div>
+      ) : null}
+
       <div className="replay-controls">
         <button className="replay-btn" type="button" onClick={toggle}
           aria-label={playing ? t("mdPause") : t("mdPlay")} title={playing ? t("mdPause") : t("mdPlay")}>
@@ -347,9 +416,11 @@ function MatchReplay({ fx, d, t }) {
       </div>
 
       {events.length ? (
-        <div className="detail-timeline replay">
+        <div className="detail-timeline replay" ref={feedRef}>
           <div className="timeline-legend"><span>{fx.home}</span><span>{fx.away}</span></div>
-          {shown.map((r) => <EventRow key={r.i} ev={r.ev} scoreStr={r.scoreStr} />)}
+          {shown.map((r) => (
+            <EventRow key={r.i} ev={r.ev} scoreStr={r.scoreStr} active={r === last} />
+          ))}
         </div>
       ) : null}
 

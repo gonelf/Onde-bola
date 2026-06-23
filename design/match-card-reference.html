@@ -77,9 +77,13 @@
   .hero{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:40px;
     display:flex;flex-direction:column;align-items:center;gap:14px}
   .hero .comp{font-size:26px;font-weight:600;color:var(--muted)}
-  .hero .eyebrow .time{font-size:48px}
-  .hero .eyebrow .minute{font-size:48px}
+  /* hero kickoff banner: time, then the channel pill to its right */
+  .hero .eyebrow{display:flex;align-items:center;justify-content:center;gap:14px}
+  .hero .eyebrow .time{font-size:48px;font-weight:800;color:var(--eyebrow-time);line-height:1}
+  .hero .eyebrow .minute{font-size:48px;font-weight:800;color:var(--red);line-height:1}
+  .hero .eyebrow .dot{width:18px;height:18px;border-radius:50%;background:var(--red)}
   .hero .eyebrow svg{width:44px;height:44px}
+  .hero .eyebrow .channel{font-size:26px}
   .hero .matchup{align-items:flex-start}
   .hero .hteam{flex:1;display:flex;flex-direction:column;align-items:center;gap:18px}
   .hero .hcrest{width:158px;height:158px;border-radius:50%;background:#0c151d;border:1px solid var(--line);
@@ -150,6 +154,7 @@
       <div class="eyebrow scheduled">
         <svg style="color:var(--eyebrow-time)"><use href="#clock"/></svg>
         <span class="time">20:00</span>
+        <span class="channel paid"><span class="lock">🔒</span>Sport TV1</span>
       </div>
       <div class="matchup">
         <div class="hteam"><div class="hcrest">B</div><div class="hname">Benfica</div></div>

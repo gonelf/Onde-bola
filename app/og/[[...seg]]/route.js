@@ -357,30 +357,38 @@ function lockIcon(size, color) {
   );
 }
 
-// The channel pill shown beneath the time in the rail — styled like the
-// website's chips (rounded, soft tinted fill + border): free-to-air green,
-// paid amber with a padlock.
-function channelLine(f, S) {
-  const ch = f._ptChannel ? clamp(f._ptChannel, 16) : "";
+// The channel pill — styled like the website's chips (rounded, soft tinted
+// fill + border): free-to-air green, paid amber with a padlock. `margin` places
+// it (marginTop in the rail, marginLeft beside the hero's kickoff time).
+function channelPill(channel, fontSize, margin) {
+  const ch = channel ? clamp(channel, 16) : "";
   if (!ch) return null;
-  const paid = isPaidChannel(f._ptChannel);
+  const paid = isPaidChannel(channel);
   const c = paid ? CHIP.paid : CHIP.free;
-  const padV = Math.round(S.railChannel * 0.24);
-  const padH = Math.round(S.railChannel * 0.5);
+  const padV = Math.round(fontSize * 0.24);
+  const padH = Math.round(fontSize * 0.5);
   const kids = [];
-  if (paid) kids.push(lockIcon(Math.round(S.railChannel * 0.78), c.fg));
-  kids.push(h("div", { style: { display: "flex", fontSize: S.railChannel, fontWeight: 700, color: c.fg } }, ch));
+  if (paid) kids.push(lockIcon(Math.round(fontSize * 0.78), c.fg));
+  kids.push(h("div", { style: { display: "flex", fontSize, fontWeight: 700, color: c.fg } }, ch));
   return h(
     "div",
     {
-      style: {
-        display: "flex", flexDirection: "row", alignItems: "center", marginTop: S.railGap,
-        maxWidth: S.railCol, padding: `${padV}px ${padH}px`,
-        borderRadius: Math.round(S.railChannel * 0.5), backgroundColor: c.bg, border: `1px solid ${c.border}`,
-      },
+      style: Object.assign(
+        {
+          display: "flex", flexDirection: "row", alignItems: "center",
+          padding: `${padV}px ${padH}px`, borderRadius: Math.round(fontSize * 0.5),
+          backgroundColor: c.bg, border: `1px solid ${c.border}`,
+        },
+        margin || {}
+      ),
     },
     kids
   );
+}
+
+// The channel pill shown beneath the time in the rail.
+function channelLine(f, S) {
+  return channelPill(f._ptChannel, S.railChannel, { marginTop: S.railGap, maxWidth: S.railCol });
 }
 
 // The left "TV-guide" rail: the kickoff time / minute lives here, in its own
@@ -522,7 +530,14 @@ function heroCard(f, S) {
             ]
           )
         : h("div", { style: { display: "flex" } }, ""),
-      eyebrowLine(f, S.heroEyebrow, S.heroEyebrowLabel, { marginBottom: 14 }),
+      h(
+        "div",
+        { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 14 } },
+        [
+          eyebrowLine(f, S.heroEyebrow, S.heroEyebrowLabel, {}),
+          channelPill(f._ptChannel, S.heroEyebrowLabel, { marginLeft: Math.round(S.heroEyebrowLabel * 0.7) }),
+        ].filter(Boolean)
+      ),
       h(
         "div",
         { style: { display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between" } },

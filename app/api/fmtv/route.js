@@ -23,6 +23,7 @@
  */
 
 import { kv } from "@/lib/kv";
+import { canonicalChannelName } from "@/lib/broadcasters";
 
 export const dynamic = "force-dynamic";
 
@@ -226,7 +227,9 @@ export async function GET(request) {
       const bucket = byMatch[id].channels;
       if (!bucket[country]) bucket[country] = {};
       for (const l of listings) {
-        const ch = nameOf(l && l.station);
+        // Fold streaming-brand variants ("Amazon Prime Video" -> "Prime Video")
+        // into one key so the same service merges instead of fragmenting.
+        const ch = canonicalChannelName(nameOf(l && l.station));
         if (ch) bucket[country][ch] = true;
       }
     }

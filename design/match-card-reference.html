@@ -15,6 +15,9 @@
       its own column on the far left of the row, so a time can never be misread
       as a score (and vice-versa). The featured/hero card keeps the time on an
       EYEBROW line directly above the matchup.
+    • Below the time, the rail names the top Portuguese channel for the game —
+      the first one shown on its detail page (free-to-air before paid, otherwise
+      feed order; see lib/app-data orderChannels). Green = free-to-air.
 
   Info hierarchy (by size):  1) team names + crests, 2) kickoff time, 3) result.
 
@@ -51,6 +54,9 @@
   .rail .minute{font-size:34px;font-weight:800;color:var(--red);line-height:1}
   .rail .live-tag{display:flex;align-items:center;gap:7px;font-size:16px;font-weight:800;color:var(--red);letter-spacing:.04em}
   .rail .dot{width:11px;height:11px;border-radius:50%;background:var(--red)}
+  /* top Portuguese channel (detail-page order), under the time; green if free */
+  .rail .channel{font-size:19px;font-weight:700;color:var(--muted);white-space:nowrap}
+  .rail .channel.free{color:var(--green)}
   .matchup{display:flex;align-items:center;justify-content:space-between;flex:1;min-width:0}
   .team{display:flex;align-items:center;gap:18px;flex:1;min-width:0}
   .team.home{justify-content:flex-end;text-align:right}
@@ -95,6 +101,7 @@
     <div class="row scheduled">
       <div class="rail scheduled">
         <span class="time">20:00</span>
+        <span class="channel free">RTP1</span>
       </div>
       <div class="matchup">
         <div class="team home"><span class="name">Benfica</span><span class="crest">B</span></div>
@@ -108,6 +115,7 @@
       <div class="rail live">
         <span class="minute">45'</span>
         <span class="live-tag"><span class="dot"></span>AO VIVO</span>
+        <span class="channel">Sport TV1</span>
       </div>
       <div class="matchup">
         <div class="team home"><span class="name">Sporting CP</span><span class="crest">S</span></div>
@@ -121,6 +129,7 @@
       <div class="rail finished">
         <span class="time">17:30</span>
         <span class="label">FIM</span>
+        <span class="channel">DAZN</span>
       </div>
       <div class="matchup">
         <div class="team home"><span class="name">Real Madrid</span><span class="crest">R</span></div>

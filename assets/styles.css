@@ -813,6 +813,75 @@ body {
   font-size: 0.82rem;
 }
 
+/* Match replay — animated scoreboard, timeline reveal and stat bars driven by a
+   virtual match clock (see MatchReplay in GamesBrowser.jsx). */
+.replay-board {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+}
+.rb-team {
+  font-weight: 700; font-size: 0.92rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rb-team.home { text-align: right; }
+.rb-team.away { text-align: left; }
+.rb-score {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  font-size: 1.7rem; font-weight: 800; font-variant-numeric: tabular-nums;
+  animation: rb-pop 0.4s ease;
+}
+.rb-score i { color: var(--text-dim); font-style: normal; font-weight: 600; font-size: 1.2rem; }
+@keyframes rb-pop { 0% { transform: scale(1); } 35% { transform: scale(1.18); } 100% { transform: scale(1); } }
+.rb-clock {
+  text-align: center; margin-top: 4px;
+  color: var(--accent); font-weight: 700; font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+.replay-controls { display: flex; align-items: center; gap: 10px; margin: 12px 0 14px; }
+.replay-btn {
+  flex: none; width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--bg-elev); color: var(--text);
+  font-size: 0.9rem; line-height: 1; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.replay-btn:hover { background: var(--accent-soft); }
+.replay-scrub {
+  flex: 1; -webkit-appearance: none; appearance: none;
+  height: 5px; border-radius: 999px; background: var(--line); cursor: pointer;
+}
+.replay-scrub::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 14px; height: 14px; border-radius: 50%; background: var(--accent); cursor: pointer;
+}
+.replay-scrub::-moz-range-thumb {
+  width: 14px; height: 14px; border: none; border-radius: 50%; background: var(--accent); cursor: pointer;
+}
+.detail-timeline.replay .event-row { animation: ev-in 0.4s ease both; }
+@keyframes ev-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.replay-stats { gap: 12px; }
+.rstat-top {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  gap: 10px; margin-bottom: 4px; font-variant-numeric: tabular-nums;
+}
+.rstat-h { text-align: right; font-weight: 700; }
+.rstat-a { text-align: left; font-weight: 700; }
+.rstat-label { text-align: center; color: var(--text-dim); font-size: 0.8rem; }
+.rstat-bar {
+  display: flex; height: 7px; border-radius: 999px; overflow: hidden; background: var(--line);
+}
+.rstat-fill { height: 100%; transition: width 0.12s linear; }
+.rstat-fill.h { background: var(--accent); }
+.rstat-fill.a { background: #6b7a8d; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rb-score { animation: none; }
+  .detail-timeline.replay .event-row { animation: none; }
+  .rstat-fill { transition: none; }
+}
+
 .detail-form { display: flex; flex-direction: column; gap: 8px; }
 .form-side { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .form-side > span:first-child { flex: 1; font-weight: 600; font-size: 0.9rem; }

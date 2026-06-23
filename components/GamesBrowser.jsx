@@ -231,6 +231,158 @@ function EventRow({ ev, scoreStr }) {
   );
 }
 
+// Parse an event minute string ("45'", "90+3'") into a comparable number, with
+// stoppage time as a fraction (90+3 → 90.03) so it sorts after 90 but before 91.
+function minOf(ev) {
+  const s = String((ev && ev.min) || "").replace(/'/g, "").trim();
+  const m = s.match(/^(\d+)(?:\s*\+\s*(\d+))?/);
+  if (!m) return 0;
+  return parseInt(m[1], 10) + (m[2] ? parseInt(m[2], 10) * 0.01 : 0);
+}
+
+// Split a FotMob stat value ("60%", "1.85", "12") into a number, its decimal
+// precision and any suffix, so we can count it up while keeping the unit.
+function parseStat(v) {
+  const raw = String(v == null ? "" : v).trim();
+  const m = raw.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+  if (!m) return { ok: false, raw, num: 0, dec: 0, suffix: "" };
+  const dec = m[1].includes(".") ? m[1].split(".")[1].length : 0;
+  return { ok: true, raw, num: parseFloat(m[1]), dec, suffix: m[2] || "" };
+}
+
+// An interactive "replay" of a finished match built entirely from the data we
+// already fetch: the event timeline (chronology) and the aggregate stats. A play
+// control runs a virtual clock across the 90'+ — events pop in as the clock
+// reaches them, the scoreline ticks up, and the stat bars fill toward their
+// final split. It's a CSS-driven visual, not a true minute-by-minute feed
+// (we don't have per-minute stats), so the bars grow proportionally to elapsed
+// time and settle on the real full-time values.
+const REPLAY_DURATION_MS = 14000;
+
+function MatchReplay({ fx, d, t }) {
+  const events = useMemo(() => {
+    const arr = (d.events || []).map((ev) => ({ ...ev, _m: minOf(ev) }));
+    arr.sort((a, b) => a._m - b._m);
+    return arr;
+  }, [d]);
+  const stats = d.stats || [];
+  const maxMin = useMemo(() => {
+    let m = 90;
+    events.forEach((e) => { if (e._m > m) m = e._m; });
+    return Math.ceil(m);
+  }, [events]);
+
+  // Default to full time — the modal shows the real final result; the replay
+  // (re)starts from kick-off only when the user hits play.
+  const [clock, setClock] = useState(maxMin);
+  const [playing, setPlaying] = useState(false);
+  const rafRef = useRef(0);
+  const lastRef = useRef(0);
+
+  useEffect(() => {
+    if (!playing) return undefined;
+    lastRef.current = 0;
+    const step = (ts) => {
+      if (!lastRef.current) lastRef.current = ts;
+      const dt = ts - lastRef.current;
+      lastRef.current = ts;
+      setClock((c) => Math.min(maxMin, c + (dt / REPLAY_DURATION_MS) * maxMin));
+      rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [playing, maxMin]);
+
+  useEffect(() => { if (playing && clock >= maxMin) setPlaying(false); }, [clock, maxMin, playing]);
+
+  const toggle = () => {
+    if (clock >= maxMin) { setClock(0); setPlaying(true); }
+    else setPlaying((p) => !p);
+  };
+  const restart = () => { setPlaying(false); setClock(0); };
+  const onScrub = (e) => { setPlaying(false); setClock(Number(e.target.value)); };
+
+  const progress = maxMin > 0 ? Math.min(1, clock / maxMin) : 1;
+
+  // Running scoreline and revealed events at the current clock.
+  let hs = 0, as = 0;
+  const shown = [];
+  events.forEach((ev, i) => {
+    if (ev._m > clock + 1e-9) return;
+    let scoreStr = "";
+    if (ev.kind === "goal" || ev.kind === "pengoal" || ev.kind === "owngoal") {
+      const scoresHome = ev.kind === "owngoal" ? (ev.side === "away") : (ev.side === "home");
+      if (scoresHome) hs++; else as++;
+      scoreStr = hs + "–" + as;
+    }
+    shown.push({ ev, scoreStr, i });
+  });
+
+  const atEnd = clock >= maxMin;
+  const minNum = Math.floor(clock);
+  const clockLabel = atEnd ? t("ft") : (minNum > 90 ? "90+" + (minNum - 90) : minNum) + "'";
+  const scrubPct = (progress * 100).toFixed(2);
+
+  return (
+    <div className="match-replay">
+      <h3 className="detail-h">{t("mdReplay")}</h3>
+
+      <div className="replay-board">
+        <span className="rb-team home">{fx.home}</span>
+        <span className="rb-score" key={hs + "-" + as}>{hs}<i>–</i>{as}</span>
+        <span className="rb-team away">{fx.away}</span>
+      </div>
+      <div className="rb-clock">{clockLabel}</div>
+
+      <div className="replay-controls">
+        <button className="replay-btn" type="button" onClick={toggle}
+          aria-label={playing ? t("mdPause") : t("mdPlay")} title={playing ? t("mdPause") : t("mdPlay")}>
+          {playing ? "⏸" : "▶"}
+        </button>
+        <input className="replay-scrub" type="range" min="0" max={maxMin} step="0.1"
+          value={clock} onChange={onScrub} aria-label={t("mdReplay")}
+          style={{ background: `linear-gradient(90deg, var(--accent) ${scrubPct}%, var(--line) ${scrubPct}%)` }} />
+        <button className="replay-btn" type="button" onClick={restart}
+          aria-label={t("mdRestart")} title={t("mdRestart")}>↺</button>
+      </div>
+
+      {events.length ? (
+        <div className="detail-timeline replay">
+          <div className="timeline-legend"><span>{fx.home}</span><span>{fx.away}</span></div>
+          {shown.map((r) => <EventRow key={r.i} ev={r.ev} scoreStr={r.scoreStr} />)}
+        </div>
+      ) : null}
+
+      {stats.length ? (
+        <div className="detail-stats replay-stats">
+          {stats.map((s) => {
+            const h = parseStat(s.home), a = parseStat(s.away);
+            const tot = h.num + a.num;
+            const frac = tot > 0 ? h.num / tot : 0.5;
+            const hVal = h.ok ? (h.num * progress).toFixed(h.dec) + h.suffix : h.raw;
+            const aVal = a.ok ? (a.num * progress).toFixed(a.dec) + a.suffix : a.raw;
+            const hw = (frac * progress * 100).toFixed(2);
+            const aw = ((1 - frac) * progress * 100).toFixed(2);
+            return (
+              <div className="rstat" key={s.key}>
+                <div className="rstat-top">
+                  <span className="rstat-h">{hVal}</span>
+                  <span className="rstat-label">{STAT_LABEL[s.key] ? t(STAT_LABEL[s.key]) : s.key}</span>
+                  <span className="rstat-a">{aVal}</span>
+                </div>
+                <div className="rstat-bar">
+                  <span className="rstat-fill h" style={{ width: hw + "%" }} />
+                  <span className="rstat-fill a" style={{ width: aw + "%" }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function HlEmbed({ id, t }) {
   const [playing, setPlaying] = useState(false);
   if (playing) {
@@ -258,18 +410,6 @@ function DetailExtras({ fx, t }) {
   const ytUrl = "https://www.youtube.com/results?search_query=" +
     encodeURIComponent(fx.home + " vs " + fx.away + " " + (fx.competition || "") + " highlights");
 
-  // Running scoreline for the timeline.
-  let hs = 0, as = 0;
-  const eventRows = (d.events || []).map((ev, i) => {
-    let scoreStr = "";
-    if (ev.kind === "goal" || ev.kind === "pengoal" || ev.kind === "owngoal") {
-      const scoresHome = ev.kind === "owngoal" ? (ev.side === "away") : (ev.side === "home");
-      if (scoresHome) hs++; else as++;
-      scoreStr = hs + "–" + as;
-    }
-    return <EventRow key={i} ev={ev} scoreStr={scoreStr} />;
-  });
-
   return (
     <>
       {(d.highlights && (d.highlights.url || d.highlights.youtubeId)) || finished ? (
@@ -285,29 +425,8 @@ function DetailExtras({ fx, t }) {
         </>
       ) : null}
 
-      {d.events && d.events.length ? (
-        <>
-          <h3 className="detail-h">{t("mdTimeline")}</h3>
-          <div className="detail-timeline">
-            <div className="timeline-legend"><span>{fx.home}</span><span>{fx.away}</span></div>
-            {eventRows}
-          </div>
-        </>
-      ) : null}
-
-      {d.stats && d.stats.length ? (
-        <>
-          <h3 className="detail-h">{t("mdStats")}</h3>
-          <div className="detail-stats">
-            {d.stats.map((s) => (
-              <div className="stat-row" key={s.key}>
-                <span className="stat-h">{s.home}</span>
-                <span className="stat-label">{STAT_LABEL[s.key] ? t(STAT_LABEL[s.key]) : s.key}</span>
-                <span className="stat-a">{s.away}</span>
-              </div>
-            ))}
-          </div>
-        </>
+      {(d.events && d.events.length) || (d.stats && d.stats.length) ? (
+        <MatchReplay fx={fx} d={d} t={t} />
       ) : null}
 
       {d.form && (d.form.home.length || d.form.away.length) ? (

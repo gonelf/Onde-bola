@@ -13,11 +13,13 @@ const TITLE = "Hoje Há Bola — Football on TV worldwide & where to watch";
 const DESCRIPTION =
   "See today's football games from around the world and which TV channels and streaming services are broadcasting them in your country — live scores, kickoff times and where to watch, free or paid.";
 
-// 1200×630 PNG generated on the fly from the day's top games. Unlike an SVG it
-// actually unfurls on Facebook, X/Twitter, WhatsApp, LinkedIn, etc.
-const OG_IMAGE = "/og/today";
+// Static 1200×630 branded share card (the "Hoje Há Bola" logo over a stadium).
+// A real raster image so it unfurls reliably on Facebook, X/Twitter, WhatsApp,
+// LinkedIn, Reddit, etc. — unlike an SVG, and without depending on the live
+// /og/today render succeeding at scrape time.
+const OG_IMAGE = "/assets/og-home.jpg";
 const OG_ALT =
-  "Hoje Há Bola — today's top football games and where to watch them on TV";
+  "Hoje Há Bola — football worldwide and where to watch it on TV";
 
 export const metadata = {
   title: {
@@ -66,7 +68,7 @@ export const metadata = {
     images: [
       {
         url: OG_IMAGE,
-        type: "image/png",
+        type: "image/jpeg",
         width: 1200,
         height: 630,
         alt: OG_ALT,

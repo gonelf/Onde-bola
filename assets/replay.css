@@ -66,11 +66,10 @@
 }
 .pitch-marker {
   width: 16px; height: 16px; border-radius: 50%;
-  transform: translate(-50%, -50%);
   display: flex; align-items: center; justify-content: center;
   font-size: 9px; line-height: 1; color: #06231a; font-weight: 800;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
-  animation: marker-drop 0.4s ease both; z-index: 3;
+  transition: opacity 0.2s linear; z-index: 3;
 }
 .pitch-marker.goal { background: var(--accent, #38d39f); }
 .pitch-marker.yellow { background: #f1c40f; }
@@ -78,34 +77,11 @@
 .pitch-marker.sub { background: #4a90d9; }
 .pitch-marker.other { background: #cfd8e3; }
 .pitch-marker.active { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3); z-index: 4; }
-@keyframes marker-drop {
-  from { opacity: 0; transform: translate(-50%, -150%) scale(0.4); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-}
-.marker-label {
-  position: absolute; top: 130%; left: 50%; transform: translateX(-50%);
-  white-space: nowrap; font-size: 0.7rem; font-weight: 700; color: #fff;
-  background: rgba(0, 0, 0, 0.55); padding: 1px 6px; border-radius: 6px;
-  font-variant-numeric: tabular-nums;
-}
 .pitch-ball {
   width: 9px; height: 9px; border-radius: 50%; background: #fff;
   box-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
   transform: translate(-50%, -50%); z-index: 3;
 }
-.pitch-flash {
-  inset: 0; display: flex; align-items: center; justify-content: center;
-  font-size: clamp(1.2rem, 6vw, 2rem); font-weight: 900; letter-spacing: 2px; color: #fff;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6); background: rgba(0, 0, 0, 0.12);
-  pointer-events: none; z-index: 5; animation: flash-in 1.1s ease both;
-}
-@keyframes flash-in {
-  0% { opacity: 0; transform: scale(0.6); }
-  18% { opacity: 1; transform: scale(1.12); }
-  70% { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; }
-}
-
 /* Transport */
 .replay-controls { display: flex; align-items: center; gap: 10px; margin: 12px 0 14px; }
 .replay-btn {
@@ -143,11 +119,38 @@
 .rstat-fill.h { background: var(--accent, #38bdf8); }
 .rstat-fill.a { background: #6b7a8d; }
 
+/* On-pitch event "scenes" (goal celebration, card, substitution) — drawn on top
+   of everything for the most recent event. */
+.ev-overlay {
+  position: absolute; inset: 0; z-index: 20; pointer-events: none;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.goal-sweep {
+  position: absolute; top: 50%; left: 0; white-space: nowrap;
+  font-weight: 900; font-size: clamp(1.4rem, 9vw, 3rem); letter-spacing: 3px;
+  color: #fff; text-shadow: 0 3px 12px rgba(0, 0, 0, 0.75); text-transform: uppercase;
+}
+.scene-col { display: flex; flex-direction: column; align-items: center; gap: 6px; animation: pop-in 0.25s ease both; }
+.scene-name {
+  font-weight: 800; font-size: clamp(1rem, 5vw, 1.7rem); color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.75); text-align: center; animation: pop-in 0.25s ease both;
+}
+.scene-emoji { font-size: clamp(1.6rem, 11vw, 3rem); line-height: 1; }
+.card-rect { width: 22px; height: 30px; border-radius: 3px; animation: card-raise 0.4s ease both; }
+.card-rect.yellow { background: #f1c40f; }
+.card-rect.red { background: #f87171; }
+.sub-arrow { font-size: clamp(1.8rem, 12vw, 3.2rem); line-height: 1; animation: pop-in 0.25s ease both; }
+.sub-arrow.out { color: #f87171; }
+.sub-arrow.in { color: #f4c430; }
+.whistle { animation: whistle-shake 0.35s ease both; }
+@keyframes pop-in { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: scale(1); } }
+@keyframes card-raise { from { opacity: 0; transform: translateY(22px) rotate(-16deg); } to { opacity: 1; transform: none; } }
+@keyframes whistle-shake { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-9deg); } 75% { transform: rotate(9deg); } }
+
 @media (prefers-reduced-motion: reduce) {
   .rb-score { animation: none; }
-  .pitch-marker { animation: none; }
   .pitch-player { transition: none; }
   .pitch-ball { transition: none; }
-  .pitch-flash { animation: none; opacity: 0; }
   .rstat-fill { transition: none; }
+  .scene-col, .scene-name, .sub-arrow, .whistle, .card-rect { animation: none; }
 }

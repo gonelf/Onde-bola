@@ -15,9 +15,15 @@
   `/admin/*.js` from the filesystem before any rewrite, like `admin-nav.js`.)
   Tunables live in `DEFAULT_CONFIG`; the lab passes its own config and exports
   the tuned values to paste back into `DEFAULT_CONFIG`.
-- **⏳ Still to do:** component reuse (the pitch *renderer* is still JSX in
-  `GamesBrowser.jsx` and re-implemented as DOM in the lab) and the React admin
-  shell. Those are Phases 1–3 below.
+- **✅ Component reuse done.** The pitch renderer is now `components/MatchPitch.jsx`,
+  used by both the public modal and the React admin lab. Its styles live in
+  `assets/replay.css` (token fallbacks for both themes). The admin console has a
+  React shell (`app/(admin)/layout.js` + `components/AdminNav.jsx`) and the lab
+  is a React route (`app/(admin)/admin/replay`) that mounts the real `MatchPitch`
+  with live controls + the real-game loader; the static `replay.html` is gone.
+- **⏳ Still to do (optional):** port the remaining static admin pages (flags,
+  overrides, seo, ads, ad-test, connections) to React — Phase 4. The console runs
+  hybrid (React lab + static pages) in the meantime, which is fine.
 
 ## Why
 

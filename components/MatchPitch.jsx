@@ -27,6 +27,23 @@ import {
 
 const TRAIL_N = 10;
 
+// Event-presentation windows, in simulated minutes (so they scale with playback
+// speed). A marker pops in over POP; goals then linger as a dim "shadow"; cards
+// and subs fade out over FADE. The on-pitch "scene" (the big celebration / card
+// / sub overlay) plays over the *_WIN window for the most recent event.
+const POP = 1.4, FADE = 4, GOAL_WIN = 7, CARD_WIN = 5, SUB_WIN = 5;
+
+function Whistle() {
+  return (
+    <svg className="whistle" width="64" height="42" viewBox="0 0 64 42" fill="none" aria-hidden="true">
+      <path d="M6 16 H33 a13 13 0 1 1 -13 13 V22 H6 a3 3 0 0 1 -3 -3 v0 a3 3 0 0 1 3 -3 Z" fill="#eef3f8" />
+      <circle cx="20" cy="29" r="4.5" fill="#9aa7b5" />
+      <rect x="29" y="7" width="4" height="10" rx="2" fill="#c2ccd6" />
+      <path d="M44 6 l6 -4 M50 12 l7 -3 M50 20 l7 1" stroke="#f4c430" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function MatchPitch({
   home, away, events: rawEvents, stats, config, clock, seed,
   showNumbers = false, showMarkers = true, showTrail = false, goalLabel = "GOAL!",
@@ -55,12 +72,57 @@ export default function MatchPitch({
 
   const { players, ball } = stateAt(clock);
 
-  const shown = [];
+  // Revealed events with their age (dt) at this clock.
+  const revealed = [];
   events.forEach((ev, i) => {
-    if (ev._m <= clock + 1e-9) shown.push({ ev, i, type: markerType(ev.kind), pos: pitchPos(ev, i) });
+    if (ev._m <= clock + 1e-9) {
+      revealed.push({ ev, i, type: markerType(ev.kind), pos: pitchPos(ev, i), dt: clock - ev._m });
+    }
   });
-  const last = shown.length ? shown[shown.length - 1] : null;
-  const goalFlash = last && last.type === "goal" ? last : null;
+
+  // Markers: goals persist (dimmed to a shadow after their pop); cards/subs only
+  // linger briefly, then fade away.
+  const markers = revealed.filter((r) => r.type === "goal" || r.dt <= FADE);
+  const markerStyle = (r) => {
+    const pop = r.dt < POP ? 1 + (1 - r.dt / POP) * 1.3 : 1;
+    if (r.type === "goal" && r.dt >= POP) {
+      return { left: r.pos.x + "%", top: r.pos.y + "%",
+        transform: "translate(-50%,-50%) scale(0.8)", opacity: 0.4, filter: "grayscale(0.6)" };
+    }
+    const opacity = r.type === "goal" ? 1 : Math.max(0, 1 - r.dt / FADE);
+    return { left: r.pos.x + "%", top: r.pos.y + "%",
+      transform: `translate(-50%,-50%) scale(${pop.toFixed(3)})`, opacity };
+  };
+
+  // The on-pitch "scene" overlay = the most recent revealed event still inside
+  // its window. Driven by p (0..1) so it scrubs cleanly.
+  let overlay = null;
+  for (let k = revealed.length - 1; k >= 0; k--) {
+    const r = revealed[k];
+    const win = r.type === "goal" ? GOAL_WIN : (r.ev.kind === "sub" ? SUB_WIN : CARD_WIN);
+    if (r.dt <= win) { overlay = Object.assign({}, r, { p: win > 0 ? r.dt / win : 1 }); break; }
+  }
+
+  const renderOverlay = (o) => {
+    if (!o) return null;
+    const { p, ev, type } = o;
+    if (type === "goal") {
+      if (p < 0.62) {
+        const x = -35 + (p / 0.62) * 165; // sweep across the pitch (left %)
+        return <div className="ev-overlay"><div className="goal-sweep" style={{ left: x + "%", transform: "translateY(-50%)" }}>{goalLabel}</div></div>;
+      }
+      return <div className="ev-overlay"><div className="scene-name" key="gn">{ev.player || ""}</div></div>;
+    }
+    if (ev.kind === "sub") {
+      return p < 0.5
+        ? <div className="ev-overlay"><div className="scene-col" key="so"><span className="sub-arrow out">⬇</span><span className="scene-name">{ev.note || ev.player || ""}</span></div></div>
+        : <div className="ev-overlay"><div className="scene-col" key="si"><span className="sub-arrow in">⬆</span><span className="scene-name">{ev.player || ""}</span></div></div>;
+    }
+    // card
+    if (p < 0.34) return <div className="ev-overlay"><div className="scene-col" key="cw"><Whistle /></div></div>;
+    if (p < 0.67) return <div className="ev-overlay"><div className="scene-col" key="ch"><span className="scene-emoji">✋</span><span className={"card-rect " + type} /></div></div>;
+    return <div className="ev-overlay"><div className="scene-name" key="cn">{ev.player || ""}</div></div>;
+  };
 
   const trail = [];
   if (showTrail) {
@@ -90,20 +152,13 @@ export default function MatchPitch({
         <span key={"tr" + i} className="pitch-trail"
           style={{ left: pt.x + "%", top: pt.y + "%", opacity: (1 - i / TRAIL_N) * 0.4 }} />
       )) : null}
-      {showMarkers ? shown.map((r) => {
-        const active = r === last;
-        return (
-          <span key={r.i} className={"pitch-marker " + r.type + (active ? " active" : "")}
-            style={{ left: r.pos.x + "%", top: r.pos.y + "%" }}>
-            <span className="marker-glyph">{MARKER_GLYPH[r.type]}</span>
-            {active && r.ev.player ? (
-              <span className="marker-label">{r.ev.player}{r.ev.min ? " " + r.ev.min : ""}</span>
-            ) : null}
-          </span>
-        );
-      }) : null}
+      {showMarkers ? markers.map((r) => (
+        <span key={r.i} className={"pitch-marker " + r.type} style={markerStyle(r)}>
+          <span className="marker-glyph">{MARKER_GLYPH[r.type]}</span>
+        </span>
+      )) : null}
       <span className="pitch-ball" style={{ left: ball.x + "%", top: ball.y + "%" }} />
-      {goalFlash ? <div className="pitch-flash" key={"f" + goalFlash.i}>{goalLabel}</div> : null}
+      {renderOverlay(overlay)}
     </div>
   );
 }

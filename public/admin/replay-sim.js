@@ -295,6 +295,10 @@ export function passBall(clock, wp, wHome, seed, players, events, maxMin, cfg) {
 // so their lines interleave near the ball like a real game. `blockFollow` blends
 // between the resting formation (0) and fully ball-centred (1).
 //
+// The forward/back push is a CONTINUOUS function of where the ball is (how far
+// into a team's attacking half), not a discrete "who's attacking" flip — so when
+// play switches direction both blocks slide together smoothly instead of jumping.
+//
 // `sampleField(c)` returns { ball, atk } at clock minute c. Each player reacts to
 // the play sampled a little in the PAST — forwards first, defenders last
 // (reactLag sim-minutes scaled by role) — so a switch of play ripples through
@@ -307,10 +311,11 @@ export function placePlayers(base, home, sampleField, clock, cfg) {
   const lag = c.reactLag != null ? c.reactLag : 0;
   return base.map((p, idx) => {
     const bd = p.bd != null ? p.bd : 0.5;
-    const f = sampleField(clock - lag * (1 - bd)); // forwards (high bd) react first
-    const ball = f.ball;
-    const attacking = f.atk === (home ? "home" : "away");
-    const phase = f.atk ? (attacking ? c.attackPush : -c.defendDrop) : 0; // push up / drop back
+    const ball = sampleField(clock - lag * (1 - bd)).ball; // forwards (high bd) react first
+    // How far the ball is into THIS team's attacking half (−1 own goal … +1 opp
+    // goal). Smooth, so the push has no discontinuity when play switches sides.
+    const fwd = ((ball.x - 50) / 50) * dir;
+    const phase = fwd >= 0 ? fwd * c.attackPush : fwd * c.defendDrop;
     if (idx === 0) { // GK: holds near own goal, edges toward the ball a touch
       const ownGoal = home ? 4 : 96;
       return { x: ownGoal + (ball.x - ownGoal) * 0.1, y: 50 + (ball.y - 50) * 0.15 };

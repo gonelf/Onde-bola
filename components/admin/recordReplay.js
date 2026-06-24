@@ -38,14 +38,14 @@ function drawPitch(ctx) {
   // mowing stripes
   ctx.fillStyle = "rgba(255,255,255,0.05)";
   for (let i = 0; i < 8; i += 2) ctx.fillRect((i / 8) * W, HEADER, W / 8, PITCHH);
-  ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.moveTo(W / 2, HEADER); ctx.lineTo(W / 2, H); ctx.stroke();
   ctx.beginPath(); ctx.arc(W / 2, HEADER + PITCHH / 2, PITCHH * 0.12, 0, Math.PI * 2); ctx.stroke();
   const boxW = W * 0.13, boxH = PITCHH * 0.56, boxY = HEADER + (PITCHH - boxH) / 2;
   ctx.strokeRect(0, boxY, boxW, boxH); ctx.strokeRect(W - boxW, boxY, boxW, boxH);
   ctx.fillStyle = "rgba(255,255,255,0.65)";
   const gH = PITCHH * 0.18, gY = HEADER + (PITCHH - gH) / 2;
-  ctx.fillRect(0, gY, 4, gH); ctx.fillRect(W - 4, gY, 4, gH);
+  ctx.fillRect(0, gY, 6, gH); ctx.fillRect(W - 6, gY, 6, gH);
 }
 
 function drawHeader(ctx, homeName, awayName, hs, as, clockLabel) {
@@ -145,7 +145,7 @@ export function recordReplayVideo(opts) {
         const c = clock - k * 0.7; if (c < 0) break;
         const b = ballAt(c);
         ctx.globalAlpha = (1 - k / trailLength) * 0.4; ctx.fillStyle = "#fff";
-        ctx.beginPath(); ctx.arc(PX(b.x), PY(b.y), 4, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(PX(b.x), PY(b.y), 9, 0, Math.PI * 2); ctx.fill();
       }
       ctx.globalAlpha = 1;
     }
@@ -155,10 +155,10 @@ export function recordReplayVideo(opts) {
       away: placePlayers(bases.away, false, sampleField, clock, cfg),
     };
     const drawTeam = (arr, color) => arr.forEach((p, i) => {
-      ctx.beginPath(); ctx.arc(PX(p.x), PY(p.y), 10, 0, Math.PI * 2);
+      ctx.beginPath(); ctx.arc(PX(p.x), PY(p.y), 22, 0, Math.PI * 2);
       ctx.fillStyle = color; ctx.fill();
-      ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(0,0,0,0.45)"; ctx.stroke();
-      if (d.showNumbers) { ctx.fillStyle = "#fff"; ctx.font = "700 9px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(String(i + 1), PX(p.x), PY(p.y)); }
+      ctx.lineWidth = 2.5; ctx.strokeStyle = "rgba(0,0,0,0.45)"; ctx.stroke();
+      if (d.showNumbers) { ctx.fillStyle = "#fff"; ctx.font = "700 13px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(String(i + 1), PX(p.x), PY(p.y)); }
     });
     drawTeam(players.home, homeColor); drawTeam(players.away, awayColor);
     // markers
@@ -170,18 +170,18 @@ export function recordReplayVideo(opts) {
         const pos = pitchPos(ev, i);
         let alpha = type === "goal" ? (dt >= 1.4 ? 0.4 : 1) : Math.max(0, 1 - dt / 4);
         const pop = dt < 1.4 ? 1 + (1 - dt / 1.4) * 1.3 : (type === "goal" && dt >= 1.4 ? 0.8 : 1);
-        const r = (type === "shot" ? 7 : 8) * pop;
+        const r = (type === "shot" ? 15 : 22) * pop;
         ctx.globalAlpha = alpha; ctx.fillStyle = MARK_COLOR[type] || "#cfd8e3";
         ctx.beginPath(); ctx.arc(PX(pos.x), PY(pos.y), r, 0, Math.PI * 2); ctx.fill();
-        if (type === "goal") { ctx.globalAlpha = alpha; ctx.font = (r) + "px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("⚽", PX(pos.x), PY(pos.y)); }
+        if (type === "goal") { ctx.globalAlpha = alpha; ctx.font = r + "px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("⚽", PX(pos.x), PY(pos.y)); }
       });
       ctx.globalAlpha = 1;
     }
     // ball
     const ball = ballAt(clock);
     ctx.save();
-    if (d.ballShadow !== false) { ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 3; ctx.shadowOffsetY = 2; }
-    ctx.font = "18px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    if (d.ballShadow !== false) { ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 5; ctx.shadowOffsetY = 3; }
+    ctx.font = "34px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText("⚽", PX(ball.x), PY(ball.y));
     ctx.restore();
     // scoreboard

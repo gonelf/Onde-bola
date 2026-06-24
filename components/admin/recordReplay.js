@@ -20,7 +20,13 @@ const PX = (x) => (x / 100) * W;
 const PY = (y) => HEADER + (y / 100) * PITCHH;
 
 function pickMime() {
-  const cands = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"];
+  // Prefer MP4 (H.264) so Safari/iOS and recent Chrome export .mp4; fall back to
+  // WebM only where MP4 recording isn't available (older Chrome/Firefox).
+  const cands = [
+    "video/mp4;codecs=avc1.640028", "video/mp4;codecs=avc1.42E01E",
+    "video/mp4;codecs=h264", "video/mp4",
+    "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm",
+  ];
   for (const m of cands) { if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(m)) return m; }
   return "";
 }

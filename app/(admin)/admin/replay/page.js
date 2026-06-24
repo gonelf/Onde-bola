@@ -10,7 +10,7 @@
 import { useMemo, useState } from "react";
 import MatchPitch from "@/components/MatchPitch";
 import useReplayClock from "@/components/useReplayClock";
-import { prepEvents, maxMinute, runningScore, num, DEFAULT_CONFIG } from "@/public/admin/replay-sim";
+import { prepEvents, maxMinute, runningScore, addShotEvents, num, DEFAULT_CONFIG } from "@/public/admin/replay-sim";
 
 const SCENARIOS = {
   thriller: {
@@ -82,12 +82,10 @@ export default function ReplayLabPage() {
   const [awayColor, setAwayColor] = useState("#e8554e");
   const [possHome, setPossHome] = useState(56);
   const [seed, setSeed] = useState(undefined);
-  const [disp, setDisp] = useState({ showNumbers: true, showMarkers: true, showTrail: true, showBallShadow: true });
+  const [disp, setDisp] = useState({ showNumbers: true, showMarkers: true, showTrail: true, showBallShadow: true, showShots: true });
 
   const match = real || SCENARIOS[scenarioKey];
   const shots = match.shots || [10, 10];
-  const events = useMemo(() => prepEvents(match.events), [match]);
-  const maxMin = useMemo(() => maxMinute(events), [events]);
   const stats = useMemo(() => {
     const base = [{ key: "possession", home: possHome, away: 100 - possHome },
       { key: "shots", home: shots[0], away: shots[1] }];
@@ -97,6 +95,13 @@ export default function ReplayLabPage() {
     }
     return base;
   }, [real, possHome, shots]);
+  const events = useMemo(() => {
+    const base = prepEvents(match.events);
+    if (!disp.showShots) return base;
+    const mm = maxMinute(base);
+    return addShotEvents(base, stats, mm, base.length * 131 + Math.round(mm) * 7);
+  }, [match, stats, disp.showShots]);
+  const maxMin = useMemo(() => maxMinute(events), [events]);
 
   // Playback clock — pauses on each event for its scene (see useReplayClock).
   // Game speed scales how fast the match clock advances (1× ≈ a 14s full match).
@@ -200,7 +205,7 @@ export default function ReplayLabPage() {
         <div className="rb-clock">{clockLabel}</div>
         <MatchPitch home={{ name: match.home, formation: homeForm, color: homeColor }}
           away={{ name: match.away, formation: awayForm, color: awayColor }}
-          events={match.events} stats={stats} config={cfg} clock={clock} seed={seed} celebrate={celebrating}
+          events={events} stats={stats} config={cfg} clock={clock} seed={seed} celebrate={celebrating}
           sceneScale={sceneScale} ballShadow={disp.showBallShadow} trailLength={cfg.trailLength}
           showNumbers={disp.showNumbers} showMarkers={disp.showMarkers} showTrail={disp.showTrail} />
         <div className="replay-controls">
@@ -304,6 +309,8 @@ export default function ReplayLabPage() {
             <input type="checkbox" style={{ width: "auto" }} checked={disp.showTrail} onChange={(e) => setDisp((d) => ({ ...d, showTrail: e.target.checked }))} /> Ball trail</label>
           <label style={{ display: "flex", alignItems: "center", gap: 6, width: "auto", color: "var(--text)" }}>
             <input type="checkbox" style={{ width: "auto" }} checked={disp.showBallShadow} onChange={(e) => setDisp((d) => ({ ...d, showBallShadow: e.target.checked }))} /> Ball shadow</label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, width: "auto", color: "var(--text)" }}>
+            <input type="checkbox" style={{ width: "auto" }} checked={disp.showShots} onChange={(e) => setDisp((d) => ({ ...d, showShots: e.target.checked }))} /> Shots</label>
         </div>
         <div style={{ maxWidth: 320, marginTop: 8 }}>
           <Slider label="Ball trail length" value={cfg.trailLength} min={2} max={28} step={1} onChange={(v) => set("trailLength", v)} />

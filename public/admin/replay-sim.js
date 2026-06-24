@@ -18,11 +18,12 @@
 
 export const DEFAULT_CONFIG = {
   passMin: 1.5,      // one pass roughly every N simulated minutes
-  blockFollow: 0.6,  // how far the whole team block slides up/down toward the ball
+  blockFollow: 0.8,  // 0 = teams stay in their halves, 1 = fully centred on the ball
+  spread: 46,        // goal-to-goal length of a team's shape (pitch %)
   attackPush: 10,    // extra forward push for the side in possession (pitch %)
   defendDrop: 6,     // extra drop-back for the side out of possession (pitch %)
   lateral: 0.28,     // lateral slide toward the ball's vertical position
-  ballFollow: 0.07,  // pull of each player toward the ball's x
+  ballFollow: 0.05,  // small extra pull of each player toward the ball's x
   jitterAmp: 0.8,    // amplitude of per-player idle movement (pitch %)
   jitterSpeed: 1.0,  // speed of that idle movement
 };
@@ -56,6 +57,26 @@ export function maxMinute(events) {
   return Math.ceil(m);
 }
 
+// Add synthetic "shot" events from the aggregate shot counts (minus the goals,
+// which were shots that scored). We have no shot timestamps, so they're spread
+// across the match at seeded minutes — illustrative, like the rest of the sim.
+// The ball visits each shot's goalmouth; the marker fades quickly (no pause).
+export function addShotEvents(events, stats, maxMin, seed) {
+  const sr = (stats || []).find((s) => s.key === "shots") || {};
+  const goalsH = events.filter((e) => (e.kind === "goal" || e.kind === "pengoal") && e.side !== "away").length;
+  const goalsA = events.filter((e) => (e.kind === "goal" || e.kind === "pengoal") && e.side === "away").length;
+  const sh = Math.max(0, Math.min(30, Math.round(num(sr.home)) - goalsH));
+  const sa = Math.max(0, Math.min(30, Math.round(num(sr.away)) - goalsA));
+  if (!sh && !sa) return events;
+  const rng = mulberry32((((seed || 1) ^ 0x5f3759df) >>> 0) || 1);
+  const span = Math.max(1, maxMin - 6);
+  const out = events.slice();
+  const add = (side, n) => { for (let i = 0; i < n; i++) { const m = 3 + Math.floor(rng() * span); out.push({ side, kind: "shot", min: m + "'", _m: m, synthetic: true }); } };
+  add("home", sh); add("away", sa);
+  out.sort((a, b) => a._m - b._m);
+  return out;
+}
+
 // Running scoreline at a clock minute, from the revealed goal events.
 export function runningScore(events, clock) {
   let hs = 0, as = 0;
@@ -75,10 +96,11 @@ export function markerType(kind) {
   if (kind === "red") return "red";
   if (kind === "yellow") return "yellow";
   if (kind === "sub") return "sub";
+  if (kind === "shot") return "shot";
   return "other";
 }
 
-export const MARKER_GLYPH = { goal: "⚽", sub: "↔", red: "", yellow: "", other: "" };
+export const MARKER_GLYPH = { goal: "⚽", sub: "↔", red: "", yellow: "", shot: "", other: "" };
 
 // How long (real ms) to hold the match clock while an event's on-pitch scene
 // plays. Must match the CSS scene durations in assets/replay.css.
@@ -101,6 +123,7 @@ export function pitchPos(ev, idx) {
   const kind = ev.kind;
   if (kind === "goal" || kind === "pengoal") return { x: home ? 94 : 6, y: 50 + j * 0.4 };
   if (kind === "owngoal") return { x: home ? 6 : 94, y: 50 + j * 0.4 }; // own net
+  if (kind === "shot") return { x: home ? 90 : 10, y: 50 + j * 0.9 }; // toward opp goal, spread
   if (kind === "sub") return { x: home ? 24 : 76, y: idx % 2 ? 8 : 92 }; // touchline
   return { x: home ? 36 : 64, y: 50 + j }; // cards etc., in the offending half
 }
@@ -142,18 +165,19 @@ export function formationArr(side) {
   return [4, 3, 3];
 }
 
-// Resting positions for a team's 11 (GK first), in pitch %. Home keeps to the
-// left half and attacks right; away mirrors.
+// Resting positions for a team's 11 (GK first), in pitch %. Each carries `bd`,
+// a 0..1 depth from own goal toward the opponent (GK 0, forwards ~0.75), used to
+// arrange the team around the ball.
 export function teamBase(formation, home) {
   const lines = formation && formation.length ? formation : [4, 3, 3];
-  const pts = [{ bx: home ? 4 : 96, by: 50 }]; // GK
+  const pts = [{ bx: home ? 4 : 96, by: 50, bd: 0 }]; // GK
   const L = lines.length;
   lines.forEach((cnt, li) => {
     const depth = (li + 1) / (L + 1); // own goal → midfield
     const x = home ? 9 + depth * 39 : 91 - depth * 39;
     for (let p = 0; p < cnt; p++) {
       const y = cnt === 1 ? 50 : 13 + (p / (cnt - 1)) * 74;
-      pts.push({ bx: x, by: y });
+      pts.push({ bx: x, by: y, bd: depth });
     }
   });
   return pts;
@@ -264,19 +288,26 @@ export function passBall(clock, wp, wHome, seed, players, events, maxMin, cfg) {
 // Shift a team's resting shape toward the current phase: the attacking side
 // pushes up, the defending side drops, both slide laterally to follow the ball,
 // plus a little per-player idle movement so the shape is never frozen.
+// Arrange a team AROUND the ball rather than inside its own half: the line
+// follows the ball up/down the pitch, with defenders sitting behind the ball and
+// forwards ahead of it (along the team's attack direction). Both teams do this,
+// so their lines interleave near the ball like a real game. `blockFollow` blends
+// between the resting formation (0) and fully ball-centred (1).
 export function placePlayers(base, home, atk, ball, clock, cfg) {
   const c = cfg || DEFAULT_CONFIG;
   const dir = home ? 1 : -1;
   const attacking = atk === (home ? "home" : "away");
-  // The whole team block slides up/down the pitch toward the ball — BOTH teams
-  // do this (same direction), so the lines overlap around the ball like a real
-  // compact game instead of each side staying in its own half.
-  const blockFollow = c.blockFollow != null ? c.blockFollow : 0.6;
-  const block = (ball.x - 50) * blockFollow;
-  const phase = atk ? (attacking ? dir * c.attackPush : -dir * c.defendDrop) : 0;
+  const follow = c.blockFollow != null ? c.blockFollow : 0.8;
+  const spread = c.spread != null ? c.spread : 46;
+  const phase = atk ? (attacking ? c.attackPush : -c.defendDrop) : 0; // push up / drop back
   return base.map((p, idx) => {
-    if (idx === 0) return { x: p.bx + block * 0.25, y: 50 + (ball.y - 50) * 0.15 }; // GK holds near goal
-    let x = p.bx + block + phase;
+    if (idx === 0) { // GK: holds near own goal, edges toward the ball a touch
+      const ownGoal = home ? 4 : 96;
+      return { x: ownGoal + (ball.x - ownGoal) * 0.1, y: 50 + (ball.y - 50) * 0.15 };
+    }
+    const bd = p.bd != null ? p.bd : 0.5;
+    const centered = ball.x + dir * ((bd - 0.5) * spread + phase);
+    let x = p.bx * (1 - follow) + centered * follow;
     let y = p.by + (ball.y - 50) * c.lateral;
     x += (ball.x - x) * c.ballFollow;
     x += Math.cos(clock * c.jitterSpeed * 0.9 + idx * 1.3) * c.jitterAmp;

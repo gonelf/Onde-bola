@@ -75,6 +75,7 @@
 .pitch-marker.yellow { background: #f1c40f; }
 .pitch-marker.red { background: var(--live, #f87171); }
 .pitch-marker.sub { background: #4a90d9; }
+.pitch-marker.shot { background: #ffb347; width: 11px; height: 11px; }
 .pitch-marker.other { background: #cfd8e3; }
 .pitch-marker.active { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3); z-index: 4; }
 .pitch-ball {

@@ -14,7 +14,7 @@ import {
   ensureEventTv, ensureDetails, loadHighlights, loadedTv, detailsCache,
 } from "@/lib/app-data";
 import { normName } from "@/lib/format";
-import { prepEvents, maxMinute } from "@/public/admin/replay-sim";
+import { prepEvents, maxMinute, addShotEvents } from "@/public/admin/replay-sim";
 import MatchPitch from "@/components/MatchPitch";
 import useReplayClock from "@/components/useReplayClock";
 
@@ -254,8 +254,12 @@ function parseStat(v) {
 const REPLAY_DURATION_MS = 14000;
 
 function MatchReplay({ fx, d, t }) {
-  const events = useMemo(() => prepEvents(d.events), [d]);
   const stats = d.stats || [];
+  const events = useMemo(() => {
+    const base = prepEvents(d.events);
+    const mm = maxMinute(base);
+    return addShotEvents(base, d.stats || [], mm, base.length * 131 + Math.round(mm) * 7);
+  }, [d]);
   const maxMin = useMemo(() => maxMinute(events), [events]);
 
   // Team descriptors for the shared pitch (formation + kit colour from FotMob).
@@ -275,7 +279,7 @@ function MatchReplay({ fx, d, t }) {
   let hs = 0, as = 0;
   const shown = [];
   events.forEach((ev, i) => {
-    if (ev._m > clock + 1e-9) return;
+    if (ev._m > clock + 1e-9 || ev.kind === "shot") return; // shots are pitch-only
     let scoreStr = "";
     if (ev.kind === "goal" || ev.kind === "pengoal" || ev.kind === "owngoal") {
       const scoresHome = ev.kind === "owngoal" ? (ev.side === "away") : (ev.side === "home");
@@ -309,7 +313,7 @@ function MatchReplay({ fx, d, t }) {
       <div className="rb-clock">{clockLabel}</div>
 
       {events.length ? (
-        <MatchPitch home={pitchHome} away={pitchAway} events={d.events} stats={stats}
+        <MatchPitch home={pitchHome} away={pitchAway} events={events} stats={stats}
           clock={clock} celebrate={celebrating} goalLabel={t("mdGoal")} />
       ) : null}
 

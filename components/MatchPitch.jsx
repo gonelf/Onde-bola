@@ -89,17 +89,22 @@ export default function MatchPitch({
   const homeColor = (home && home.color) || "#4a90d9";
   const awayColor = (away && away.color) || "#e8554e";
 
-  // Players + ball at any clock — pure, so the trail can be sampled backwards.
-  const stateAt = (c) => {
-    const field = simState(sim.wp, c);
-    const players = {
-      home: placePlayers(bases.home, true, field.atk, field.ball, c, cfg),
-      away: placePlayers(bases.away, false, field.atk, field.ball, c, cfg),
-    };
-    return { players, ball: passBall(c, sim.wp, sim.wHome, sim.seed, players, events, maxMin, cfg) };
-  };
+  // Field (ball + attacking side) at any clock minute.
+  const sampleField = (c) => simState(sim.wp, c);
+  // Lag-free positions drive the ball (so the ball leads a switch of play);
+  // the rendered players use the role-staggered reaction lag and trail behind.
+  const cfgNoLag = Object.assign({}, cfg, { reactLag: 0 });
+  const playersNowAt = (c) => ({
+    home: placePlayers(bases.home, true, sampleField, c, cfgNoLag),
+    away: placePlayers(bases.away, false, sampleField, c, cfgNoLag),
+  });
+  const ballAt = (c) => passBall(c, sim.wp, sim.wHome, sim.seed, playersNowAt(c), events, maxMin, cfg);
 
-  const { players, ball } = stateAt(clock);
+  const ball = ballAt(clock);
+  const players = {
+    home: placePlayers(bases.home, true, sampleField, clock, cfg),
+    away: placePlayers(bases.away, false, sampleField, clock, cfg),
+  };
 
   // Revealed events with their age (dt) at this clock.
   const revealed = [];
@@ -129,7 +134,7 @@ export default function MatchPitch({
     for (let k = 1; k <= trailLength; k++) {
       const c = clock - k * 0.7;
       if (c < 0) break;
-      trail.push(stateAt(c).ball);
+      trail.push(ballAt(c));
     }
   }
 

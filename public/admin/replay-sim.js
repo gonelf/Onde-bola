@@ -22,6 +22,7 @@ export const DEFAULT_CONFIG = {
   spread: 46,        // goal-to-goal length of a team's shape (pitch %)
   attackPush: 10,    // extra forward push for the side in possession (pitch %)
   defendDrop: 6,     // extra drop-back for the side out of possession (pitch %)
+  reactLag: 3,       // sim-minutes of role-staggered reaction (forwards first)
   lateral: 0.28,     // lateral slide toward the ball's vertical position
   ballFollow: 0.05,  // small extra pull of each player toward the ball's x
   jitterAmp: 0.8,    // amplitude of per-player idle movement (pitch %)
@@ -293,19 +294,27 @@ export function passBall(clock, wp, wHome, seed, players, events, maxMin, cfg) {
 // forwards ahead of it (along the team's attack direction). Both teams do this,
 // so their lines interleave near the ball like a real game. `blockFollow` blends
 // between the resting formation (0) and fully ball-centred (1).
-export function placePlayers(base, home, atk, ball, clock, cfg) {
+//
+// `sampleField(c)` returns { ball, atk } at clock minute c. Each player reacts to
+// the play sampled a little in the PAST — forwards first, defenders last
+// (reactLag sim-minutes scaled by role) — so a switch of play ripples through
+// the team like a counter-attack instead of everyone moving in sync.
+export function placePlayers(base, home, sampleField, clock, cfg) {
   const c = cfg || DEFAULT_CONFIG;
   const dir = home ? 1 : -1;
-  const attacking = atk === (home ? "home" : "away");
   const follow = c.blockFollow != null ? c.blockFollow : 0.8;
   const spread = c.spread != null ? c.spread : 46;
-  const phase = atk ? (attacking ? c.attackPush : -c.defendDrop) : 0; // push up / drop back
+  const lag = c.reactLag != null ? c.reactLag : 0;
   return base.map((p, idx) => {
+    const bd = p.bd != null ? p.bd : 0.5;
+    const f = sampleField(clock - lag * (1 - bd)); // forwards (high bd) react first
+    const ball = f.ball;
+    const attacking = f.atk === (home ? "home" : "away");
+    const phase = f.atk ? (attacking ? c.attackPush : -c.defendDrop) : 0; // push up / drop back
     if (idx === 0) { // GK: holds near own goal, edges toward the ball a touch
       const ownGoal = home ? 4 : 96;
       return { x: ownGoal + (ball.x - ownGoal) * 0.1, y: 50 + (ball.y - 50) * 0.15 };
     }
-    const bd = p.bd != null ? p.bd : 0.5;
     const centered = ball.x + dir * ((bd - 0.5) * spread + phase);
     let x = p.bx * (1 - follow) + centered * follow;
     let y = p.by + (ball.y - 50) * c.lateral;

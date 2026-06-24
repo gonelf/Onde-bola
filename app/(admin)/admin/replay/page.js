@@ -177,7 +177,7 @@ export default function ReplayLabPage() {
     const out = {
       REPLAY_DURATION_MS: Math.round(BASE_DURATION_MS / (cfg.gameSpeed || 1)), PASS_MIN: cfg.passMin,
       eventSpeed: cfg.eventSpeed,
-      blockFollow: cfg.blockFollow,
+      blockFollow: cfg.blockFollow, reactLag: cfg.reactLag,
       jitterAmp: cfg.jitterAmp, jitterSpeed: cfg.jitterSpeed,
       attackPush: cfg.attackPush, defendDrop: cfg.defendDrop,
       lateral: cfg.lateral, ballFollow: cfg.ballFollow,
@@ -273,6 +273,7 @@ export default function ReplayLabPage() {
           <Slider label="Team block follow" value={cfg.blockFollow} min={0} max={1} step={0.05} fmt={(v) => v.toFixed(2)} onChange={(v) => set("blockFollow", v)} />
           <Slider label="Attack push up" value={cfg.attackPush} min={0} max={25} step={1} onChange={(v) => set("attackPush", v)} />
           <Slider label="Defend drop back" value={cfg.defendDrop} min={0} max={20} step={1} onChange={(v) => set("defendDrop", v)} />
+          <Slider label="Reaction lag (ripple)" value={cfg.reactLag} min={0} max={8} step={0.5} fmt={(v) => v.toFixed(1)} onChange={(v) => set("reactLag", v)} />
           <Slider label="Lateral ball-follow" value={cfg.lateral} min={0} max={0.6} step={0.02} fmt={(v) => v.toFixed(2)} onChange={(v) => set("lateral", v)} />
           <Slider label="Pull toward ball" value={cfg.ballFollow} min={0} max={0.2} step={0.01} fmt={(v) => v.toFixed(2)} onChange={(v) => set("ballFollow", v)} />
         </div>

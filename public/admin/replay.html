@@ -99,6 +99,20 @@
   </div>
 
   <div class="card">
+    <div style="font-weight:600;margin-bottom:8px;">📥 Load a real finished game</div>
+    <div class="sub" style="margin-bottom:8px;">Pick a date, choose a finished game, and the lab plays its real timeline (events, stats, formations) via <code>/api/fixtures</code> + <code>/api/matchdetails</code>.</div>
+    <div class="row">
+      <div><label>Date</label><input type="date" id="cDate"></div>
+      <div style="flex:2 1 240px;"><label>Finished game</label><select id="cGame"><option value="">— find games first —</option></select></div>
+    </div>
+    <div class="toolbar">
+      <button id="findGames">Find games</button>
+      <button class="secondary" id="loadGame">Load selected</button>
+      <span class="pill" id="gameHint">no game loaded</span>
+    </div>
+  </div>
+
+  <div class="card">
     <div style="font-weight:600;margin-bottom:8px;">🎬 Animation</div>
     <div class="ctl-grid">
       <div class="ctl"><label>Match duration <b id="vDuration"></b></label><input type="range" id="cDuration" min="4" max="40" step="1"></div>
@@ -351,9 +365,14 @@
     var st = null; // { events, maxMin, wp, wHome, seed, bases, els }
     var clock = 0, playing = false, lastTs = 0, lastFlashIdx = -1;
     var TRAIL_N = 10, trail = [], trailEls = [];
+    var realMatch = null; // a loaded real game, shaped like a scenario
+
+    function activeScenario() {
+      return cfg.scenario === "__real__" && realMatch ? realMatch : SCENARIOS[cfg.scenario];
+    }
 
     function rebuild() {
-      var sc = SCENARIOS[cfg.scenario];
+      var sc = activeScenario();
       var events = sc.events.map(function (ev) { var o = {}; for (var k in ev) o[k] = ev[k]; o._m = minOf(ev); return o; });
       events.sort(function (a, b) { return a._m - b._m; });
       var maxMin = 90;
@@ -530,7 +549,9 @@
     Object.keys(SCENARIOS).forEach(function (k) { var o = document.createElement("option"); o.value = k; o.textContent = SCENARIOS[k].label; scSel.appendChild(o); });
     scSel.value = cfg.scenario;
     scSel.addEventListener("change", function () {
-      cfg.scenario = this.value; cfg.possHome = SCENARIOS[cfg.scenario].possHome;
+      cfg.scenario = this.value;
+      var sc = activeScenario();
+      if (sc) cfg.possHome = sc.possHome;
       pause(); clock = 0; syncInputs(); rebuild();
     });
     [["cHomeForm", "homeForm"], ["cAwayForm", "awayForm"]].forEach(function (pair) {
@@ -558,6 +579,91 @@
       $("exportOut").textContent = txt; $("exportOut").classList.add("show");
       if (navigator.clipboard) navigator.clipboard.writeText(txt).then(function () { $("exportHint").textContent = "copied ✓"; }, function () {});
     });
+
+    // ---- load a real finished game --------------------------------------
+    function statNum(v) { var n = parseFloat(String(v == null ? "" : v).replace(/[^\d.]/g, "")); return isFinite(n) ? n : 0; }
+    var gameList = []; // [{ fmid, home, away, label }]
+
+    function findGames() {
+      var date = $("cDate").value;
+      if (!date) { $("gameHint").textContent = "pick a date"; return; }
+      $("gameHint").textContent = "loading " + date + "…";
+      fetch("/api/fixtures?date=" + encodeURIComponent(date) + "&all=1")
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          var fin = (j.fixtures || []).filter(function (f) { return f.status === "FT" && f.fmid; });
+          gameList = fin.map(function (f) {
+            var sc = (f.homeScore != null && f.awayScore != null) ? (f.homeScore + "–" + f.awayScore) : "";
+            return { fmid: f.fmid, home: f.home, away: f.away, label: f.home + " " + sc + " " + f.away + " · " + (f.competition || "") };
+          });
+          var sel = $("cGame");
+          sel.innerHTML = "";
+          if (!gameList.length) { sel.innerHTML = "<option value=''>no finished games this date</option>"; $("gameHint").textContent = "0 finished games"; return; }
+          gameList.forEach(function (g, i) { var o = document.createElement("option"); o.value = String(i); o.textContent = g.label; sel.appendChild(o); });
+          $("gameHint").textContent = gameList.length + " finished game(s) — pick one & Load";
+        })
+        .catch(function (e) { $("gameHint").textContent = "error: " + (e && e.message || e); });
+    }
+
+    // Map an /api/matchdetails `details` object onto the lab's scenario shape.
+    function toScenario(d, meta) {
+      var ps = (d.stats || []).find(function (s) { return s.key === "possession"; });
+      var ss = (d.stats || []).find(function (s) { return s.key === "shots"; });
+      var lu = d.lineups || {};
+      var hk = lu.home && lu.home.kit && lu.home.kit.shirt;
+      var ak = lu.away && lu.away.kit && lu.away.kit.shirt;
+      return {
+        home: meta.home, away: meta.away,
+        possHome: ps ? (Math.round(statNum(ps.home)) || 50) : 50,
+        shots: [ss ? (statNum(ss.home) || 1) : 1, ss ? (statNum(ss.away) || 1) : 1],
+        events: (d.events || []).map(function (e) {
+          return { side: e.side === "away" ? "away" : "home", min: e.min, kind: e.kind, player: e.player, note: e.note };
+        }),
+        homeForm: (lu.home && lu.home.formation) || cfg.homeForm,
+        awayForm: (lu.away && lu.away.formation) || cfg.awayForm,
+        homeColor: hk || cfg.homeColor, awayColor: ak || cfg.awayColor,
+      };
+    }
+
+    function ensureFormOption(selId, val) {
+      var sel = $(selId);
+      if (val && !Array.prototype.some.call(sel.options, function (o) { return o.value === val; })) {
+        var o = document.createElement("option"); o.value = val; o.textContent = val; sel.appendChild(o);
+      }
+    }
+
+    function loadGame() {
+      var idx = parseInt($("cGame").value, 10);
+      if (isNaN(idx) || !gameList[idx]) { $("gameHint").textContent = "pick a game"; return; }
+      var g = gameList[idx];
+      $("gameHint").textContent = "loading details for " + g.home + " vs " + g.away + "…";
+      fetch("/api/matchdetails?id=" + encodeURIComponent(g.fmid))
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (!j || !j.ok || !j.details) { $("gameHint").textContent = "no details available for this game"; return; }
+          realMatch = toScenario(j.details, g);
+          // make a "real game" scenario option and select it
+          if (!Array.prototype.some.call(scSel.options, function (o) { return o.value === "__real__"; })) {
+            var o = document.createElement("option"); o.value = "__real__"; scSel.appendChild(o);
+          }
+          Array.prototype.forEach.call(scSel.options, function (o) { if (o.value === "__real__") o.textContent = "★ " + g.home + " vs " + g.away; });
+          scSel.value = "__real__"; cfg.scenario = "__real__";
+          // apply the game's formations / colours / possession
+          cfg.homeForm = realMatch.homeForm; cfg.awayForm = realMatch.awayForm;
+          cfg.homeColor = realMatch.homeColor; cfg.awayColor = realMatch.awayColor;
+          cfg.possHome = realMatch.possHome;
+          ensureFormOption("cHomeForm", cfg.homeForm); ensureFormOption("cAwayForm", cfg.awayForm);
+          $("cHomeForm").value = cfg.homeForm; $("cAwayForm").value = cfg.awayForm;
+          pause(); clock = 0; trail = []; syncInputs(); rebuild();
+          var n = realMatch.events.length;
+          $("gameHint").textContent = "loaded ✓ " + n + " event" + (n === 1 ? "" : "s") + (n ? "" : " (no timeline — try another)");
+        })
+        .catch(function (e) { $("gameHint").textContent = "error: " + (e && e.message || e); });
+    }
+
+    $("cDate").value = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    $("findGames").addEventListener("click", findGames);
+    $("loadGame").addEventListener("click", loadGame);
 
     syncInputs();
     rebuild();

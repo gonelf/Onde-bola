@@ -68,6 +68,13 @@ pre { margin: 0; padding: 12px 14px; background: #0a1120; border-top: 1px solid 
 .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
 a { color: var(--accent); }
 
+/* Ad script tester debug-log row colours (page uses inline styles otherwise). */
+.at-row.ok, .at-row.box-ok { color: var(--ok); }
+.at-row.error, .at-row.box-error { color: var(--bad); }
+.at-row.warn, .at-row.box-warn { color: var(--warn); }
+.at-row.script { color: var(--muted); }
+.at-row.net, .at-row.frame { color: var(--accent); }
+
 /* ---- Top bar + hamburger navigation (injected by admin-nav.js) ---- */
 .admin-topbar {
   display: flex; align-items: center; gap: 12px;

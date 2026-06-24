@@ -813,6 +813,17 @@ body {
   font-size: 0.82rem;
 }
 
+.detail-timeline.replay { max-height: 220px; overflow-y: auto; scroll-behavior: smooth; }
+.detail-timeline.replay .event-row { animation: ev-in 0.4s ease both; transition: opacity 0.2s ease; }
+.detail-timeline.replay .event-row:not(.active) { opacity: 0.6; }
+.detail-timeline.replay .event-row.active .event-icon { box-shadow: 0 0 0 2px var(--accent); }
+@keyframes ev-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .detail-timeline.replay { scroll-behavior: auto; }
+  .detail-timeline.replay .event-row { animation: none; }
+}
+
 .detail-form { display: flex; flex-direction: column; gap: 8px; }
 .form-side { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .form-side > span:first-child { flex: 1; font-weight: 600; font-size: 0.9rem; }

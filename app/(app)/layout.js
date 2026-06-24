@@ -7,6 +7,7 @@
 
 import { Analytics } from "@vercel/analytics/react";
 import "../../assets/styles.css";
+import "../../assets/replay.css";
 
 const SITE_URL = "https://hojehabola.com";
 const TITLE = "Hoje Há Bola — Football on TV worldwide & where to watch";

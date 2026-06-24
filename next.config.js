@@ -4,17 +4,9 @@ const nextConfig = {
   compress: true,
   poweredByHeader: false,
 
-  // Serve the admin console at clean /admin paths (the pages live in
-  // public/admin/*.html). /admin -> the index page, /admin/<section> -> that
-  // section's page. Static assets (admin.css, the *.js) under public/admin/ are
-  // served straight from the filesystem before these afterFiles rewrites run.
-  // Old /admin.html links 308 to /admin so there's a single canonical entry.
-  async rewrites() {
-    return [
-      { source: "/admin", destination: "/admin/index.html" },
-      { source: "/admin/:page", destination: "/admin/:page.html" },
-    ];
-  },
+  // The admin console is now React routes under app/(admin)/admin/*. Static
+  // assets it imports (admin.css, replay-sim.js) still live under public/admin/
+  // and are served straight from the filesystem. Old /admin.html 308s to /admin.
   async redirects() {
     return [{ source: "/admin.html", destination: "/admin", permanent: true }];
   },

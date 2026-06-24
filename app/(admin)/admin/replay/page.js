@@ -10,6 +10,7 @@
 import { useMemo, useState } from "react";
 import MatchPitch from "@/components/MatchPitch";
 import useReplayClock from "@/components/useReplayClock";
+import { recordReplayVideo } from "@/components/admin/recordReplay";
 import { prepEvents, maxMinute, runningScore, addShotEvents, num, DEFAULT_CONFIG } from "@/public/admin/replay-sim";
 
 const SCENARIOS = {
@@ -173,6 +174,25 @@ export default function ReplayLabPage() {
 
   // ---- export ----
   const [exportTxt, setExportTxt] = useState("");
+  const [recHint, setRecHint] = useState("");
+  const [recording, setRecording] = useState(false);
+
+  const exportVideo = async () => {
+    if (recording) return;
+    setRecording(true); setRecHint("recording…");
+    try {
+      const name = await recordReplayVideo({
+        events, stats, maxMin, seed, cfg,
+        gameSpeed: cfg.gameSpeed, sceneScale, baseDurationMs: BASE_DURATION_MS,
+        homeName: match.home, awayName: match.away,
+        homeForm, awayForm, homeColor, awayColor, goalLabel: "GOAL!",
+        display: { showNumbers: disp.showNumbers, showMarkers: disp.showMarkers, showTrail: disp.showTrail, ballShadow: disp.showBallShadow, trailLength: cfg.trailLength },
+        onProgress: (p) => setRecHint("recording… " + Math.round(p * 100) + "%"),
+      });
+      setRecHint("saved " + name + " ✓");
+    } catch (e) { setRecHint(String((e && e.message) || e)); }
+    finally { setRecording(false); }
+  };
   const doExport = () => {
     const out = {
       REPLAY_DURATION_MS: Math.round(BASE_DURATION_MS / (cfg.gameSpeed || 1)), PASS_MIN: cfg.passMin,
@@ -316,7 +336,11 @@ export default function ReplayLabPage() {
         <div style={{ maxWidth: 320, marginTop: 8 }}>
           <Slider label="Ball trail length" value={cfg.trailLength} min={2} max={28} step={1} onChange={(v) => set("trailLength", v)} />
         </div>
-        <div className="toolbar"><button onClick={doExport}>Export settings</button><span className="pill">JSON for DEFAULT_CONFIG</span></div>
+        <div className="toolbar">
+          <button onClick={doExport}>Export settings</button>
+          <button className="secondary" onClick={exportVideo} disabled={recording}>{recording ? "Recording…" : "🎥 Export video"}</button>
+          <span className="pill">{recHint || "JSON for DEFAULT_CONFIG"}</span>
+        </div>
         {exportTxt ? <pre style={{ marginTop: 10 }}>{exportTxt}</pre> : null}
       </div>
     </>

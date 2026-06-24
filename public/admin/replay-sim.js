@@ -41,6 +41,33 @@ export const num = (v) => {
   return isFinite(n) ? n : 0;
 };
 
+// Normalise a raw event list: attach a numeric minute and sort chronologically.
+export function prepEvents(raw) {
+  const a = (raw || []).map((e) => Object.assign({}, e, { _m: minOf(e) }));
+  a.sort((x, y) => x._m - y._m);
+  return a;
+}
+
+// The match length to animate over (≥ 90, rounded up past any stoppage event).
+export function maxMinute(events) {
+  let m = 90;
+  (events || []).forEach((e) => { if (e._m > m) m = e._m; });
+  return Math.ceil(m);
+}
+
+// Running scoreline at a clock minute, from the revealed goal events.
+export function runningScore(events, clock) {
+  let hs = 0, as = 0;
+  (events || []).forEach((ev) => {
+    if (ev._m > clock + 1e-9) return;
+    if (ev.kind === "goal" || ev.kind === "pengoal" || ev.kind === "owngoal") {
+      const scoresHome = ev.kind === "owngoal" ? (ev.side === "away") : (ev.side === "home");
+      if (scoresHome) hs++; else as++;
+    }
+  });
+  return { hs, as };
+}
+
 // Map an event kind to the marker style used on the pitch.
 export function markerType(kind) {
   if (kind === "goal" || kind === "pengoal" || kind === "owngoal") return "goal";
@@ -160,6 +187,18 @@ export function buildWaypoints(events, possHome, shotsHome, shotsAway, maxMin, r
   }
   wp.sort((a, b) => a.m - b.m);
   return { wp, wHome };
+}
+
+// Convenience: build the deterministic possession model for a match from its
+// events + stats. Returns { wp, wHome, seed }.
+export function buildSim(events, stats, maxMin, seedOverride) {
+  const sr = (stats || []).find((x) => x.key === "shots") || {};
+  const sh = num(sr.home) || 1, sa = num(sr.away) || 1;
+  const poss = possShare(stats);
+  const seed = seedOverride || ((events.length * 131 + Math.round(maxMin) * 7 +
+    (events[0] ? Math.round(events[0]._m * 13) : 0)) >>> 0) || 1;
+  const built = buildWaypoints(events, poss, sh, sa, maxMin, mulberry32(seed));
+  return { wp: built.wp, wHome: built.wHome, seed };
 }
 
 // Ball position and the team currently attacking, at a given clock minute.

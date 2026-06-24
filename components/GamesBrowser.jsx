@@ -14,11 +14,8 @@ import {
   ensureEventTv, ensureDetails, loadHighlights, loadedTv, detailsCache,
 } from "@/lib/app-data";
 import { normName } from "@/lib/format";
-import {
-  minOf, markerType, pitchPos, MARKER_GLYPH, mulberry32, num, possShare,
-  formationArr, teamBase, buildWaypoints, simState, passBall, placePlayers,
-  DEFAULT_CONFIG,
-} from "@/public/admin/replay-sim";
+import { prepEvents, maxMinute } from "@/public/admin/replay-sim";
+import MatchPitch from "@/components/MatchPitch";
 
 const STORAGE_HIDDEN = "ondebola.hiddenLeagues";
 const STORAGE_REMEMBER = "ondebola.rememberFilters";
@@ -256,36 +253,15 @@ function parseStat(v) {
 const REPLAY_DURATION_MS = 14000;
 
 function MatchReplay({ fx, d, t }) {
-  const events = useMemo(() => {
-    const arr = (d.events || []).map((ev) => ({ ...ev, _m: minOf(ev) }));
-    arr.sort((a, b) => a._m - b._m);
-    return arr;
-  }, [d]);
+  const events = useMemo(() => prepEvents(d.events), [d]);
   const stats = d.stats || [];
-  const maxMin = useMemo(() => {
-    let m = 90;
-    events.forEach((e) => { if (e._m > m) m = e._m; });
-    return Math.ceil(m);
-  }, [events]);
+  const maxMin = useMemo(() => maxMinute(events), [events]);
 
-  // Deterministic possession model + resting formations for the simulation.
-  const sim = useMemo(() => {
-    const sr = (stats || []).find((x) => x.key === "shots") || {};
-    const sh = num(sr.home) || 1, sa = num(sr.away) || 1;
-    const poss = possShare(stats);
-    const seed = ((events.length * 131 + Math.round(maxMin) * 7 +
-      (events[0] ? Math.round(events[0]._m * 13) : 0)) >>> 0) || 1;
-    const built = buildWaypoints(events, poss, sh, sa, maxMin, mulberry32(seed));
-    return { wp: built.wp, wHome: built.wHome, seed };
-  }, [events, stats, maxMin]);
-  const bases = useMemo(() => ({
-    home: teamBase(formationArr(d.lineups && d.lineups.home), true),
-    away: teamBase(formationArr(d.lineups && d.lineups.away), false),
-  }), [d]);
-  const kit = {
-    home: (d.lineups && d.lineups.home && d.lineups.home.kit && d.lineups.home.kit.shirt) || "#4a90d9",
-    away: (d.lineups && d.lineups.away && d.lineups.away.kit && d.lineups.away.kit.shirt) || "#e8554e",
-  };
+  // Team descriptors for the shared pitch (formation + kit colour from FotMob).
+  const pitchHome = { name: fx.home, formation: d.lineups && d.lineups.home,
+    color: d.lineups && d.lineups.home && d.lineups.home.kit && d.lineups.home.kit.shirt };
+  const pitchAway = { name: fx.away, formation: d.lineups && d.lineups.away,
+    color: d.lineups && d.lineups.away && d.lineups.away.kit && d.lineups.away.kit.shirt };
 
   // Default to full time — the modal shows the real final result; the replay
   // (re)starts from kick-off only when the user hits play.
@@ -320,7 +296,7 @@ function MatchReplay({ fx, d, t }) {
 
   const progress = maxMin > 0 ? Math.min(1, clock / maxMin) : 1;
 
-  // Running scoreline and revealed events at the current clock.
+  // Running scoreline + revealed events for the scoreboard and chronology feed.
   let hs = 0, as = 0;
   const shown = [];
   events.forEach((ev, i) => {
@@ -331,7 +307,7 @@ function MatchReplay({ fx, d, t }) {
       if (scoresHome) hs++; else as++;
       scoreStr = hs + "–" + as;
     }
-    shown.push({ ev, scoreStr, i, type: markerType(ev.kind), pos: pitchPos(ev, i) });
+    shown.push({ ev, scoreStr, i });
   });
 
   // Keep the chronology feed scrolled to the latest revealed event.
@@ -340,16 +316,6 @@ function MatchReplay({ fx, d, t }) {
   }, [shown.length]);
 
   const last = shown.length ? shown[shown.length - 1] : null;
-  const goalFlash = last && last.type === "goal" ? last : null;
-
-  // Continuous simulated play: a coarse "play location" shapes the formation,
-  // then the ball is passed between the resulting player positions.
-  const field = simState(sim.wp, clock);
-  const players = {
-    home: placePlayers(bases.home, true, field.atk, field.ball, clock, DEFAULT_CONFIG),
-    away: placePlayers(bases.away, false, field.atk, field.ball, clock, DEFAULT_CONFIG),
-  };
-  const ball = passBall(clock, sim.wp, sim.wHome, sim.seed, players, events, maxMin, DEFAULT_CONFIG);
 
   const atEnd = clock >= maxMin;
   const minNum = Math.floor(clock);
@@ -368,37 +334,8 @@ function MatchReplay({ fx, d, t }) {
       <div className="rb-clock">{clockLabel}</div>
 
       {events.length ? (
-        <div className="replay-pitch">
-          <div className="pitch-line center" />
-          <div className="pitch-circle" />
-          <div className="pitch-box left" />
-          <div className="pitch-box right" />
-          <div className="pitch-goal left" />
-          <div className="pitch-goal right" />
-          {players.home.map((p, i) => (
-            <span key={"ph" + i} className="pitch-player"
-              style={{ left: p.x + "%", top: p.y + "%", background: kit.home }} />
-          ))}
-          {players.away.map((p, i) => (
-            <span key={"pa" + i} className="pitch-player"
-              style={{ left: p.x + "%", top: p.y + "%", background: kit.away }} />
-          ))}
-          {shown.map((r) => {
-            const active = r === last;
-            return (
-              <span key={r.i}
-                className={"pitch-marker " + r.type + (active ? " active" : "")}
-                style={{ left: r.pos.x + "%", top: r.pos.y + "%" }}>
-                <span className="marker-glyph">{MARKER_GLYPH[r.type]}</span>
-                {active && r.ev.player ? (
-                  <span className="marker-label">{r.ev.player}{r.ev.min ? " " + r.ev.min : ""}</span>
-                ) : null}
-              </span>
-            );
-          })}
-          <span className="pitch-ball" style={{ left: ball.x + "%", top: ball.y + "%" }} />
-          {goalFlash ? <div className="pitch-flash" key={"f" + goalFlash.i}>{t("mdGoal")}</div> : null}
-        </div>
+        <MatchPitch home={pitchHome} away={pitchAway} events={d.events} stats={stats}
+          clock={clock} goalLabel={t("mdGoal")} />
       ) : null}
 
       <div className="replay-controls">

@@ -25,8 +25,6 @@ import {
   placePlayers, passBall, markerType, pitchPos, MARKER_GLYPH, DEFAULT_CONFIG,
 } from "@/public/admin/replay-sim";
 
-const TRAIL_N = 10;
-
 // Marker lifetimes, in simulated minutes: a marker pops in over POP; goals then
 // linger as a dim "shadow"; cards and subs fade out over FADE. The on-pitch
 // "scene" (celebration / card / sub) is rendered separately via the `celebrate`
@@ -77,7 +75,7 @@ function Whistle() {
 export default function MatchPitch({
   home, away, events: rawEvents, stats, config, clock, seed, celebrate,
   showNumbers = false, showMarkers = true, showTrail = false, goalLabel = "GOAL!",
-  sceneScale = 1, ballShadow = true,
+  sceneScale = 1, ballShadow = true, trailLength = 10,
 }) {
   const cfg = config || DEFAULT_CONFIG;
   const events = useMemo(() => prepEvents(rawEvents), [rawEvents]);
@@ -128,7 +126,7 @@ export default function MatchPitch({
 
   const trail = [];
   if (showTrail) {
-    for (let k = 1; k <= TRAIL_N; k++) {
+    for (let k = 1; k <= trailLength; k++) {
       const c = clock - k * 0.7;
       if (c < 0) break;
       trail.push(stateAt(c).ball);
@@ -152,7 +150,7 @@ export default function MatchPitch({
       {players.away.map((p, i) => playerDot(p, i, awayColor, "pa"))}
       {showTrail ? trail.map((pt, i) => (
         <span key={"tr" + i} className="pitch-trail"
-          style={{ left: pt.x + "%", top: pt.y + "%", opacity: (1 - i / TRAIL_N) * 0.4 }} />
+          style={{ left: pt.x + "%", top: pt.y + "%", opacity: (1 - i / trailLength) * 0.4 }} />
       )) : null}
       {showMarkers ? markers.map((r) => (
         <span key={r.i} className={"pitch-marker " + r.type} style={markerStyle(r)}>

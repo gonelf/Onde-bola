@@ -70,7 +70,7 @@ function Slider({ label, value, min, max, step, fmt, onChange }) {
 }
 
 export default function ReplayLabPage() {
-  const [cfg, setCfg] = useState(Object.assign({ durationSec: 14, eventSpeed: 1 }, DEFAULT_CONFIG));
+  const [cfg, setCfg] = useState(Object.assign({ durationSec: 14, eventSpeed: 1, trailLength: 10 }, DEFAULT_CONFIG));
   const set = (k, v) => setCfg((c) => Object.assign({}, c, { [k]: v }));
 
   const [scenarioKey, setScenarioKey] = useState("thriller");
@@ -197,7 +197,7 @@ export default function ReplayLabPage() {
         <MatchPitch home={{ name: match.home, formation: homeForm, color: homeColor }}
           away={{ name: match.away, formation: awayForm, color: awayColor }}
           events={match.events} stats={stats} config={cfg} clock={clock} seed={seed} celebrate={celebrating}
-          sceneScale={sceneScale} ballShadow={disp.showBallShadow}
+          sceneScale={sceneScale} ballShadow={disp.showBallShadow} trailLength={cfg.trailLength}
           showNumbers={disp.showNumbers} showMarkers={disp.showMarkers} showTrail={disp.showTrail} />
         <div className="replay-controls">
           <button className="replay-btn" type="button" onClick={toggle}>{playing ? "⏸" : "▶"}</button>
@@ -299,6 +299,9 @@ export default function ReplayLabPage() {
             <input type="checkbox" style={{ width: "auto" }} checked={disp.showTrail} onChange={(e) => setDisp((d) => ({ ...d, showTrail: e.target.checked }))} /> Ball trail</label>
           <label style={{ display: "flex", alignItems: "center", gap: 6, width: "auto", color: "var(--text)" }}>
             <input type="checkbox" style={{ width: "auto" }} checked={disp.showBallShadow} onChange={(e) => setDisp((d) => ({ ...d, showBallShadow: e.target.checked }))} /> Ball shadow</label>
+        </div>
+        <div style={{ maxWidth: 320, marginTop: 8 }}>
+          <Slider label="Ball trail length" value={cfg.trailLength} min={2} max={28} step={1} onChange={(v) => set("trailLength", v)} />
         </div>
         <div className="toolbar"><button onClick={doExport}>Export settings</button><span className="pill">JSON for DEFAULT_CONFIG</span></div>
         {exportTxt ? <pre style={{ marginTop: 10 }}>{exportTxt}</pre> : null}

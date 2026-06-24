@@ -70,7 +70,7 @@ function Slider({ label, value, min, max, step, fmt, onChange }) {
 }
 
 export default function ReplayLabPage() {
-  const [cfg, setCfg] = useState(Object.assign({ durationSec: 14 }, DEFAULT_CONFIG));
+  const [cfg, setCfg] = useState(Object.assign({ durationSec: 14, eventSpeed: 1 }, DEFAULT_CONFIG));
   const set = (k, v) => setCfg((c) => Object.assign({}, c, { [k]: v }));
 
   const [scenarioKey, setScenarioKey] = useState("thriller");
@@ -81,7 +81,7 @@ export default function ReplayLabPage() {
   const [awayColor, setAwayColor] = useState("#e8554e");
   const [possHome, setPossHome] = useState(56);
   const [seed, setSeed] = useState(undefined);
-  const [disp, setDisp] = useState({ showNumbers: true, showMarkers: true, showTrail: true });
+  const [disp, setDisp] = useState({ showNumbers: true, showMarkers: true, showTrail: true, showBallShadow: true });
 
   const match = real || SCENARIOS[scenarioKey];
   const shots = match.shots || [10, 10];
@@ -98,7 +98,8 @@ export default function ReplayLabPage() {
   }, [real, possHome, shots]);
 
   // Playback clock — pauses on each event for its scene (see useReplayClock).
-  const { clock, playing, celebrating, toggle, restart, scrub } = useReplayClock(events, maxMin, cfg.durationSec * 1000);
+  const sceneScale = 1 / (cfg.eventSpeed || 1);
+  const { clock, playing, celebrating, toggle, restart, scrub } = useReplayClock(events, maxMin, cfg.durationSec * 1000, sceneScale);
   const onScrub = (e) => scrub(Number(e.target.value));
 
   const { hs, as } = runningScore(events, clock);
@@ -167,6 +168,7 @@ export default function ReplayLabPage() {
   const doExport = () => {
     const out = {
       REPLAY_DURATION_MS: cfg.durationSec * 1000, PASS_MIN: cfg.passMin,
+      eventSpeed: cfg.eventSpeed,
       jitterAmp: cfg.jitterAmp, jitterSpeed: cfg.jitterSpeed,
       attackPush: cfg.attackPush, defendDrop: cfg.defendDrop,
       lateral: cfg.lateral, ballFollow: cfg.ballFollow,
@@ -195,6 +197,7 @@ export default function ReplayLabPage() {
         <MatchPitch home={{ name: match.home, formation: homeForm, color: homeColor }}
           away={{ name: match.away, formation: awayForm, color: awayColor }}
           events={match.events} stats={stats} config={cfg} clock={clock} seed={seed} celebrate={celebrating}
+          sceneScale={sceneScale} ballShadow={disp.showBallShadow}
           showNumbers={disp.showNumbers} showMarkers={disp.showMarkers} showTrail={disp.showTrail} />
         <div className="replay-controls">
           <button className="replay-btn" type="button" onClick={toggle}>{playing ? "⏸" : "▶"}</button>
@@ -251,6 +254,7 @@ export default function ReplayLabPage() {
           <Slider label="Pass interval" value={cfg.passMin} min={0.6} max={4} step={0.1} fmt={(v) => v.toFixed(1) + "'"} onChange={(v) => set("passMin", v)} />
           <Slider label="Player jitter amount" value={cfg.jitterAmp} min={0} max={3} step={0.1} fmt={(v) => v.toFixed(1)} onChange={(v) => set("jitterAmp", v)} />
           <Slider label="Player jitter speed" value={cfg.jitterSpeed} min={0} max={3} step={0.1} fmt={(v) => v.toFixed(1)} onChange={(v) => set("jitterSpeed", v)} />
+          <Slider label="Event scene speed" value={cfg.eventSpeed} min={0.3} max={3} step={0.1} fmt={(v) => v.toFixed(1) + "×"} onChange={(v) => set("eventSpeed", v)} />
         </div>
       </div>
 
@@ -293,6 +297,8 @@ export default function ReplayLabPage() {
             <input type="checkbox" style={{ width: "auto" }} checked={disp.showMarkers} onChange={(e) => setDisp((d) => ({ ...d, showMarkers: e.target.checked }))} /> Event markers</label>
           <label style={{ display: "flex", alignItems: "center", gap: 6, width: "auto", color: "var(--text)" }}>
             <input type="checkbox" style={{ width: "auto" }} checked={disp.showTrail} onChange={(e) => setDisp((d) => ({ ...d, showTrail: e.target.checked }))} /> Ball trail</label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, width: "auto", color: "var(--text)" }}>
+            <input type="checkbox" style={{ width: "auto" }} checked={disp.showBallShadow} onChange={(e) => setDisp((d) => ({ ...d, showBallShadow: e.target.checked }))} /> Ball shadow</label>
         </div>
         <div className="toolbar"><button onClick={doExport}>Export settings</button><span className="pill">JSON for DEFAULT_CONFIG</span></div>
         {exportTxt ? <pre style={{ marginTop: 10 }}>{exportTxt}</pre> : null}

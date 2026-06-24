@@ -77,6 +77,7 @@ function Whistle() {
 export default function MatchPitch({
   home, away, events: rawEvents, stats, config, clock, seed, celebrate,
   showNumbers = false, showMarkers = true, showTrail = false, goalLabel = "GOAL!",
+  sceneScale = 1, ballShadow = true,
 }) {
   const cfg = config || DEFAULT_CONFIG;
   const events = useMemo(() => prepEvents(rawEvents), [rawEvents]);
@@ -142,7 +143,7 @@ export default function MatchPitch({
   );
 
   return (
-    <div className="replay-pitch">
+    <div className="replay-pitch" style={{ "--scene-scale": sceneScale }}>
       <div className="pitch-line center" />
       <div className="pitch-circle" />
       <div className="pitch-box left" /><div className="pitch-box right" />
@@ -158,7 +159,7 @@ export default function MatchPitch({
           <span className="marker-glyph">{MARKER_GLYPH[r.type]}</span>
         </span>
       )) : null}
-      <span className="pitch-ball" style={{ left: ball.x + "%", top: ball.y + "%" }} />
+      <span className={"pitch-ball" + (ballShadow ? "" : " no-shadow")} style={{ left: ball.x + "%", top: ball.y + "%" }}>⚽</span>
       {celebrate ? <EventScene key={"sc" + celebrate._m + "-" + celebrate.kind} ev={celebrate} goalLabel={goalLabel} /> : null}
     </div>
   );

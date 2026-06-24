@@ -15,7 +15,7 @@
 import { useEffect, useRef, useState } from "react";
 import { sceneMs } from "@/public/admin/replay-sim";
 
-export default function useReplayClock(events, maxMin, durationMs) {
+export default function useReplayClock(events, maxMin, durationMs, sceneScale = 1) {
   const [clock, setClock] = useState(maxMin);
   const [playing, setPlaying] = useState(false);
   const [celebrating, setCelebrating] = useState(null);
@@ -59,7 +59,7 @@ export default function useReplayClock(events, maxMin, durationMs) {
         celebrated.current.add(hit.i);
         clockRef.current = hit.e._m; setClock(hit.e._m);
         celebRef.current = hit.e; setCelebrating(hit.e);
-        holdUntil.current = ts + sceneMs(hit.e);
+        holdUntil.current = ts + sceneMs(hit.e) * sceneScale;
         raf.current = requestAnimationFrame(step);
         return;
       }
@@ -69,7 +69,7 @@ export default function useReplayClock(events, maxMin, durationMs) {
     };
     raf.current = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf.current);
-  }, [playing, maxMin, durationMs, events]);
+  }, [playing, maxMin, durationMs, events, sceneScale]);
 
   const clearHold = () => { holdUntil.current = 0; celebRef.current = null; setCelebrating(null); };
 

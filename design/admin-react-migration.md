@@ -4,6 +4,21 @@
 > the production components**, and make the admin the place where we **test
 > those components in isolation** (the Match Animation Lab is the first case).
 
+## Status
+
+- **✅ Engine reuse done.** The simulation engine is extracted to
+  `public/admin/replay-sim.js` (a framework-free ES module). Both surfaces now
+  import the *same* file — the production modal via the `@/public/admin/replay-sim`
+  alias, and the static lab via `import … from "/admin/replay-sim.js"`. No more
+  duplicated maths. (It lives under `public/` rather than `lib/` precisely so the
+  static admin page can import it over HTTP; the `next.config.js` rewrites serve
+  `/admin/*.js` from the filesystem before any rewrite, like `admin-nav.js`.)
+  Tunables live in `DEFAULT_CONFIG`; the lab passes its own config and exports
+  the tuned values to paste back into `DEFAULT_CONFIG`.
+- **⏳ Still to do:** component reuse (the pitch *renderer* is still JSX in
+  `GamesBrowser.jsx` and re-implemented as DOM in the lab) and the React admin
+  shell. Those are Phases 1–3 below.
+
 ## Why
 
 The Match Animation Lab (`public/admin/replay.html`) currently **re-implements**
@@ -133,9 +148,9 @@ Admin is the component harness:
   React should *reduce* duplicated JS overall.
 - Don't break Basic Auth: the existing `matcher` already covers nested paths;
   just don't introduce an `/admin` API route that bypasses it.
-- Until Phase 0/1 land, **`public/admin/replay.html` is a deliberate temporary
-  duplicate** of the engine. Keep edits to the sim in `GamesBrowser.jsx` mirrored
-  here, or prioritise Phase 0 to delete the duplication.
+- Engine duplication is **resolved** (see Status) — both surfaces import
+  `public/admin/replay-sim.js`. What remains duplicated is the *rendering* (JSX
+  vs. DOM), which Phase 1/3 removes by sharing the React renderer.
 
 ## Suggested first PR
 

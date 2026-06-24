@@ -218,9 +218,9 @@ export default function ReplayLabPage() {
 
       <div className="card" style={{ maxWidth: 660, margin: "0 auto 14px" }}>
         <div className="replay-board">
-          <span className="rb-team home">{match.home}</span>
+          <span className="rb-team home" style={{ color: homeColor }}>{match.home}</span>
           <span className="rb-score" key={hs + "-" + as}>{hs}<i>–</i>{as}</span>
-          <span className="rb-team away">{match.away}</span>
+          <span className="rb-team away" style={{ color: awayColor }}>{match.away}</span>
         </div>
         <div className="rb-clock">{clockLabel}</div>
         <MatchPitch home={{ name: match.home, formation: homeForm, color: homeColor }}

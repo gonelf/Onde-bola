@@ -315,9 +315,9 @@ function MatchReplay({ fx, d, t }) {
       <h3 className="detail-h">{t("mdReplay")}</h3>
 
       <div className="replay-board">
-        <span className="rb-team home">{fx.home}</span>
+        <span className="rb-team home" style={{ color: pitchHome.color || "#4a90d9" }}>{fx.home}</span>
         <span className="rb-score" key={hs + "-" + as}>{hs}<i>–</i>{as}</span>
-        <span className="rb-team away">{fx.away}</span>
+        <span className="rb-team away" style={{ color: pitchAway.color || "#e8554e" }}>{fx.away}</span>
       </div>
       <div className="rb-clock">{clockLabel}</div>
 

@@ -79,6 +79,17 @@ export function markerType(kind) {
 
 export const MARKER_GLYPH = { goal: "⚽", sub: "↔", red: "", yellow: "", other: "" };
 
+// How long (real ms) to hold the match clock while an event's on-pitch scene
+// plays. Must match the CSS scene durations in assets/replay.css.
+export const SCENE_MS = { goal: 2000, card: 2600, sub: 2000 };
+export function sceneMs(ev) {
+  const k = markerType(ev && ev.kind);
+  if (k === "goal") return SCENE_MS.goal;
+  if (k === "sub") return SCENE_MS.sub;
+  if (k === "yellow" || k === "red") return SCENE_MS.card;
+  return 0; // no scene → no hold
+}
+
 // FotMob events carry no pitch coordinates, so we infer a plausible spot from
 // the kind and side for an FM-style top-down view. Coordinate space: x 0% = the
 // home goal (left), x 100% = the away goal (right); home attacks right, away

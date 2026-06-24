@@ -16,6 +16,7 @@ import {
 import { normName } from "@/lib/format";
 import { prepEvents, maxMinute } from "@/public/admin/replay-sim";
 import MatchPitch from "@/components/MatchPitch";
+import useReplayClock from "@/components/useReplayClock";
 
 const STORAGE_HIDDEN = "ondebola.hiddenLeagues";
 const STORAGE_REMEMBER = "ondebola.rememberFilters";
@@ -263,36 +264,10 @@ function MatchReplay({ fx, d, t }) {
   const pitchAway = { name: fx.away, formation: d.lineups && d.lineups.away,
     color: d.lineups && d.lineups.away && d.lineups.away.kit && d.lineups.away.kit.shirt };
 
-  // Default to full time — the modal shows the real final result; the replay
-  // (re)starts from kick-off only when the user hits play.
-  const [clock, setClock] = useState(maxMin);
-  const [playing, setPlaying] = useState(false);
-  const rafRef = useRef(0);
-  const lastRef = useRef(0);
+  // Playback clock — defaults to full time; pauses on each event for its scene.
   const feedRef = useRef(null);
-
-  useEffect(() => {
-    if (!playing) return undefined;
-    lastRef.current = 0;
-    const step = (ts) => {
-      if (!lastRef.current) lastRef.current = ts;
-      const dt = ts - lastRef.current;
-      lastRef.current = ts;
-      setClock((c) => Math.min(maxMin, c + (dt / REPLAY_DURATION_MS) * maxMin));
-      rafRef.current = requestAnimationFrame(step);
-    };
-    rafRef.current = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [playing, maxMin]);
-
-  useEffect(() => { if (playing && clock >= maxMin) setPlaying(false); }, [clock, maxMin, playing]);
-
-  const toggle = () => {
-    if (clock >= maxMin) { setClock(0); setPlaying(true); }
-    else setPlaying((p) => !p);
-  };
-  const restart = () => { setPlaying(false); setClock(0); };
-  const onScrub = (e) => { setPlaying(false); setClock(Number(e.target.value)); };
+  const { clock, playing, celebrating, toggle, restart, scrub } = useReplayClock(events, maxMin, REPLAY_DURATION_MS);
+  const onScrub = (e) => scrub(Number(e.target.value));
 
   const progress = maxMin > 0 ? Math.min(1, clock / maxMin) : 1;
 
@@ -335,7 +310,7 @@ function MatchReplay({ fx, d, t }) {
 
       {events.length ? (
         <MatchPitch home={pitchHome} away={pitchAway} events={d.events} stats={stats}
-          clock={clock} goalLabel={t("mdGoal")} />
+          clock={clock} celebrate={celebrating} goalLabel={t("mdGoal")} />
       ) : null}
 
       <div className="replay-controls">

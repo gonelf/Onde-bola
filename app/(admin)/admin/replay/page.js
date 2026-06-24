@@ -7,8 +7,9 @@
  * /api/matchdetails. This replaces the old static public/admin/replay.html.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import MatchPitch from "@/components/MatchPitch";
+import useReplayClock from "@/components/useReplayClock";
 import { prepEvents, maxMinute, runningScore, num, DEFAULT_CONFIG } from "@/public/admin/replay-sim";
 
 const SCENARIOS = {
@@ -96,32 +97,9 @@ export default function ReplayLabPage() {
     return base;
   }, [real, possHome, shots]);
 
-  const [clock, setClock] = useState(maxMin);
-  const [playing, setPlaying] = useState(false);
-  const rafRef = useRef(0);
-  const lastRef = useRef(0);
-
-  // Reset to full time whenever the match changes.
-  useEffect(() => { setPlaying(false); setClock(maxMin); }, [match]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (!playing) return undefined;
-    lastRef.current = 0;
-    const step = (ts) => {
-      if (!lastRef.current) lastRef.current = ts;
-      const dt = ts - lastRef.current; lastRef.current = ts;
-      setClock((c) => Math.min(maxMin, c + (dt / (cfg.durationSec * 1000)) * maxMin));
-      rafRef.current = requestAnimationFrame(step);
-    };
-    rafRef.current = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [playing, maxMin, cfg.durationSec]);
-
-  useEffect(() => { if (playing && clock >= maxMin) setPlaying(false); }, [clock, maxMin, playing]);
-
-  const toggle = () => { if (clock >= maxMin) { setClock(0); setPlaying(true); } else setPlaying((p) => !p); };
-  const restart = () => { setPlaying(false); setClock(0); };
-  const onScrub = (e) => { setPlaying(false); setClock(Number(e.target.value)); };
+  // Playback clock — pauses on each event for its scene (see useReplayClock).
+  const { clock, playing, celebrating, toggle, restart, scrub } = useReplayClock(events, maxMin, cfg.durationSec * 1000);
+  const onScrub = (e) => scrub(Number(e.target.value));
 
   const { hs, as } = runningScore(events, clock);
   const progress = maxMin > 0 ? Math.min(1, clock / maxMin) : 1;
@@ -216,7 +194,7 @@ export default function ReplayLabPage() {
         <div className="rb-clock">{clockLabel}</div>
         <MatchPitch home={{ name: match.home, formation: homeForm, color: homeColor }}
           away={{ name: match.away, formation: awayForm, color: awayColor }}
-          events={match.events} stats={stats} config={cfg} clock={clock} seed={seed}
+          events={match.events} stats={stats} config={cfg} clock={clock} seed={seed} celebrate={celebrating}
           showNumbers={disp.showNumbers} showMarkers={disp.showMarkers} showTrail={disp.showTrail} />
         <div className="replay-controls">
           <button className="replay-btn" type="button" onClick={toggle}>{playing ? "⏸" : "▶"}</button>

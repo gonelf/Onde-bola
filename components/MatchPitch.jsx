@@ -27,11 +27,41 @@ import {
 
 const TRAIL_N = 10;
 
-// Event-presentation windows, in simulated minutes (so they scale with playback
-// speed). A marker pops in over POP; goals then linger as a dim "shadow"; cards
-// and subs fade out over FADE. The on-pitch "scene" (the big celebration / card
-// / sub overlay) plays over the *_WIN window for the most recent event.
-const POP = 1.4, FADE = 4, GOAL_WIN = 7, CARD_WIN = 5, SUB_WIN = 5;
+// Marker lifetimes, in simulated minutes: a marker pops in over POP; goals then
+// linger as a dim "shadow"; cards and subs fade out over FADE. The on-pitch
+// "scene" (celebration / card / sub) is rendered separately via the `celebrate`
+// prop and timed by CSS while the parent freezes the clock.
+const POP = 1.4, FADE = 4;
+
+// The on-pitch "scene" for one event, played on real CSS time (the match clock
+// is frozen by the parent meanwhile). Phases are sequenced via animation-delays
+// in assets/replay.css. Mounted keyed by the event so it plays once.
+function EventScene({ ev, goalLabel }) {
+  const type = markerType(ev.kind);
+  if (type === "goal") {
+    return (
+      <div className="ev-overlay">
+        <div className="goal-sweep">{goalLabel}</div>
+        <div className="scene-name gs-name">{ev.player || ""}</div>
+      </div>
+    );
+  }
+  if (ev.kind === "sub") {
+    return (
+      <div className="ev-overlay">
+        <div className="scene-col sub-out"><span className="sub-arrow out">⬇</span><span className="scene-name-i">{ev.note || ev.player || ""}</span></div>
+        <div className="scene-col sub-in"><span className="sub-arrow in">⬆</span><span className="scene-name-i">{ev.player || ""}</span></div>
+      </div>
+    );
+  }
+  return (
+    <div className="ev-overlay">
+      <div className="scene-col card-whistle"><Whistle /></div>
+      <div className="scene-col card-hand"><span className="scene-emoji">✋</span><span className={"card-rect " + type} /></div>
+      <div className="scene-name card-name">{ev.player || ""}</div>
+    </div>
+  );
+}
 
 function Whistle() {
   return (
@@ -45,7 +75,7 @@ function Whistle() {
 }
 
 export default function MatchPitch({
-  home, away, events: rawEvents, stats, config, clock, seed,
+  home, away, events: rawEvents, stats, config, clock, seed, celebrate,
   showNumbers = false, showMarkers = true, showTrail = false, goalLabel = "GOAL!",
 }) {
   const cfg = config || DEFAULT_CONFIG;
@@ -94,35 +124,6 @@ export default function MatchPitch({
       transform: `translate(-50%,-50%) scale(${pop.toFixed(3)})`, opacity };
   };
 
-  // The on-pitch "scene" overlay = the most recent revealed event still inside
-  // its window. Driven by p (0..1) so it scrubs cleanly.
-  let overlay = null;
-  for (let k = revealed.length - 1; k >= 0; k--) {
-    const r = revealed[k];
-    const win = r.type === "goal" ? GOAL_WIN : (r.ev.kind === "sub" ? SUB_WIN : CARD_WIN);
-    if (r.dt <= win) { overlay = Object.assign({}, r, { p: win > 0 ? r.dt / win : 1 }); break; }
-  }
-
-  const renderOverlay = (o) => {
-    if (!o) return null;
-    const { p, ev, type } = o;
-    if (type === "goal") {
-      if (p < 0.62) {
-        const x = -35 + (p / 0.62) * 165; // sweep across the pitch (left %)
-        return <div className="ev-overlay"><div className="goal-sweep" style={{ left: x + "%", transform: "translateY(-50%)" }}>{goalLabel}</div></div>;
-      }
-      return <div className="ev-overlay"><div className="scene-name" key="gn">{ev.player || ""}</div></div>;
-    }
-    if (ev.kind === "sub") {
-      return p < 0.5
-        ? <div className="ev-overlay"><div className="scene-col" key="so"><span className="sub-arrow out">⬇</span><span className="scene-name">{ev.note || ev.player || ""}</span></div></div>
-        : <div className="ev-overlay"><div className="scene-col" key="si"><span className="sub-arrow in">⬆</span><span className="scene-name">{ev.player || ""}</span></div></div>;
-    }
-    // card
-    if (p < 0.34) return <div className="ev-overlay"><div className="scene-col" key="cw"><Whistle /></div></div>;
-    if (p < 0.67) return <div className="ev-overlay"><div className="scene-col" key="ch"><span className="scene-emoji">✋</span><span className={"card-rect " + type} /></div></div>;
-    return <div className="ev-overlay"><div className="scene-name" key="cn">{ev.player || ""}</div></div>;
-  };
 
   const trail = [];
   if (showTrail) {
@@ -158,7 +159,7 @@ export default function MatchPitch({
         </span>
       )) : null}
       <span className="pitch-ball" style={{ left: ball.x + "%", top: ball.y + "%" }} />
-      {renderOverlay(overlay)}
+      {celebrate ? <EventScene key={"sc" + celebrate._m + "-" + celebrate.kind} ev={celebrate} goalLabel={goalLabel} /> : null}
     </div>
   );
 }

@@ -120,37 +120,63 @@
 .rstat-fill.a { background: #6b7a8d; }
 
 /* On-pitch event "scenes" (goal celebration, card, substitution) — drawn on top
-   of everything for the most recent event. */
-.ev-overlay {
-  position: absolute; inset: 0; z-index: 20; pointer-events: none;
-  display: flex; align-items: center; justify-content: center; overflow: hidden;
+   of everything while the match clock is frozen (see useReplayClock). Each phase
+   is one absolutely-centred element sequenced purely by animation-delay, so the
+   scene plays once on real time. Durations must match SCENE_MS in replay-sim.js
+   (goal 2.0s, card 2.6s, sub 2.0s). */
+.ev-overlay { position: absolute; inset: 0; z-index: 20; pointer-events: none; overflow: hidden; }
+.ev-overlay .scene-col, .ev-overlay .scene-name, .ev-overlay .goal-sweep {
+  position: absolute; top: 50%; left: 50%;
 }
-.goal-sweep {
-  position: absolute; top: 50%; left: 0; white-space: nowrap;
-  font-weight: 900; font-size: clamp(1.4rem, 9vw, 3rem); letter-spacing: 3px;
-  color: #fff; text-shadow: 0 3px 12px rgba(0, 0, 0, 0.75); text-transform: uppercase;
-}
-.scene-col { display: flex; flex-direction: column; align-items: center; gap: 6px; animation: pop-in 0.25s ease both; }
-.scene-name {
+.scene-col { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.scene-name, .scene-name-i {
   font-weight: 800; font-size: clamp(1rem, 5vw, 1.7rem); color: #fff;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.75); text-align: center; animation: pop-in 0.25s ease both;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.75); text-align: center; white-space: nowrap;
 }
 .scene-emoji { font-size: clamp(1.6rem, 11vw, 3rem); line-height: 1; }
-.card-rect { width: 22px; height: 30px; border-radius: 3px; animation: card-raise 0.4s ease both; }
+.card-rect { width: 24px; height: 32px; border-radius: 3px; }
 .card-rect.yellow { background: #f1c40f; }
 .card-rect.red { background: #f87171; }
-.sub-arrow { font-size: clamp(1.8rem, 12vw, 3.2rem); line-height: 1; animation: pop-in 0.25s ease both; }
+.sub-arrow { font-size: clamp(1.8rem, 12vw, 3.2rem); line-height: 1; }
 .sub-arrow.out { color: #f87171; }
 .sub-arrow.in { color: #f4c430; }
-.whistle { animation: whistle-shake 0.35s ease both; }
-@keyframes pop-in { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: scale(1); } }
-@keyframes card-raise { from { opacity: 0; transform: translateY(22px) rotate(-16deg); } to { opacity: 1; transform: none; } }
-@keyframes whistle-shake { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-9deg); } 75% { transform: rotate(9deg); } }
+
+/* Goal: label sweeps across the pitch, then the scorer's name pops in. */
+.goal-sweep {
+  transform: translate(-50%, -50%); white-space: nowrap;
+  font-weight: 900; font-size: clamp(1.4rem, 9vw, 3rem); letter-spacing: 3px;
+  color: #fff; text-shadow: 0 3px 12px rgba(0, 0, 0, 0.75); text-transform: uppercase;
+  animation: goal-sweep 1.4s ease both;
+}
+.gs-name { animation: scene-stay 0.7s ease 1.15s both; }
+
+/* Card: whistle → hand raising the card → player name. */
+.card-whistle { animation: scene-flash 0.85s ease both; }
+.card-hand { animation: scene-flash 1s ease 0.8s both; }
+.card-name { animation: scene-stay 1s ease 1.6s both; }
+
+/* Sub: outgoing (red down) → incoming (gold up). */
+.sub-out { animation: scene-flash 1.1s ease both; }
+.sub-in { animation: scene-stay 0.9s ease 1s both; }
+
+@keyframes goal-sweep {
+  0% { left: -25%; opacity: 0; } 12% { opacity: 1; } 50% { left: 50%; } 80% { opacity: 1; } 100% { left: 125%; opacity: 0; }
+}
+@keyframes scene-flash {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+  18% { opacity: 1; transform: translate(-50%, -50%) scale(1.06); }
+  30% { transform: translate(-50%, -50%) scale(1); }
+  78% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+}
+@keyframes scene-stay {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+  35% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .rb-score { animation: none; }
   .pitch-player { transition: none; }
   .pitch-ball { transition: none; }
   .rstat-fill { transition: none; }
-  .scene-col, .scene-name, .sub-arrow, .whistle, .card-rect { animation: none; }
 }

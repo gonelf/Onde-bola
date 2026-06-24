@@ -14,7 +14,7 @@ import {
   ensureEventTv, ensureDetails, loadHighlights, loadedTv, detailsCache,
 } from "@/lib/app-data";
 import { normName } from "@/lib/format";
-import { prepEvents, maxMinute, addShotEvents } from "@/public/admin/replay-sim";
+import { prepEvents, maxMinute, addShotEvents, DEFAULT_CONFIG } from "@/public/admin/replay-sim";
 import MatchPitch from "@/components/MatchPitch";
 import useReplayClock from "@/components/useReplayClock";
 
@@ -251,7 +251,12 @@ function parseStat(v) {
 // while the chronology scrolls below and the stat bars fill toward full time.
 // It's a stylised visual: we have no per-minute or positional data, so spots
 // are inferred from kind/side and stat bars grow proportionally to elapsed time.
-const REPLAY_DURATION_MS = 14000;
+const BASE_DURATION_MS = 14000; // full match at game speed 1×
+
+// Production replay settings, tuned in the admin Animation Lab and exported here.
+// gameSpeed scales how fast the match clock advances (durationMs = base / gameSpeed);
+// eventSpeed scales the on-pitch scene durations; trailLength is the ball trail.
+const REPLAY_CONFIG = Object.assign({ gameSpeed: 0.4, eventSpeed: 1, trailLength: 2 }, DEFAULT_CONFIG);
 
 function MatchReplay({ fx, d, t }) {
   const stats = d.stats || [];
@@ -269,8 +274,12 @@ function MatchReplay({ fx, d, t }) {
     color: d.lineups && d.lineups.away && d.lineups.away.kit && d.lineups.away.kit.shirt };
 
   // Playback clock — defaults to full time; pauses on each event for its scene.
+  // Game speed scales playback; event speed scales the on-pitch scene durations.
   const feedRef = useRef(null);
-  const { clock, playing, celebrating, toggle, restart, scrub } = useReplayClock(events, maxMin, REPLAY_DURATION_MS);
+  const cfg = REPLAY_CONFIG;
+  const sceneScale = 1 / (cfg.eventSpeed || 1);
+  const durationMs = BASE_DURATION_MS / (cfg.gameSpeed || 1);
+  const { clock, playing, celebrating, toggle, restart, scrub } = useReplayClock(events, maxMin, durationMs, sceneScale);
   const onScrub = (e) => scrub(Number(e.target.value));
 
   const progress = maxMin > 0 ? Math.min(1, clock / maxMin) : 1;
@@ -314,7 +323,8 @@ function MatchReplay({ fx, d, t }) {
 
       {events.length ? (
         <MatchPitch home={pitchHome} away={pitchAway} events={events} stats={stats}
-          clock={clock} celebrate={celebrating} goalLabel={t("mdGoal")} />
+          config={cfg} clock={clock} celebrate={celebrating} goalLabel={t("mdGoal")}
+          sceneScale={sceneScale} showTrail trailLength={cfg.trailLength} />
       ) : null}
 
       <div className="replay-controls">

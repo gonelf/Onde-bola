@@ -80,9 +80,9 @@
 .pitch-marker.active { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3); z-index: 4; }
 .pitch-ball {
   font-size: 13px; line-height: 1; transform: translate(-50%, -50%); z-index: 3;
-  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.55));
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.55);
 }
-.pitch-ball.no-shadow { filter: none; }
+.pitch-ball.no-shadow { text-shadow: none; }
 /* Transport */
 .replay-controls { display: flex; align-items: center; gap: 10px; margin: 12px 0 14px; }
 .replay-btn {

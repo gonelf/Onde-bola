@@ -22,6 +22,9 @@ Decisions locked in with the user:
 - **PvP:** async leagues/challenges (never needs both players online).
 - **Squad data:** real teams/players from FotMob, snapshotted into our DB for stability.
 - **Infra:** add a real database.
+- **Rollout:** the entire game mode ships behind a **feature flag** (off by default) so it can be
+  built and deployed without exposing it, then flipped on from the admin dashboard. See
+  §0 below.
 
 The animation is the reusable asset. The missing piece is a **headless simulator** that
 *generates* the event+stats timeline the animation already plays. Everything else (accounts, DB,
@@ -35,6 +38,27 @@ simulator *outputs into* the exact shape these consume. KV (`lib/kv.js`) stays f
 Postgres is the source of truth.
 
 ## Architecture
+
+### 0. Feature flag — gate the whole mode (reuse the existing flag system)
+The app already has a generic, admin-flippable flag system: `lib/flags.js` (`FLAG_DEFS` +
+`isEnabled(id)`, KV-backed, `unstable_cache` + `revalidateTag`, fails closed to `false`), the
+admin CRUD route `app/api/flags/route.js`, and the admin UI `app/(admin)/admin/flags/page.js`.
+Adding a flag is *one entry* in `FLAG_DEFS` — the API and admin page are generic over it.
+
+- Add to `FLAG_DEFS` in `lib/flags.js`:
+  `{ id: "game", label: "Manager game", description: "...", default: false }`.
+- **Gate every entry point** with `await isEnabled("game")` (it's cached and safe to call):
+  - **`app/(game)/layout.js`** — if disabled, `notFound()` (404) the whole `/play` + `/login`
+    route group. This is the single chokepoint for all game UI.
+  - **`app/api/game/*` route handlers** — return 404/403 when disabled (defence in depth, so the
+    APIs aren't reachable even if a page leaks).
+  - **`app/api/cron-tick/route.js`** — no-op early-return when disabled (don't simulate fixtures
+    for a hidden mode).
+  - **Public nav link to the game** (wherever we add a "Play" entry) — only render when enabled.
+- Off by default means it deploys dark; the owner flips it on at `/admin/flags` (no redeploy),
+  and `revalidateTag("flags")` propagates the change within the cache window.
+- The admin seeding endpoint (`seed-squads`) stays Basic-Auth gated regardless, so squads can be
+  ingested while the player-facing mode is still flagged off.
 
 ### 1. Match simulator (the bridge) — `lib/game/simMatch.js` (new)
 Pure, headless (no React/DOM). Imports only the PRNG from the existing engine so there is one
@@ -113,8 +137,9 @@ reused `MatchPitch` + `useReplayClock` (identical to the admin lab). New thin co
 
 ## Phasing (ship value early)
 
-- **M1 — Accounts + DB foundation.** Neon + Drizzle, Auth.js magic-link, core tables,
-  `(game)` layout guard. *Log in, see an empty dashboard.*
+- **M1 — Accounts + DB foundation.** Add the `game` flag to `FLAG_DEFS` (default off) and gate the
+  `(game)` layout on it; Neon + Drizzle, Auth.js magic-link, core tables, `(game)` layout guard.
+  *Flip the flag on in `/admin/flags`, log in, see an empty dashboard; flip off → 404.*
 - **M2 — Simulate-and-watch (THE PROOF, smallest vertical slice).** `lib/game/simMatch.js` +
   `ratings.js`; ingest a few real squads; a "friendly" page that picks two clubs → sims → freezes
   a `match_results` row → plays it in the reused `MatchPitch` viewer. Validates the simulator
@@ -130,12 +155,18 @@ reused `MatchPitch` + `useReplayClock` (identical to the admin lab). New thin co
 `lib/db/schema.js`, `lib/db/client.js`, `lib/game/auth.js` + `app/api/auth/[...nextauth]/route.js`,
 `lib/game/fotmobSquad.js` + `lib/game/deriveRatings.js`, `app/api/admin/seed-squads/route.js`,
 `app/api/cron-tick/route.js`, `app/(game)/` route group + `components/game/ReplayViewer.jsx`.
-**Modify:** `vercel.json` (add crons), `package.json` (add `@neondatabase/serverless`,
-`drizzle-orm`, `drizzle-kit`, `next-auth@beta`, `@auth/drizzle-adapter` + `db:*` scripts).
+**Modify:** `lib/flags.js` (add the `game` flag to `FLAG_DEFS`, default off — gates the whole
+mode; the admin flags route/page are already generic over it), `vercel.json` (add crons),
+`package.json` (add `@neondatabase/serverless`, `drizzle-orm`, `drizzle-kit`, `next-auth@beta`,
+`@auth/drizzle-adapter` + `db:*` scripts).
 **Reuse unchanged:** `public/admin/replay-sim.js`, `components/MatchPitch.jsx`,
 `components/useReplayClock.js`, `assets/replay.css`, FotMob helpers in `lib/cardinfo.js`.
 
 ## Verification
+- **Feature flag:** with `game` off (default), `/play` and `/login` return 404 and `/api/game/*`
+  is unreachable; flip it on at `/admin/flags`, confirm the routes appear within the cache window
+  (`revalidateTag("flags")`); flip off again and confirm they 404. The public site is unaffected
+  either way.
 - **Simulator (M2, the linchpin):** run `simulateMatch` with a fixed seed in a Node script;
   assert same seed → identical `events`/`stats`; feed the output into the existing
   `app/(admin)/admin/replay` lab and confirm it animates — goals/cards/subs render and the

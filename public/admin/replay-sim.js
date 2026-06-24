@@ -18,10 +18,11 @@
 
 export const DEFAULT_CONFIG = {
   passMin: 1.5,      // one pass roughly every N simulated minutes
-  attackPush: 13,    // how far the attacking line pushes up (pitch %)
-  defendDrop: 7,     // how far the defending line drops back (pitch %)
-  lateral: 0.22,     // lateral slide toward the ball's vertical position
-  ballFollow: 0.05,  // pull of each player toward the ball's x
+  blockFollow: 0.6,  // how far the whole team block slides up/down toward the ball
+  attackPush: 10,    // extra forward push for the side in possession (pitch %)
+  defendDrop: 6,     // extra drop-back for the side out of possession (pitch %)
+  lateral: 0.28,     // lateral slide toward the ball's vertical position
+  ballFollow: 0.07,  // pull of each player toward the ball's x
   jitterAmp: 0.8,    // amplitude of per-player idle movement (pitch %)
   jitterSpeed: 1.0,  // speed of that idle movement
 };
@@ -267,12 +268,16 @@ export function placePlayers(base, home, atk, ball, clock, cfg) {
   const c = cfg || DEFAULT_CONFIG;
   const dir = home ? 1 : -1;
   const attacking = atk === (home ? "home" : "away");
+  // The whole team block slides up/down the pitch toward the ball — BOTH teams
+  // do this (same direction), so the lines overlap around the ball like a real
+  // compact game instead of each side staying in its own half.
+  const blockFollow = c.blockFollow != null ? c.blockFollow : 0.6;
+  const block = (ball.x - 50) * blockFollow;
+  const phase = atk ? (attacking ? dir * c.attackPush : -dir * c.defendDrop) : 0;
   return base.map((p, idx) => {
-    if (idx === 0) return { x: p.bx, y: 50 + (ball.y - 50) * 0.12 }; // GK
-    let x = p.bx;
-    let y = p.by;
-    if (atk) x += attacking ? dir * c.attackPush : -dir * c.defendDrop;
-    y += (ball.y - 50) * c.lateral;
+    if (idx === 0) return { x: p.bx + block * 0.25, y: 50 + (ball.y - 50) * 0.15 }; // GK holds near goal
+    let x = p.bx + block + phase;
+    let y = p.by + (ball.y - 50) * c.lateral;
     x += (ball.x - x) * c.ballFollow;
     x += Math.cos(clock * c.jitterSpeed * 0.9 + idx * 1.3) * c.jitterAmp;
     y += Math.sin(clock * c.jitterSpeed + idx) * c.jitterAmp * 1.15;

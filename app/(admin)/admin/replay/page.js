@@ -47,6 +47,7 @@ const SCENARIOS = {
   },
 };
 const FORMATIONS = ["4-3-3", "4-4-2", "4-2-3-1", "3-5-2", "3-4-3", "5-3-2", "4-5-1"];
+const BASE_DURATION_MS = 14000; // full match at game speed 1×
 const STAT_LABEL = { possession: "Possession", shots: "Shots", sot: "On target", xg: "xG", corners: "Corners", fouls: "Fouls" };
 
 function parseStat(v) {
@@ -70,7 +71,7 @@ function Slider({ label, value, min, max, step, fmt, onChange }) {
 }
 
 export default function ReplayLabPage() {
-  const [cfg, setCfg] = useState(Object.assign({ durationSec: 14, eventSpeed: 1, trailLength: 10 }, DEFAULT_CONFIG));
+  const [cfg, setCfg] = useState(Object.assign({ gameSpeed: 1, eventSpeed: 1, trailLength: 10 }, DEFAULT_CONFIG));
   const set = (k, v) => setCfg((c) => Object.assign({}, c, { [k]: v }));
 
   const [scenarioKey, setScenarioKey] = useState("thriller");
@@ -98,8 +99,10 @@ export default function ReplayLabPage() {
   }, [real, possHome, shots]);
 
   // Playback clock — pauses on each event for its scene (see useReplayClock).
+  // Game speed scales how fast the match clock advances (1× ≈ a 14s full match).
   const sceneScale = 1 / (cfg.eventSpeed || 1);
-  const { clock, playing, celebrating, toggle, restart, scrub } = useReplayClock(events, maxMin, cfg.durationSec * 1000, sceneScale);
+  const durationMs = BASE_DURATION_MS / (cfg.gameSpeed || 1);
+  const { clock, playing, celebrating, toggle, restart, scrub } = useReplayClock(events, maxMin, durationMs, sceneScale);
   const onScrub = (e) => scrub(Number(e.target.value));
 
   const { hs, as } = runningScore(events, clock);
@@ -167,8 +170,9 @@ export default function ReplayLabPage() {
   const [exportTxt, setExportTxt] = useState("");
   const doExport = () => {
     const out = {
-      REPLAY_DURATION_MS: cfg.durationSec * 1000, PASS_MIN: cfg.passMin,
+      REPLAY_DURATION_MS: Math.round(BASE_DURATION_MS / (cfg.gameSpeed || 1)), PASS_MIN: cfg.passMin,
       eventSpeed: cfg.eventSpeed,
+      blockFollow: cfg.blockFollow,
       jitterAmp: cfg.jitterAmp, jitterSpeed: cfg.jitterSpeed,
       attackPush: cfg.attackPush, defendDrop: cfg.defendDrop,
       lateral: cfg.lateral, ballFollow: cfg.ballFollow,
@@ -250,7 +254,7 @@ export default function ReplayLabPage() {
       <div className="card">
         <div style={{ fontWeight: 600, marginBottom: 8 }}>🎬 Animation</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-          <Slider label="Match duration" value={cfg.durationSec} min={4} max={40} step={1} fmt={(v) => v + "s"} onChange={(v) => set("durationSec", v)} />
+          <Slider label="Game speed" value={cfg.gameSpeed} min={0.25} max={4} step={0.05} fmt={(v) => v.toFixed(2) + "×"} onChange={(v) => set("gameSpeed", v)} />
           <Slider label="Pass interval" value={cfg.passMin} min={0.6} max={4} step={0.1} fmt={(v) => v.toFixed(1) + "'"} onChange={(v) => set("passMin", v)} />
           <Slider label="Player jitter amount" value={cfg.jitterAmp} min={0} max={3} step={0.1} fmt={(v) => v.toFixed(1)} onChange={(v) => set("jitterAmp", v)} />
           <Slider label="Player jitter speed" value={cfg.jitterSpeed} min={0} max={3} step={0.1} fmt={(v) => v.toFixed(1)} onChange={(v) => set("jitterSpeed", v)} />
@@ -261,6 +265,7 @@ export default function ReplayLabPage() {
       <div className="card">
         <div style={{ fontWeight: 600, marginBottom: 8 }}>🧲 Formation movement</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+          <Slider label="Team block follow" value={cfg.blockFollow} min={0} max={1} step={0.05} fmt={(v) => v.toFixed(2)} onChange={(v) => set("blockFollow", v)} />
           <Slider label="Attack push up" value={cfg.attackPush} min={0} max={25} step={1} onChange={(v) => set("attackPush", v)} />
           <Slider label="Defend drop back" value={cfg.defendDrop} min={0} max={20} step={1} onChange={(v) => set("defendDrop", v)} />
           <Slider label="Lateral ball-follow" value={cfg.lateral} min={0} max={0.6} step={0.02} fmt={(v) => v.toFixed(2)} onChange={(v) => set("lateral", v)} />

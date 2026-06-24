@@ -14,7 +14,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { buildShare, buildLeague } from "@/lib/seo-render";
+import { buildShare, buildLeague, buildRatings } from "@/lib/seo-render";
 import { langForCountryCode } from "@/lib/i18n";
 import { forwardAuthHeaders } from "@/lib/forward-auth";
 import AdSlot from "@/components/AdSlot";
@@ -30,10 +30,20 @@ async function getContext() {
   return { origin: `${proto}://${host}`, lang: langForCountryCode(code), auth: forwardAuthHeaders(h) };
 }
 
+// Trailing path segments that select a per-game child page instead of the hub.
+const SUBPAGES = { "player-ratings": "ratings" };
+
 async function build(params, searchParams) {
   const { origin, lang, auth } = await getContext();
-  const parts = (params && params.slug) || [];
+  let parts = (params && params.slug) || [];
   const query = (await searchParams) || {};
+
+  // A child page (e.g. /g/<…>/player-ratings) is the hub path plus a known
+  // trailing segment; strip it and resolve the same match.
+  const view = parts.length ? SUBPAGES[parts[parts.length - 1]] : "";
+  if (view) parts = parts.slice(0, -1);
+  if (view === "ratings") return buildRatings({ origin, lang, parts, query, auth });
+
   // A single non-numeric segment is a league hub; everything else is a game page.
   if (parts.length === 1 && !/^\d+$/.test(parts[0])) {
     return buildLeague({ origin, lang, leagueSlug: parts[0], auth });

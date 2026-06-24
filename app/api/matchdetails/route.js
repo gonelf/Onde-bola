@@ -188,6 +188,18 @@ function positionLabel(p) {
   return s.length <= 4 ? s.toUpperCase() : s.slice(0, 3).toUpperCase();
 }
 
+// A player's match rating out of 10 ("7.4"), from any of the shapes FotMob has
+// used for it; "" when there's no rating yet (e.g. before/early in a match).
+function playerRating(p) {
+  var r = p && (p.rating || (p.performance && p.performance.rating) ||
+    (p.fantasyStats && p.fantasyStats.rating));
+  if (r && typeof r === "object") {
+    r = r.num != null ? r.num : (r.value != null ? r.value : r.rating);
+  }
+  var n = parseFloat(r);
+  return isFinite(n) ? n.toFixed(1) : "";
+}
+
 // Split the outfield players into formation lines from a "4-3-3"-style string
 // (the GK is handled separately). Falls back to a single line when unknown.
 function rowsFromFormation(formation, outfield) {
@@ -219,7 +231,7 @@ function lineupSide(team) {
     if (!name) return null;
     var num = p.shirt != null ? p.shirt : (p.shirtNumber != null ? p.shirtNumber : p.shirtNo);
     return { num: num == null ? "" : String(num), name: name,
-      short: shortPlayerName(p, name), pos: positionLabel(p) };
+      short: shortPlayerName(p, name), pos: positionLabel(p), rating: playerRating(p) };
   };
   if (Array.isArray(players)) {
     players.forEach(function (row) {

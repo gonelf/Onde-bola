@@ -84,7 +84,7 @@ export default function MatchPitch({
   home, away, events: rawEvents, stats, config, clock, seed, celebrate,
   showNumbers = false, showMarkers = true, showTrail = false, goalLabel = "GOAL!",
   sceneScale = 1, ballShadow = true, trailLength = 10, gameSpeed = 1, igStory = false,
-  camSpeed = 1,
+  camSpeed = 1, eventFont = 1,
 }) {
   const cfg = config || DEFAULT_CONFIG;
   const events = useMemo(() => prepEvents(rawEvents), [rawEvents]);
@@ -211,7 +211,7 @@ export default function MatchPitch({
     const minNum = Math.floor(clock);
     const clockLabel = clock >= maxMin ? "FT" : (minNum > 90 ? "90+" + (minNum - 90) : minNum) + "'";
     return (
-      <div className="replay-pitch ig" style={{ "--scene-scale": sceneScale }}>
+      <div className="replay-pitch ig" style={{ "--scene-scale": sceneScale, "--event-font": eventFont }}>
         <div className="ig-header">
           <div className="ig-brand"><span className="ig-ball">⚽</span> Hoje Há <span className="ig-accent">Bola</span></div>
           <div className="ig-score">
@@ -231,7 +231,7 @@ export default function MatchPitch({
   }
 
   return (
-    <div className="replay-pitch" style={{ "--scene-scale": sceneScale }}>
+    <div className="replay-pitch" style={{ "--scene-scale": sceneScale, "--event-font": eventFont }}>
       {pitchWorld}
       {scene}
     </div>

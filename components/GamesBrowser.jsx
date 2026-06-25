@@ -256,7 +256,21 @@ const BASE_DURATION_MS = 14000; // full match at game speed 1×
 // Production replay settings, tuned in the admin Animation Lab and exported here.
 // gameSpeed scales how fast the match clock advances (durationMs = base / gameSpeed);
 // eventSpeed scales the on-pitch scene durations; trailLength is the ball trail.
-const REPLAY_CONFIG = Object.assign({ gameSpeed: 0.5, eventSpeed: 1, trailLength: 2 }, DEFAULT_CONFIG);
+const REPLAY_CONFIG = Object.assign({ gameSpeed: 0.5, eventSpeed: 1, trailLength: 2, eventFont: 1 }, DEFAULT_CONFIG);
+const REPLAY_DISPLAY = { showNumbers: true, showMarkers: true, showTrail: true, showBallShadow: true };
+
+// App-wide replay defaults saved by the owner in the admin lab (/api/replay-config).
+// Fetched once and shared by every replay; falls back to REPLAY_CONFIG when unset.
+let savedReplay; // undefined = not loaded yet, null = none, object = loaded
+let savedReplayPromise = null;
+function loadSavedReplay() {
+  if (savedReplayPromise) return savedReplayPromise;
+  savedReplayPromise = fetch("/api/replay-config")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => { savedReplay = (j && j.config) || null; return savedReplay; })
+    .catch(() => { savedReplay = null; return null; });
+  return savedReplayPromise;
+}
 
 function MatchReplay({ fx, d, t }) {
   const stats = d.stats || [];
@@ -273,10 +287,21 @@ function MatchReplay({ fx, d, t }) {
   const pitchAway = { name: fx.away, formation: d.lineups && d.lineups.away,
     color: d.lineups && d.lineups.away && d.lineups.away.kit && d.lineups.away.kit.shirt };
 
+  // App-wide saved defaults (owner-tuned in the admin lab), merged over the
+  // built-in config; falls back to the built-ins until/if the fetch resolves.
+  const [saved, setSaved] = useState(savedReplay);
+  useEffect(() => {
+    if (savedReplay !== undefined) { setSaved(savedReplay); return undefined; }
+    let on = true;
+    loadSavedReplay().then((c) => { if (on) setSaved(c); });
+    return () => { on = false; };
+  }, []);
+  const cfg = saved && saved.cfg ? Object.assign({}, REPLAY_CONFIG, saved.cfg) : REPLAY_CONFIG;
+  const disp = (saved && saved.display) || REPLAY_DISPLAY;
+
   // Playback clock — defaults to full time; pauses on each event for its scene.
   // Game speed scales playback; event speed scales the on-pitch scene durations.
   const feedRef = useRef(null);
-  const cfg = REPLAY_CONFIG;
   const sceneScale = 1 / (cfg.eventSpeed || 1);
   const durationMs = BASE_DURATION_MS / (cfg.gameSpeed || 1);
   const { clock, playing, celebrating, toggle, restart, scrub } = useReplayClock(events, maxMin, durationMs, sceneScale);
@@ -324,8 +349,9 @@ function MatchReplay({ fx, d, t }) {
       {events.length ? (
         <MatchPitch home={pitchHome} away={pitchAway} events={events} stats={stats}
           config={cfg} clock={clock} celebrate={celebrating} goalLabel={t("mdGoal")}
-          sceneScale={sceneScale} showTrail trailLength={cfg.trailLength} showNumbers
-          gameSpeed={cfg.gameSpeed} />
+          sceneScale={sceneScale} trailLength={cfg.trailLength} gameSpeed={cfg.gameSpeed} eventFont={cfg.eventFont}
+          showTrail={disp.showTrail} showNumbers={disp.showNumbers}
+          showMarkers={disp.showMarkers} ballShadow={disp.showBallShadow} />
       ) : null}
 
       <div className="replay-controls">

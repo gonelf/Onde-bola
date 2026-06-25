@@ -7,7 +7,7 @@
  * /api/matchdetails. This replaces the old static public/admin/replay.html.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import MatchPitch from "@/components/MatchPitch";
 import useReplayClock from "@/components/useReplayClock";
 import { recordReplayVideo } from "@/components/admin/recordReplay";
@@ -72,7 +72,7 @@ function Slider({ label, value, min, max, step, fmt, onChange }) {
 }
 
 export default function ReplayLabPage() {
-  const [cfg, setCfg] = useState(Object.assign({ gameSpeed: 0.5, eventSpeed: 1, trailLength: 10, camSpeed: 2.2 }, DEFAULT_CONFIG));
+  const [cfg, setCfg] = useState(Object.assign({ gameSpeed: 0.5, eventSpeed: 1, trailLength: 10, camSpeed: 2.2, eventFont: 1 }, DEFAULT_CONFIG));
   const set = (k, v) => setCfg((c) => Object.assign({}, c, { [k]: v }));
 
   const [scenarioKey, setScenarioKey] = useState("thriller");
@@ -173,6 +173,36 @@ export default function ReplayLabPage() {
     } catch (e) { setHint("error: " + (e && e.message || e)); }
   };
 
+  // ---- saved app-wide defaults ----
+  const [saveHint, setSaveHint] = useState("");
+
+  // Start from the saved app default (if any), so the lab opens on the live values.
+  useEffect(() => {
+    let on = true;
+    fetch("/api/replay-config").then((r) => (r.ok ? r.json() : null)).then((j) => {
+      if (!on || !j || !j.config) return;
+      if (j.config.cfg) setCfg((c) => Object.assign({}, c, j.config.cfg));
+      if (j.config.display) setDisp((dd) => Object.assign({}, dd, j.config.display));
+      setSaveHint("loaded saved default" + (j.config.updatedAt ? " · " + new Date(j.config.updatedAt).toLocaleString() : ""));
+    }).catch(() => {});
+    return () => { on = false; };
+  }, []);
+
+  const saveDefault = async () => {
+    setSaveHint("saving…");
+    try {
+      const r = await fetch("/api/replay-config", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cfg,
+          display: { showNumbers: disp.showNumbers, showMarkers: disp.showMarkers, showTrail: disp.showTrail, showBallShadow: disp.showBallShadow },
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      setSaveHint(r.ok ? "saved as app default ✓" : "error: " + (j.error || r.status));
+    } catch (e) { setSaveHint("error: " + ((e && e.message) || e)); }
+  };
+
   // ---- export ----
   const [exportTxt, setExportTxt] = useState("");
   const [recHint, setRecHint] = useState("");
@@ -185,7 +215,7 @@ export default function ReplayLabPage() {
       const name = await recordReplayVideo({
         events, stats, maxMin, seed, cfg,
         gameSpeed: cfg.gameSpeed, sceneScale, baseDurationMs: BASE_DURATION_MS,
-        igStory, camSpeed: cfg.camSpeed,
+        igStory, camSpeed: cfg.camSpeed, eventFont: cfg.eventFont,
         homeName: match.home, awayName: match.away,
         homeForm, awayForm, homeColor, awayColor, goalLabel: "GOAL!",
         display: { showNumbers: disp.showNumbers, showMarkers: disp.showMarkers, showTrail: disp.showTrail, ballShadow: disp.showBallShadow, trailLength: cfg.trailLength },
@@ -198,7 +228,7 @@ export default function ReplayLabPage() {
   const doExport = () => {
     const out = {
       REPLAY_DURATION_MS: Math.round(BASE_DURATION_MS / (cfg.gameSpeed || 1)), PASS_MIN: cfg.passMin,
-      eventSpeed: cfg.eventSpeed, camSpeed: cfg.camSpeed,
+      eventSpeed: cfg.eventSpeed, camSpeed: cfg.camSpeed, eventFont: cfg.eventFont,
       blockFollow: cfg.blockFollow, reactLag: cfg.reactLag,
       jitterAmp: cfg.jitterAmp, jitterSpeed: cfg.jitterSpeed,
       attackPush: cfg.attackPush, defendDrop: cfg.defendDrop,
@@ -234,7 +264,7 @@ export default function ReplayLabPage() {
           away={{ name: match.away, formation: awayForm, color: awayColor }}
           events={events} stats={stats} config={cfg} clock={clock} seed={seed} celebrate={celebrating}
           sceneScale={sceneScale} ballShadow={disp.showBallShadow} trailLength={cfg.trailLength}
-          gameSpeed={cfg.gameSpeed} igStory={igStory} camSpeed={cfg.camSpeed}
+          gameSpeed={cfg.gameSpeed} igStory={igStory} camSpeed={cfg.camSpeed} eventFont={cfg.eventFont}
           showNumbers={disp.showNumbers} showMarkers={disp.showMarkers} showTrail={disp.showTrail} />
         <div className="replay-controls">
           <button className="replay-btn" type="button" onClick={toggle}>{playing ? "⏸" : "▶"}</button>
@@ -292,6 +322,7 @@ export default function ReplayLabPage() {
           <Slider label="Player jitter amount" value={cfg.jitterAmp} min={0} max={3} step={0.1} fmt={(v) => v.toFixed(1)} onChange={(v) => set("jitterAmp", v)} />
           <Slider label="Player jitter speed" value={cfg.jitterSpeed} min={0} max={3} step={0.1} fmt={(v) => v.toFixed(1)} onChange={(v) => set("jitterSpeed", v)} />
           <Slider label="Event scene speed" value={cfg.eventSpeed} min={0.3} max={3} step={0.1} fmt={(v) => v.toFixed(1) + "×"} onChange={(v) => set("eventSpeed", v)} />
+          <Slider label="Event text size" value={cfg.eventFont} min={0.5} max={2.5} step={0.05} fmt={(v) => v.toFixed(2) + "×"} onChange={(v) => set("eventFont", v)} />
         </div>
       </div>
 
@@ -353,6 +384,10 @@ export default function ReplayLabPage() {
           <span className="pill">{recHint || "JSON for DEFAULT_CONFIG"}</span>
         </div>
         {exportTxt ? <pre style={{ marginTop: 10 }}>{exportTxt}</pre> : null}
+        <div className="toolbar" style={{ marginTop: 10, borderTop: "1px solid var(--line, #243349)", paddingTop: 10 }}>
+          <button onClick={saveDefault}>💾 Save as app default</button>
+          <span className="pill">{saveHint || "applies these settings across the whole app"}</span>
+        </div>
       </div>
     </>
   );

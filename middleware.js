@@ -15,10 +15,16 @@
 import { NextResponse } from "next/server";
 
 export const config = {
-  matcher: ["/admin", "/admin/:path*", "/admin.html", "/api/overrides", "/api/ads", "/api/seo", "/api/flags"],
+  matcher: ["/admin", "/admin/:path*", "/admin.html", "/api/overrides", "/api/ads", "/api/seo", "/api/flags", "/api/replay-config"],
 };
 
 export function middleware(request) {
+  // Replay defaults are public to READ (the live site picks them up); only
+  // saving (POST) is gated.
+  if (request.nextUrl.pathname === "/api/replay-config" && request.method === "GET") {
+    return NextResponse.next();
+  }
+
   const USER = process.env.ADMIN_USER;
   const PASS = process.env.ADMIN_PASSWORD;
   if (!USER || !PASS) return NextResponse.next();

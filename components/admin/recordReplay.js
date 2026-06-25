@@ -62,9 +62,9 @@ function drawHeader(ctx, homeName, awayName, hs, as, clockLabel) {
 }
 
 function drawScene(ctx, ev, p, goalLabel, frame) {
-  const cx = frame ? frame.cx : W / 2;
-  const cy = frame ? frame.cy : HEADER + PITCHH / 2;
-  const fw = frame ? frame.w : W;
+  const cx = frame && frame.cx != null ? frame.cx : W / 2;
+  const cy = frame && frame.cy != null ? frame.cy : HEADER + PITCHH / 2;
+  const fw = frame && frame.w != null ? frame.w : W;
   const FS = frame && frame.fs ? frame.fs : 1;
   const type = markerType(ev.kind);
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -149,6 +149,7 @@ export function recordReplayVideo(opts) {
   const d = opts.display || {};
   const trailLength = d.trailLength || 10;
   const gameSpeed = opts.gameSpeed || 1;
+  const eventFont = opts.eventFont || 1;
 
   // IG-story (portrait 9:16) layout + a "broadcast camera" that zooms into the
   // pitch and pans to follow the ball. The camera centre eases toward the ball
@@ -249,7 +250,7 @@ export function recordReplayVideo(opts) {
     if (ig) drawHeaderIG(ctx, OW, HEADER_IG, opts.homeName || "Home", opts.awayName || "Away", hs, as, label, homeColor, awayColor);
     else drawHeader(ctx, opts.homeName || "Home", opts.awayName || "Away", hs, as, label);
     // scene (centred on the visible frame; enlarged for the portrait story)
-    if (celeb) drawScene(ctx, celeb, sceneP, opts.goalLabel, ig ? { cx: OW / 2, cy: PR.y + PR.h / 2, w: OW, fs: 1.8 } : null);
+    if (celeb) drawScene(ctx, celeb, sceneP, opts.goalLabel, ig ? { cx: OW / 2, cy: PR.y + PR.h / 2, w: OW, fs: 1.8 * eventFont } : { fs: eventFont });
     // site watermark over the bottom of the pitch
     if (ig) {
       ctx.save();

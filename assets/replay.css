@@ -172,21 +172,21 @@
 }
 .scene-col { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .scene-name, .scene-name-i {
-  font-weight: 800; font-size: clamp(1rem, 5vw, 1.7rem); color: #fff;
+  font-weight: 800; font-size: calc(clamp(1rem, 5vw, 1.7rem) * var(--event-font, 1)); color: #fff;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.75); text-align: center; white-space: nowrap;
 }
-.scene-emoji { font-size: clamp(1.6rem, 11vw, 3rem); line-height: 1; }
+.scene-emoji { font-size: calc(clamp(1.6rem, 11vw, 3rem) * var(--event-font, 1)); line-height: 1; }
 .card-rect { width: 24px; height: 32px; border-radius: 3px; }
 .card-rect.yellow { background: #f1c40f; }
 .card-rect.red { background: #f87171; }
-.sub-arrow { font-size: clamp(1.8rem, 12vw, 3.2rem); line-height: 1; }
+.sub-arrow { font-size: calc(clamp(1.8rem, 12vw, 3.2rem) * var(--event-font, 1)); line-height: 1; }
 .sub-arrow.out { color: #f87171; }
 .sub-arrow.in { color: #f4c430; }
 
 /* Goal: label sweeps across the pitch, then the scorer's name pops in. */
 .goal-sweep {
   transform: translate(-50%, -50%); white-space: nowrap;
-  font-weight: 900; font-size: clamp(1.4rem, 9vw, 3rem); letter-spacing: 3px;
+  font-weight: 900; font-size: calc(clamp(1.4rem, 9vw, 3rem) * var(--event-font, 1)); letter-spacing: 3px;
   color: #fff; text-shadow: 0 3px 12px rgba(0, 0, 0, 0.75); text-transform: uppercase;
   animation: goal-sweep calc(1.4s * var(--scene-scale, 1)) ease both;
 }

@@ -119,13 +119,14 @@ export const MARKER_GLYPH = { goal: "⚽", sub: "↔", red: "", yellow: "", shot
 
 // How long (real ms) to hold the match clock while an event's on-pitch scene
 // plays. Must match the CSS scene durations in assets/replay.css.
-export const SCENE_MS = { goal: 2000, card: 2600, sub: 2000, phase: 1900 };
+export const SCENE_MS = { goal: 2000, card: 2600, sub: 2000, phase: 1900, shot: 1450 };
 export function sceneMs(ev) {
   const k = markerType(ev && ev.kind);
   if (k === "goal") return SCENE_MS.goal;
   if (k === "sub") return SCENE_MS.sub;
   if (k === "yellow" || k === "red") return SCENE_MS.card;
   if (k === "phase") return SCENE_MS.phase;
+  if (k === "shot") return SCENE_MS.shot;
   return 0; // no scene → no hold
 }
 

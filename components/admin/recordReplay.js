@@ -94,6 +94,12 @@ function drawScene(ctx, ev, p, goalLabel, frame) {
       ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 8;
       ctx.fillText(ev.player || "", cx, cy);
     }
+  } else if (type === "shot") {
+    const x = (-0.25 + (p / 0.9) * 1.5) * fw;
+    ctx.globalAlpha = Math.min(1, 1 - Math.abs(p / 0.9 - 0.5) * 1.6 + 0.4);
+    ctx.fillStyle = "#ffb347"; ctx.font = "900 " + (48 * FS) + "px -apple-system, Segoe UI, Roboto, sans-serif";
+    ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 10;
+    ctx.fillText("MISSED", x, cy);
   } else if (type === "phase") {
     const label = ev.kind === "kickoff" ? "KICK-OFF" : ev.kind === "halftime" ? "HALF-TIME" : "FULL-TIME";
     const s = Math.min(1, p / 0.3);

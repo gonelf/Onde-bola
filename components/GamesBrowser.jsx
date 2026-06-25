@@ -361,7 +361,7 @@ function MatchReplay({ fx, d, t }) {
         <MatchPitch home={pitchHome} away={pitchAway} events={events} stats={stats}
           config={cfg} clock={clock} celebrate={celebrating} goalLabel={t("mdGoal")}
           sceneScale={sceneScale} trailLength={cfg.trailLength} gameSpeed={cfg.gameSpeed} eventFont={cfg.eventFont}
-          phaseLabels={{ kickoff: t("mdKickoff"), halftime: t("mdHalftime"), fulltime: t("mdFulltime") }}
+          phaseLabels={{ kickoff: t("mdKickoff"), halftime: t("mdHalftime"), fulltime: t("mdFulltime") }} missLabel={t("mdMiss")}
           showTrail={disp.showTrail} showNumbers={disp.showNumbers}
           showMarkers={disp.showMarkers} ballShadow={disp.showBallShadow} />
       ) : null}

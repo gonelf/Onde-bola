@@ -323,8 +323,8 @@ function MatchReplay({ fx, d, t }) {
   let hs = 0, as = 0;
   const shown = [];
   events.forEach((ev, i) => {
-    // shots and match phases are pitch/scene-only, not chronology rows
-    if (ev._m > clock + 1e-9 || ev.kind === "shot" || ev.phase) return;
+    // shots (save/miss) and match phases are pitch/scene-only, not chronology rows
+    if (ev._m > clock + 1e-9 || ev.synthetic || ev.phase) return;
     let scoreStr = "";
     if (ev.kind === "goal" || ev.kind === "pengoal" || ev.kind === "owngoal") {
       const scoresHome = ev.kind === "owngoal" ? (ev.side === "away") : (ev.side === "home");
@@ -361,7 +361,7 @@ function MatchReplay({ fx, d, t }) {
         <MatchPitch home={pitchHome} away={pitchAway} events={events} stats={stats}
           config={cfg} clock={clock} celebrate={celebrating} goalLabel={t("mdGoal")}
           sceneScale={sceneScale} trailLength={cfg.trailLength} gameSpeed={cfg.gameSpeed} eventFont={cfg.eventFont}
-          phaseLabels={{ kickoff: t("mdKickoff"), halftime: t("mdHalftime"), fulltime: t("mdFulltime") }} missLabel={t("mdMiss")}
+          phaseLabels={{ kickoff: t("mdKickoff"), halftime: t("mdHalftime"), fulltime: t("mdFulltime") }} missLabel={t("mdMiss")} savedLabel={t("mdSaved")}
           showTrail={disp.showTrail} showNumbers={disp.showNumbers}
           showMarkers={disp.showMarkers} ballShadow={disp.showBallShadow} />
       ) : null}

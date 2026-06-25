@@ -191,8 +191,10 @@
   animation: goal-sweep calc(1.4s * var(--scene-scale, 1)) ease both;
 }
 .gs-name { animation: scene-stay calc(0.7s * var(--scene-scale, 1)) ease calc(1.15s * var(--scene-scale, 1)) both; }
-/* Missed shot: same sweep as a goal, amber and a touch smaller. */
-.miss-sweep { color: #ffb347; font-size: calc(clamp(1.1rem, 7vw, 2.4rem) * var(--event-font, 1)); }
+/* Shot outcomes: same sweep as a goal, a touch smaller — amber miss, teal save. */
+.miss-sweep, .save-sweep { font-size: calc(clamp(1.1rem, 7vw, 2.4rem) * var(--event-font, 1)); }
+.miss-sweep { color: #ffb347; }
+.save-sweep { color: #38d39f; }
 
 /* Match phase (kick-off / half-time / full-time): a centred label that pops in. */
 .phase-name { letter-spacing: 2px; text-transform: uppercase; animation: scene-stay calc(1.4s * var(--scene-scale, 1)) ease both; }

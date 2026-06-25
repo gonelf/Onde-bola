@@ -96,6 +96,8 @@ export default function ReplayLabPage() {
       const others = real.stats.filter((s) => s.key !== "possession" && s.key !== "shots");
       return base.concat(others);
     }
+    // Scenarios have no real "on target" stat — estimate ~45% so saves preview.
+    base.push({ key: "sot", home: Math.round(shots[0] * 0.45), away: Math.round(shots[1] * 0.45) });
     return base;
   }, [real, possHome, shots]);
   const events = useMemo(() => {

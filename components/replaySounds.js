@@ -41,26 +41,29 @@ export const SFX_PRESETS = [
 // sound for each.
 export const SOUND_EVENTS = [
   { key: "goal", label: "Goal" },
+  { key: "save", label: "Shot saved" },
+  { key: "miss", label: "Shot missed" },
   { key: "yellow", label: "Yellow card" },
   { key: "red", label: "Red card" },
   { key: "sub", label: "Substitution" },
-  { key: "shot", label: "Shot" },
   { key: "kickoff", label: "Kick-off" },
   { key: "halftime", label: "Half-time" },
   { key: "fulltime", label: "Full-time" },
 ];
 
 export const DEFAULT_EVENT_SOUNDS = {
-  goal: "roar", yellow: "whistleShort", red: "whistleDouble", sub: "chime",
-  shot: "whoosh", kickoff: "whistleLong", halftime: "whistleDouble", fulltime: "whistleTriple",
+  goal: "roar", save: "applause", miss: "boo", yellow: "whistleShort", red: "whistleDouble",
+  sub: "chime", kickoff: "whistleLong", halftime: "whistleDouble", fulltime: "whistleTriple",
 };
 
 // Map an event kind to one of the picker's event-type keys.
 function soundCategory(kind) {
   if (kind === "kickoff" || kind === "halftime" || kind === "fulltime") return kind;
+  if (kind === "save" || kind === "miss") return kind;
+  if (kind === "shot") return "miss"; // legacy generic shot
   const ty = markerType(kind);
   if (ty === "goal") return "goal";
-  if (ty === "yellow" || ty === "red" || ty === "sub" || ty === "shot") return ty;
+  if (ty === "yellow" || ty === "red" || ty === "sub") return ty;
   return null;
 }
 

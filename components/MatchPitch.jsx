@@ -44,7 +44,7 @@ const POP = 1.4, FADE = 4;
 // in assets/replay.css. Mounted keyed by the event so it plays once.
 const PHASE_LABEL = { kickoff: "KICK-OFF", halftime: "HALF-TIME", fulltime: "FULL-TIME" };
 
-function EventScene({ ev, goalLabel, missLabel, phaseLabels }) {
+function EventScene({ ev, goalLabel, missLabel, savedLabel, phaseLabels }) {
   const type = markerType(ev.kind);
   if (type === "phase") {
     return (
@@ -54,9 +54,10 @@ function EventScene({ ev, goalLabel, missLabel, phaseLabels }) {
     );
   }
   if (type === "shot") {
+    const saved = ev.kind === "save";
     return (
       <div className="ev-overlay">
-        <div className="goal-sweep miss-sweep">{missLabel || "MISSED"}</div>
+        <div className={"goal-sweep " + (saved ? "save-sweep" : "miss-sweep")}>{saved ? (savedLabel || "SAVED!") : (missLabel || "MISSED")}</div>
       </div>
     );
   }
@@ -100,7 +101,7 @@ export default function MatchPitch({
   home, away, events: rawEvents, stats, config, clock, seed, celebrate,
   showNumbers = false, showMarkers = true, showTrail = false, goalLabel = "GOAL!",
   sceneScale = 1, ballShadow = true, trailLength = 10, gameSpeed = 1, igStory = false,
-  camSpeed = 1, eventFont = 1, phaseLabels, missLabel,
+  camSpeed = 1, eventFont = 1, phaseLabels, missLabel, savedLabel,
 }) {
   const cfg = config || DEFAULT_CONFIG;
   const events = useMemo(() => prepEvents(rawEvents), [rawEvents]);
@@ -216,7 +217,7 @@ export default function MatchPitch({
     </div>
   );
   const scene = celebrate
-    ? <EventScene key={"sc" + celebrate._m + "-" + celebrate.kind} ev={celebrate} goalLabel={goalLabel} missLabel={missLabel} phaseLabels={phaseLabels} />
+    ? <EventScene key={"sc" + celebrate._m + "-" + celebrate.kind} ev={celebrate} goalLabel={goalLabel} missLabel={missLabel} savedLabel={savedLabel} phaseLabels={phaseLabels} />
     : null;
 
   // IG-story: a self-contained 9:16 reel frame — branding + live result on top,

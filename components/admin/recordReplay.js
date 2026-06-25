@@ -177,8 +177,24 @@ export function recordReplayVideo(opts) {
   canvas.width = OW; canvas.height = OH;
   const ctx = canvas.getContext("2d");
 
+  // Output resolution scale — the RELIABLE size lever. MediaRecorder's
+  // videoBitsPerSecond is only a hint and is largely ignored for canvas/H.264,
+  // so we render full-res then blit into a smaller capture canvas: fewer pixels
+  // → smaller file. scale 1 captures the render canvas directly.
+  const scale = opts.scale > 0 ? Math.min(1, Math.max(0.35, opts.scale)) : 1;
+  const outW = Math.max(2, Math.round(OW * scale / 2) * 2);
+  const outH = Math.max(2, Math.round(OH * scale / 2) * 2);
+  let capCanvas = canvas, capCtx = ctx;
+  if (outW !== OW || outH !== OH) {
+    capCanvas = document.createElement("canvas");
+    capCanvas.width = outW; capCanvas.height = outH;
+    capCtx = capCanvas.getContext("2d");
+    capCtx.imageSmoothingEnabled = true; capCtx.imageSmoothingQuality = "high";
+  }
+  const present = () => { if (capCanvas !== canvas) capCtx.drawImage(canvas, 0, 0, OW, OH, 0, 0, outW, outH); };
+
   const mime = pickMime();
-  if (!mime || !canvas.captureStream) return Promise.reject(new Error("Video recording isn’t supported in this browser"));
+  if (!mime || !capCanvas.captureStream) return Promise.reject(new Error("Video recording isn’t supported in this browser"));
 
   const draw = (clock, celeb, sceneP) => {
     ctx.clearRect(0, 0, OW, OH);
@@ -257,18 +273,17 @@ export function recordReplayVideo(opts) {
       ctx.fillText("hojehabola.com", OW / 2, OH - 26);
       ctx.restore();
     }
+    present(); // blit the full-res frame into the (possibly smaller) capture canvas
   };
 
   // Paint one frame at OW×OH BEFORE capturing, so the recorded track locks to the
   // real canvas size (portrait for IG) rather than an unpainted/default size —
   // otherwise some browsers record the story at a landscape resolution.
   draw(0, null, 0);
-  const stream = canvas.captureStream(30);
-  // Bitrate from pixel area (bits/px/frame at 30fps); opts.compress tunes it —
-  // lower = smaller file. Default ≈5 Mbps for the 1080×1920 story. These are
-  // simple flat-colour vector scenes, so they stay sharp at low bitrates.
-  const bpp = opts.compress > 0 ? opts.compress : 0.08;
-  const bitrate = Math.round(OW * OH * 30 * bpp);
+  const stream = capCanvas.captureStream(30);
+  // Bitrate hint, sized to the output pixels (browsers that honour it benefit;
+  // the real size control is the resolution scale above).
+  const bitrate = Math.round(outW * outH * 30 * 0.1);
   const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: bitrate });
   const chunks = [];
   rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };

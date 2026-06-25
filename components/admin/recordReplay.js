@@ -15,6 +15,7 @@ import {
   markerType, pitchPos, runningScore, sceneMs, DEFAULT_CONFIG,
 } from "@/public/admin/replay-sim";
 import { createReplayAudio } from "@/components/replaySounds";
+import { drawSoccerBall } from "@/lib/soccer-ball";
 
 const W = 960, HEADER = 64, PITCHH = 600, H = HEADER + PITCHH;
 const PX = (x) => (x / 100) * W;
@@ -138,14 +139,16 @@ function drawHeaderIG(ctx, w, h, homeName, awayName, hs, as, clockLabel, homeCol
   ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, w, h);
   const cx = w / 2;
   ctx.textBaseline = "middle";
-  // brand (two-tone, centred): ⚽ Hoje Há Bola
+  // brand (centred): [ball] Hoje Há Bola (two-tone)
   ctx.font = "800 40px -apple-system, Segoe UI, Roboto, sans-serif";
-  const p1 = "⚽ Hoje Há ", p2 = "Bola";
-  const w1 = ctx.measureText(p1).width, w2 = ctx.measureText(p2).width;
-  const bx = cx - (w1 + w2) / 2;
+  const t1 = "Hoje Há ", t2 = "Bola";
+  const w1 = ctx.measureText(t1).width, w2 = ctx.measureText(t2).width;
+  const ballD = 36, gap = 10, total = ballD + gap + w1 + w2;
+  let bx = cx - total / 2;
+  drawSoccerBall(ctx, bx + ballD / 2, 52, ballD / 2); bx += ballD + gap;
   ctx.textAlign = "left";
-  ctx.fillStyle = "#e6edf6"; ctx.fillText(p1, bx, 52);
-  ctx.fillStyle = "#38bdf8"; ctx.fillText(p2, bx + w1, 52);
+  ctx.fillStyle = "#e6edf6"; ctx.fillText(t1, bx, 52);
+  ctx.fillStyle = "#38bdf8"; ctx.fillText(t2, bx + w1, 52);
   // scoreline + team names
   ctx.textAlign = "center"; ctx.fillStyle = "#fff";
   ctx.font = "800 64px -apple-system, Segoe UI, Roboto, sans-serif";
@@ -286,17 +289,19 @@ export function recordReplayVideo(opts) {
         const r = (type === "shot" ? 15 : 22) * pop;
         ctx.globalAlpha = alpha; ctx.fillStyle = MARK_COLOR[type] || "#cfd8e3";
         ctx.beginPath(); ctx.arc(PX(pos.x), PY(pos.y), r, 0, Math.PI * 2); ctx.fill();
-        if (type === "goal") { ctx.globalAlpha = alpha; ctx.font = r + "px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("⚽", PX(pos.x), PY(pos.y)); }
+        if (type === "goal") { ctx.globalAlpha = alpha; drawSoccerBall(ctx, PX(pos.x), PY(pos.y), r * 0.8); }
       });
       ctx.globalAlpha = 1;
     }
-    // ball
+    // ball (single soft shadow behind, then the ball)
     const ball = ballAt(clock);
-    ctx.save();
-    if (d.ballShadow !== false) { ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 5; ctx.shadowOffsetY = 3; }
-    ctx.font = "34px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText("⚽", PX(ball.x), PY(ball.y));
-    ctx.restore();   // ball shadow
+    if (d.ballShadow !== false) {
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 5; ctx.shadowOffsetY = 3;
+      ctx.beginPath(); ctx.arc(PX(ball.x), PY(ball.y), 16, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
+      ctx.restore();
+    }
+    drawSoccerBall(ctx, PX(ball.x), PY(ball.y), 16);
     ctx.restore();   // camera transform + pitch clip
     // scoreboard
     const { hs, as } = runningScore(events, clock);

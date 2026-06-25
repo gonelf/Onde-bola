@@ -16,6 +16,7 @@ import {
 import { normName } from "@/lib/format";
 import { prepEvents, maxMinute, addShotEvents, addPhaseEvents, DEFAULT_CONFIG } from "@/public/admin/replay-sim";
 import MatchPitch from "@/components/MatchPitch";
+import SoccerBall from "@/components/SoccerBall";
 import useReplayClock from "@/components/useReplayClock";
 import { useReplaySound } from "@/components/replaySounds";
 
@@ -220,7 +221,7 @@ function EventRow({ ev, scoreStr, active }) {
     <div className={"event-row " + side + (active ? " active" : "")}>
       <span className="event-min">{ev.min || ""}</span>
       <span className={"event-icon " + kindCls + ev.kind}>
-        {EVENT_ICON[ev.kind] || "•"}
+        {EVENT_ICON[ev.kind] === "⚽" ? <SoccerBall className="event-ball" /> : (EVENT_ICON[ev.kind] || "•")}
         {scoreStr ? <b>{scoreStr}</b> : null}
       </span>
       <span className="event-text">
@@ -1102,7 +1103,7 @@ export default function GamesBrowser() {
           Array.from({ length: 5 }).map((_, i) => <div className="skeleton" key={i} />)
         ) : grouped.empty ? (
           <div className="empty">
-            <div className="big">⚽</div>
+            <div className="big"><SoccerBall /></div>
             <p dangerouslySetInnerHTML={{
               __html: fixtures.length && grouped.hiddenSome && !search ? t("allFiltered") : t("noSearch"),
             }} />

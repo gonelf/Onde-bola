@@ -20,6 +20,7 @@
  */
 
 import { useMemo, useRef } from "react";
+import SoccerBall from "@/components/SoccerBall";
 import {
   prepEvents, maxMinute, buildSim, formationArr, teamBase, simState,
   placePlayers, passBall, markerType, pitchPos, MARKER_GLYPH, runningScore, DEFAULT_CONFIG,
@@ -210,10 +211,10 @@ export default function MatchPitch({
       )) : null}
       {showMarkers ? markers.map((r) => (
         <span key={r.i} className={"pitch-marker " + r.type} style={markerStyle(r)}>
-          <span className="marker-glyph">{MARKER_GLYPH[r.type]}</span>
+          {r.type === "goal" ? <SoccerBall className="marker-ball" /> : <span className="marker-glyph">{MARKER_GLYPH[r.type]}</span>}
         </span>
       )) : null}
-      <span className={"pitch-ball" + (ballShadow ? "" : " no-shadow")} style={{ left: ball.x + "%", top: ball.y + "%" }}>⚽</span>
+      <span className={"pitch-ball" + (ballShadow ? "" : " no-shadow")} style={{ left: ball.x + "%", top: ball.y + "%" }}><SoccerBall /></span>
     </div>
   );
   const scene = celebrate
@@ -230,7 +231,7 @@ export default function MatchPitch({
     return (
       <div className="replay-pitch ig" style={{ "--scene-scale": sceneScale, "--event-font": eventFont }}>
         <div className="ig-header">
-          <div className="ig-brand"><span className="ig-ball">⚽</span> Hoje Há <span className="ig-accent">Bola</span></div>
+          <div className="ig-brand"><span className="ig-ball"><SoccerBall /></span> Hoje Há <span className="ig-accent">Bola</span></div>
           <div className="ig-score">
             <span className="ig-team" style={{ color: homeColor }}>{(home && home.name) || ""}</span>
             <span className="ig-num">{hs}<i>–</i>{as}</span>

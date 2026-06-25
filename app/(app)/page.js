@@ -6,6 +6,7 @@
 // inside <main>.
 
 import GamesBrowser from "@/components/GamesBrowser";
+import SoccerBall from "@/components/SoccerBall";
 import AdSlot from "@/components/AdSlot";
 import AdUnits from "@/components/AdUnits";
 import { parseSnippet } from "@/lib/ads-store";
@@ -63,7 +64,7 @@ export default function HomePage() {
       <header className="site-header">
         <div className="container header-inner">
           <a className="brand" href="./">
-            <span className="brand-ball">⚽</span>
+            <span className="brand-ball"><SoccerBall /></span>
             <span className="brand-name">
               Hoje Há <span>Bola</span>
             </span>
@@ -122,7 +123,7 @@ export default function HomePage() {
         <div className="container footer-grid">
           <div className="footer-about">
             <a className="footer-brand" href="./">
-              <span className="brand-ball">⚽</span>
+              <span className="brand-ball"><SoccerBall /></span>
               <span className="brand-name">
                 Hoje Há <span>Bola</span>
               </span>

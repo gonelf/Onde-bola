@@ -59,7 +59,8 @@
 }
 .ig-brand { font-weight: 800; font-size: 5cqw; line-height: 1; color: #e6edf6; }
 .ig-brand .ig-accent { color: var(--accent, #38bdf8); }
-.ig-brand .ig-ball { font-size: 4.4cqw; }
+.ig-brand .ig-ball { display: inline-block; width: 4.6cqw; height: 4.6cqw; vertical-align: middle; }
+.ig-brand .ig-ball svg { display: block; width: 100%; height: 100%; }
 .ig-score { display: flex; align-items: center; justify-content: center; gap: 3.5cqw; line-height: 1; }
 .ig-score .ig-team {
   font-weight: 700; font-size: 4.4cqw; max-width: 30cqw;
@@ -120,10 +121,12 @@
 .pitch-marker.other { background: #cfd8e3; }
 .pitch-marker.active { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3); z-index: 4; }
 .pitch-ball {
-  font-size: 13px; line-height: 1; transform: translate(-50%, -50%); z-index: 3;
-  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.55);
+  width: 15px; height: 15px; transform: translate(-50%, -50%); z-index: 3;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.55));
 }
-.pitch-ball.no-shadow { text-shadow: none; }
+.pitch-ball svg { display: block; width: 100%; height: 100%; }
+.pitch-ball.no-shadow { filter: none; }
+.pitch-marker .marker-ball { width: 80%; height: 80%; display: block; }
 /* Transport */
 .replay-controls { display: flex; align-items: center; gap: 10px; margin: 12px 0 14px; }
 .replay-btn {

@@ -72,7 +72,7 @@ function Slider({ label, value, min, max, step, fmt, onChange }) {
 }
 
 export default function ReplayLabPage() {
-  const [cfg, setCfg] = useState(Object.assign({ gameSpeed: 1, eventSpeed: 1, trailLength: 10 }, DEFAULT_CONFIG));
+  const [cfg, setCfg] = useState(Object.assign({ gameSpeed: 1, eventSpeed: 1, trailLength: 10, camSpeed: 1 }, DEFAULT_CONFIG));
   const set = (k, v) => setCfg((c) => Object.assign({}, c, { [k]: v }));
 
   const [scenarioKey, setScenarioKey] = useState("thriller");
@@ -185,7 +185,7 @@ export default function ReplayLabPage() {
       const name = await recordReplayVideo({
         events, stats, maxMin, seed, cfg,
         gameSpeed: cfg.gameSpeed, sceneScale, baseDurationMs: BASE_DURATION_MS,
-        igStory,
+        igStory, camSpeed: cfg.camSpeed,
         homeName: match.home, awayName: match.away,
         homeForm, awayForm, homeColor, awayColor, goalLabel: "GOAL!",
         display: { showNumbers: disp.showNumbers, showMarkers: disp.showMarkers, showTrail: disp.showTrail, ballShadow: disp.showBallShadow, trailLength: cfg.trailLength },
@@ -198,7 +198,7 @@ export default function ReplayLabPage() {
   const doExport = () => {
     const out = {
       REPLAY_DURATION_MS: Math.round(BASE_DURATION_MS / (cfg.gameSpeed || 1)), PASS_MIN: cfg.passMin,
-      eventSpeed: cfg.eventSpeed,
+      eventSpeed: cfg.eventSpeed, camSpeed: cfg.camSpeed,
       blockFollow: cfg.blockFollow, reactLag: cfg.reactLag,
       jitterAmp: cfg.jitterAmp, jitterSpeed: cfg.jitterSpeed,
       attackPush: cfg.attackPush, defendDrop: cfg.defendDrop,
@@ -229,7 +229,7 @@ export default function ReplayLabPage() {
           away={{ name: match.away, formation: awayForm, color: awayColor }}
           events={events} stats={stats} config={cfg} clock={clock} seed={seed} celebrate={celebrating}
           sceneScale={sceneScale} ballShadow={disp.showBallShadow} trailLength={cfg.trailLength}
-          gameSpeed={cfg.gameSpeed} igStory={igStory}
+          gameSpeed={cfg.gameSpeed} igStory={igStory} camSpeed={cfg.camSpeed}
           showNumbers={disp.showNumbers} showMarkers={disp.showMarkers} showTrail={disp.showTrail} />
         <div className="replay-controls">
           <button className="replay-btn" type="button" onClick={toggle}>{playing ? "⏸" : "▶"}</button>
@@ -340,6 +340,7 @@ export default function ReplayLabPage() {
         </div>
         <div style={{ maxWidth: 320, marginTop: 8 }}>
           <Slider label="Ball trail length" value={cfg.trailLength} min={2} max={28} step={1} onChange={(v) => set("trailLength", v)} />
+          <Slider label="Camera follow speed" value={cfg.camSpeed} min={0.25} max={4} step={0.05} fmt={(v) => v.toFixed(2) + "×"} onChange={(v) => set("camSpeed", v)} />
         </div>
         <div className="toolbar">
           <button onClick={doExport}>Export settings</button>

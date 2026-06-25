@@ -149,6 +149,7 @@ export function recordReplayVideo(opts) {
   const camScale = ig ? PR.h / PITCHH : 1;            // world→screen zoom (full pitch height shown)
   const winXpct = ig ? (PR.w * 100) / (camScale * W) : 100; // pitch width (%) visible in the frame
   const camHalf = winXpct / 2;
+  const camTau = 380 / (opts.camSpeed || 1);         // easing time constant (higher camSpeed → snappier)
   let camX = 50;                                      // eased camera centre, pitch %
 
   const sampleField = (c) => simState(sim.wp, c);
@@ -262,7 +263,7 @@ export function recordReplayVideo(opts) {
         const cdt = camTs ? now - camTs : 0; camTs = now;
         let target = ballAt(clock).x;
         if (target < camHalf) target = camHalf; else if (target > 100 - camHalf) target = 100 - camHalf;
-        camX += (target - camX) * (1 - Math.exp(-cdt / 380));
+        camX += (target - camX) * (1 - Math.exp(-cdt / camTau));
       }
       if (!last) last = now;
       if (now < holdUntil) {

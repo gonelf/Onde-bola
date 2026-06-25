@@ -83,6 +83,7 @@ export default function MatchPitch({
   home, away, events: rawEvents, stats, config, clock, seed, celebrate,
   showNumbers = false, showMarkers = true, showTrail = false, goalLabel = "GOAL!",
   sceneScale = 1, ballShadow = true, trailLength = 10, gameSpeed = 1, igStory = false,
+  camSpeed = 1,
 }) {
   const cfg = config || DEFAULT_CONFIG;
   const events = useMemo(() => prepEvents(rawEvents), [rawEvents]);
@@ -126,7 +127,8 @@ export default function MatchPitch({
     const now = (typeof performance !== "undefined" ? performance.now() : 0);
     const dt = camTsRef.current ? now - camTsRef.current : 0;
     camTsRef.current = now;
-    camRef.current += (target - camRef.current) * (1 - Math.exp(-dt / 380));
+    const tau = 380 / (camSpeed || 1); // higher camSpeed → shorter lag → snappier follow
+    camRef.current += (target - camRef.current) * (1 - Math.exp(-dt / tau));
     camX = camRef.current;
   }
   const worldStyle = igStory

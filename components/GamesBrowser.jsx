@@ -256,7 +256,7 @@ const BASE_DURATION_MS = 14000; // full match at game speed 1×
 // Production replay settings, tuned in the admin Animation Lab and exported here.
 // gameSpeed scales how fast the match clock advances (durationMs = base / gameSpeed);
 // eventSpeed scales the on-pitch scene durations; trailLength is the ball trail.
-const REPLAY_CONFIG = Object.assign({ gameSpeed: 0.4, eventSpeed: 1, trailLength: 2 }, DEFAULT_CONFIG);
+const REPLAY_CONFIG = Object.assign({ gameSpeed: 0.5, eventSpeed: 1, trailLength: 2 }, DEFAULT_CONFIG);
 
 function MatchReplay({ fx, d, t }) {
   const stats = d.stats || [];

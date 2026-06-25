@@ -17,7 +17,7 @@ import { normName } from "@/lib/format";
 import { prepEvents, maxMinute, addShotEvents, DEFAULT_CONFIG } from "@/public/admin/replay-sim";
 import MatchPitch from "@/components/MatchPitch";
 import useReplayClock from "@/components/useReplayClock";
-import { useEventSound } from "@/components/replaySounds";
+import { useReplaySound } from "@/components/replaySounds";
 
 const STORAGE_HIDDEN = "ondebola.hiddenLeagues";
 const STORAGE_REMEMBER = "ondebola.rememberFilters";
@@ -308,10 +308,11 @@ function MatchReplay({ fx, d, t }) {
   const { clock, playing, celebrating, toggle, restart, scrub } = useReplayClock(events, maxMin, durationMs, sceneScale);
   const onScrub = (e) => scrub(Number(e.target.value));
 
-  // Event sound effects (off by default; the toggle/▶ are user gestures that
-  // unlock audio). Plays a goal roar / whistle / chime as each scene starts.
+  // Event SFX + background music (off by default; the toggle/▶ are user gestures
+  // that unlock audio). Goal roar / whistle / chime per scene, music bed while
+  // playing.
   const [soundOn, setSoundOn] = useState(false);
-  const { ensureAudio } = useEventSound(celebrating, soundOn);
+  const { ensureAudio } = useReplaySound(celebrating, { enabled: soundOn, music: soundOn, playing });
   const onToggle = () => { if (soundOn) ensureAudio(); toggle(); };
   const onSound = () => { const next = !soundOn; setSoundOn(next); if (next) ensureAudio(); };
 

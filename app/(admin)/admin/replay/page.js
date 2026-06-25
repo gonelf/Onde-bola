@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useState } from "react";
 import MatchPitch from "@/components/MatchPitch";
 import useReplayClock from "@/components/useReplayClock";
-import { useEventSound } from "@/components/replaySounds";
+import { useReplaySound } from "@/components/replaySounds";
 import { recordReplayVideo } from "@/components/admin/recordReplay";
 import { prepEvents, maxMinute, runningScore, addShotEvents, num, DEFAULT_CONFIG } from "@/public/admin/replay-sim";
 
@@ -113,10 +113,11 @@ export default function ReplayLabPage() {
   const { clock, playing, celebrating, toggle, restart, scrub } = useReplayClock(events, maxMin, durationMs, sceneScale);
   const onScrub = (e) => scrub(Number(e.target.value));
 
-  // Event SFX for the preview + a flag muxed into the exported video.
+  // Event SFX + background music for the preview, both also muxed into the export.
   const [soundOn, setSoundOn] = useState(true);
-  const { ensureAudio } = useEventSound(celebrating, soundOn);
-  const onToggle = () => { if (soundOn) ensureAudio(); toggle(); };
+  const [musicOn, setMusicOn] = useState(true);
+  const { ensureAudio } = useReplaySound(celebrating, { enabled: soundOn, music: musicOn, playing });
+  const onToggle = () => { if (soundOn || musicOn) ensureAudio(); toggle(); };
 
   const { hs, as } = runningScore(events, clock);
   const progress = maxMin > 0 ? Math.min(1, clock / maxMin) : 1;
@@ -222,7 +223,7 @@ export default function ReplayLabPage() {
       const name = await recordReplayVideo({
         events, stats, maxMin, seed, cfg,
         gameSpeed: cfg.gameSpeed, sceneScale, baseDurationMs: BASE_DURATION_MS,
-        igStory, camSpeed: cfg.camSpeed, eventFont: cfg.eventFont, scale: vidScale, sound: soundOn,
+        igStory, camSpeed: cfg.camSpeed, eventFont: cfg.eventFont, scale: vidScale, sound: soundOn, music: musicOn,
         homeName: match.home, awayName: match.away,
         homeForm, awayForm, homeColor, awayColor, goalLabel: "GOAL!",
         display: { showNumbers: disp.showNumbers, showMarkers: disp.showMarkers, showTrail: disp.showTrail, ballShadow: disp.showBallShadow, trailLength: cfg.trailLength },
@@ -382,6 +383,8 @@ export default function ReplayLabPage() {
             <input type="checkbox" style={{ width: "auto" }} checked={igStory} onChange={(e) => setIgStory(e.target.checked)} /> 📱 IG Story video (9:16)</label>
           <label style={{ display: "flex", alignItems: "center", gap: 6, width: "auto", color: "var(--text)" }}>
             <input type="checkbox" style={{ width: "auto" }} checked={soundOn} onChange={(e) => { setSoundOn(e.target.checked); if (e.target.checked) ensureAudio(); }} /> 🔊 Event sounds</label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, width: "auto", color: "var(--text)" }}>
+            <input type="checkbox" style={{ width: "auto" }} checked={musicOn} onChange={(e) => { setMusicOn(e.target.checked); if (e.target.checked) ensureAudio(); }} /> 🎵 Background music</label>
         </div>
         <div style={{ maxWidth: 320, marginTop: 8 }}>
           <Slider label="Ball trail length" value={cfg.trailLength} min={2} max={28} step={1} onChange={(v) => set("trailLength", v)} />

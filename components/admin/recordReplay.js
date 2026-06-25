@@ -205,13 +205,16 @@ export function recordReplayVideo(opts) {
   const present = () => { if (capCanvas !== canvas) capCtx.drawImage(canvas, 0, 0, OW, OH, 0, 0, outW, outH); };
 
   const wantSound = opts.sound !== false;
-  const mime = pickMime(wantSound);
+  const wantMusic = !!opts.music;
+  const wantAudio = wantSound || wantMusic;
+  const mime = pickMime(wantAudio);
   if (!mime || !capCanvas.captureStream) return Promise.reject(new Error("Video recording isn’t supported in this browser"));
 
-  // Event SFX, muxed into the recording via a MediaStreamDestination (only when
-  // the chosen container can carry audio). Best-effort — silent on failure.
+  // Event SFX + background music, muxed into the recording via a
+  // MediaStreamDestination (only when the chosen container can carry audio).
+  // Best-effort — silent on failure.
   let audio = null;
-  if (wantSound && mimeHasAudio(mime)) {
+  if (wantAudio && mimeHasAudio(mime)) {
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
       const actx = new AC();
@@ -331,6 +334,7 @@ export function recordReplayVideo(opts) {
     const celebrated = new Set();
     let last = 0, camTs = 0;
     try { rec.start(); } catch (e) { reject(e); return; }
+    if (audio && wantMusic) audio.startMusic();
 
     const frame = (now) => {
       // Ease the camera toward the ball every frame (including scene holds), so it
@@ -358,7 +362,7 @@ export function recordReplayVideo(opts) {
       }
       if (hit) {
         celebrated.add(hit.i); clock = hit.e._m; celeb = hit.e; celebStart = now;
-        if (audio) audio.playAt(hit.e.kind, audio.ctx.currentTime);
+        if (audio && wantSound) audio.playAt(hit.e.kind, audio.ctx.currentTime);
         holdUntil = now + sceneMs(hit.e) * sceneScale;
         draw(clock, celeb, 0); requestAnimationFrame(frame); return;
       }
@@ -366,7 +370,7 @@ export function recordReplayVideo(opts) {
       draw(clock, null, 0);
       if (opts.onProgress) opts.onProgress(clock / maxMin);
       if (clock >= maxMin) {
-        if (!endAt) endAt = now + 900; // short tail
+        if (!endAt) { endAt = now + 900; if (audio) audio.stopMusic(); } // short tail; fade music out
         if (now >= endAt) { rec.stop(); return; }
       }
       requestAnimationFrame(frame);

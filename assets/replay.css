@@ -47,7 +47,33 @@
 /* IG-story (portrait 9:16) framing — matches the video export. The container is
    the portrait pitch viewport; the world keeps 16:10 and the camera transform
    (set inline) zooms in and follows the ball. */
-.replay-pitch.ig { aspect-ratio: 1080 / 1740; max-width: 360px; margin-inline: auto; }
+.replay-pitch.ig {
+  aspect-ratio: 1080 / 1920; max-width: 360px; margin-inline: auto;
+  container-type: inline-size; /* enables cqw text sizing below */
+}
+/* Top branding + live result band (matches the video export). */
+.replay-pitch.ig .ig-header {
+  top: 0; left: 0; right: 0; height: 12.5%; background: #0b1220; z-index: 3;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.8cqw; overflow: hidden;
+}
+.ig-brand { font-weight: 800; font-size: 5cqw; line-height: 1; color: #e6edf6; }
+.ig-brand .ig-accent { color: var(--accent, #38bdf8); }
+.ig-brand .ig-ball { font-size: 4.4cqw; }
+.ig-score { display: flex; align-items: center; justify-content: center; gap: 3.5cqw; line-height: 1; }
+.ig-score .ig-team {
+  font-weight: 700; font-size: 4.4cqw; max-width: 30cqw;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ig-score .ig-num { font-weight: 800; font-size: 8.5cqw; color: #fff; font-variant-numeric: tabular-nums; }
+.ig-score .ig-num i { color: #93a3b8; font-style: normal; font-weight: 600; margin: 0 0.5cqw; }
+.ig-clock { font-weight: 700; font-size: 3.4cqw; color: var(--accent, #38bdf8); }
+.replay-pitch.ig .pitch-region { top: 12.5%; left: 0; right: 0; bottom: 0; overflow: hidden; }
+.ig-foot {
+  bottom: 1.4%; left: 0; right: 0; text-align: center; z-index: 3; pointer-events: none;
+  font-weight: 700; font-size: 3.2cqw; letter-spacing: 0.4px;
+  color: rgba(255, 255, 255, 0.82); text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
 .replay-pitch.ig .pitch-world {
   height: auto; aspect-ratio: 16 / 10;
   transform-origin: 0 0; will-change: transform;

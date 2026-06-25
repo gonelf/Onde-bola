@@ -106,19 +106,32 @@ function drawScene(ctx, ev, p, goalLabel, frame) {
   ctx.restore();
 }
 
-// Scoreboard band for the IG-story (portrait) layout: wider/taller than the
-// landscape header, with the team names tinted by their kit colours.
+// Branding + live-result band for the IG-story (portrait) layout: the "Hoje Há
+// Bola" logo on top, then the scoreline with team names tinted by kit colour,
+// then the clock — so a shared reel is instantly identifiable.
 function drawHeaderIG(ctx, w, h, homeName, awayName, hs, as, clockLabel, homeColor, awayColor) {
   ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, w, h);
-  const cx = w / 2, midY = h / 2 + 10;
+  const cx = w / 2;
   ctx.textBaseline = "middle";
-  ctx.fillStyle = "#38bdf8"; ctx.font = "700 30px -apple-system, Segoe UI, Roboto, sans-serif";
-  ctx.textAlign = "center"; ctx.fillText(clockLabel, cx, 42);
-  ctx.fillStyle = "#e6edf6"; ctx.font = "800 64px -apple-system, Segoe UI, Roboto, sans-serif";
-  ctx.fillText(hs + " – " + as, cx, midY);
-  ctx.font = "700 38px -apple-system, Segoe UI, Roboto, sans-serif";
-  ctx.textAlign = "right"; ctx.fillStyle = homeColor || "#e6edf6"; ctx.fillText(homeName, cx - 130, midY);
-  ctx.textAlign = "left"; ctx.fillStyle = awayColor || "#e6edf6"; ctx.fillText(awayName, cx + 130, midY);
+  // brand (two-tone, centred): ⚽ Hoje Há Bola
+  ctx.font = "800 40px -apple-system, Segoe UI, Roboto, sans-serif";
+  const p1 = "⚽ Hoje Há ", p2 = "Bola";
+  const w1 = ctx.measureText(p1).width, w2 = ctx.measureText(p2).width;
+  const bx = cx - (w1 + w2) / 2;
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#e6edf6"; ctx.fillText(p1, bx, 52);
+  ctx.fillStyle = "#38bdf8"; ctx.fillText(p2, bx + w1, 52);
+  // scoreline + team names
+  ctx.textAlign = "center"; ctx.fillStyle = "#fff";
+  ctx.font = "800 64px -apple-system, Segoe UI, Roboto, sans-serif";
+  ctx.fillText(hs + " – " + as, cx, 134);
+  ctx.font = "700 34px -apple-system, Segoe UI, Roboto, sans-serif";
+  ctx.textAlign = "right"; ctx.fillStyle = homeColor || "#e6edf6"; ctx.fillText(homeName, cx - 140, 134);
+  ctx.textAlign = "left"; ctx.fillStyle = awayColor || "#e6edf6"; ctx.fillText(awayName, cx + 140, 134);
+  // clock
+  ctx.textAlign = "center"; ctx.fillStyle = "#38bdf8";
+  ctx.font = "700 26px -apple-system, Segoe UI, Roboto, sans-serif";
+  ctx.fillText(clockLabel, cx, 200);
 }
 
 const MARK_COLOR = { goal: "#38d39f", yellow: "#f1c40f", red: "#f87171", sub: "#4a90d9", shot: "#ffb347", other: "#cfd8e3" };
@@ -144,7 +157,7 @@ export function recordReplayVideo(opts) {
   const ig = !!opts.igStory;
   const OW = ig ? 1080 : W;
   const OH = ig ? 1920 : H;
-  const HEADER_IG = 180;
+  const HEADER_IG = 240;
   const PR = ig ? { x: 0, y: HEADER_IG, w: OW, h: OH - HEADER_IG } : { x: 0, y: HEADER, w: W, h: PITCHH };
   const camScale = ig ? PR.h / PITCHH : 1;            // world→screen zoom (full pitch height shown)
   const winXpct = ig ? (PR.w * 100) / (camScale * W) : 100; // pitch width (%) visible in the frame
@@ -237,6 +250,16 @@ export function recordReplayVideo(opts) {
     else drawHeader(ctx, opts.homeName || "Home", opts.awayName || "Away", hs, as, label);
     // scene (centred on the visible frame; enlarged for the portrait story)
     if (celeb) drawScene(ctx, celeb, sceneP, opts.goalLabel, ig ? { cx: OW / 2, cy: PR.y + PR.h / 2, w: OW, fs: 1.8 } : null);
+    // site watermark over the bottom of the pitch
+    if (ig) {
+      ctx.save();
+      ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+      ctx.font = "700 26px -apple-system, Segoe UI, Roboto, sans-serif";
+      ctx.fillStyle = "rgba(255,255,255,0.82)";
+      ctx.shadowColor = "rgba(0,0,0,0.6)"; ctx.shadowBlur = 6;
+      ctx.fillText("hojehabola.com", OW / 2, OH - 26);
+      ctx.restore();
+    }
   };
 
   return new Promise((resolve, reject) => {

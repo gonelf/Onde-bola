@@ -22,15 +22,16 @@
 import { useMemo, useRef } from "react";
 import {
   prepEvents, maxMinute, buildSim, formationArr, teamBase, simState,
-  placePlayers, passBall, markerType, pitchPos, MARKER_GLYPH, DEFAULT_CONFIG,
+  placePlayers, passBall, markerType, pitchPos, MARKER_GLYPH, runningScore, DEFAULT_CONFIG,
 } from "@/public/admin/replay-sim";
 
-// IG-story (portrait) framing: a virtual camera zooms into the pitch and pans to
-// follow the ball, matching the 9:16 video export. The zoom and the visible width
-// fraction are derived from the portrait pitch viewport (1080×1740): the full
-// pitch height fills the frame, so the camera shows ~1/ZOOM of the width.
-const IG_ZOOM = (1740 / 1080) * (16 / 10);     // ≈ 2.578
-const IG_CAM_HALF = (1 / IG_ZOOM) / 2 * 100;   // ≈ 19.4 — half the visible width (%)
+// IG-story (portrait 9:16) framing: the frame is a top brand/score band plus a
+// camera that zooms into the pitch and pans to follow the ball, matching the
+// video export. The zoom and visible-width fraction come from the pitch region
+// (the 1680px below a 240px header in the 1080×1920 frame).
+const IG_HEADER_PCT = 12.5;                     // top brand/score band (% of the 9:16 frame)
+const IG_ZOOM = 1680 / (1080 * 10 / 16);        // ≈ 2.489 — region height / natural pitch height
+const IG_CAM_HALF = (1 / IG_ZOOM) / 2 * 100;    // ≈ 20.1 — half the visible width (%)
 
 // Marker lifetimes, in simulated minutes: a marker pops in over POP; goals then
 // linger as a dim "shadow"; cards and subs fade out over FADE. The on-pitch
@@ -178,27 +179,61 @@ export default function MatchPitch({
     </span>
   );
 
-  return (
-    <div className={"replay-pitch" + (igStory ? " ig" : "")} style={{ "--scene-scale": sceneScale }}>
-      <div className="pitch-world" style={worldStyle}>
-        <div className="pitch-line center" />
-        <div className="pitch-circle" />
-        <div className="pitch-box left" /><div className="pitch-box right" />
-        <div className="pitch-goal left" /><div className="pitch-goal right" />
-        {players.home.map((p, i) => playerDot(p, i, homeColor, "ph"))}
-        {players.away.map((p, i) => playerDot(p, i, awayColor, "pa"))}
-        {showTrail ? trail.map((pt, i) => (
-          <span key={"tr" + i} className="pitch-trail"
-            style={{ left: pt.x + "%", top: pt.y + "%", opacity: (1 - i / trailLength) * 0.4 }} />
-        )) : null}
-        {showMarkers ? markers.map((r) => (
-          <span key={r.i} className={"pitch-marker " + r.type} style={markerStyle(r)}>
-            <span className="marker-glyph">{MARKER_GLYPH[r.type]}</span>
-          </span>
-        )) : null}
-        <span className={"pitch-ball" + (ballShadow ? "" : " no-shadow")} style={{ left: ball.x + "%", top: ball.y + "%" }}>⚽</span>
+  const pitchWorld = (
+    <div className="pitch-world" style={worldStyle}>
+      <div className="pitch-line center" />
+      <div className="pitch-circle" />
+      <div className="pitch-box left" /><div className="pitch-box right" />
+      <div className="pitch-goal left" /><div className="pitch-goal right" />
+      {players.home.map((p, i) => playerDot(p, i, homeColor, "ph"))}
+      {players.away.map((p, i) => playerDot(p, i, awayColor, "pa"))}
+      {showTrail ? trail.map((pt, i) => (
+        <span key={"tr" + i} className="pitch-trail"
+          style={{ left: pt.x + "%", top: pt.y + "%", opacity: (1 - i / trailLength) * 0.4 }} />
+      )) : null}
+      {showMarkers ? markers.map((r) => (
+        <span key={r.i} className={"pitch-marker " + r.type} style={markerStyle(r)}>
+          <span className="marker-glyph">{MARKER_GLYPH[r.type]}</span>
+        </span>
+      )) : null}
+      <span className={"pitch-ball" + (ballShadow ? "" : " no-shadow")} style={{ left: ball.x + "%", top: ball.y + "%" }}>⚽</span>
+    </div>
+  );
+  const scene = celebrate
+    ? <EventScene key={"sc" + celebrate._m + "-" + celebrate.kind} ev={celebrate} goalLabel={goalLabel} />
+    : null;
+
+  // IG-story: a self-contained 9:16 reel frame — branding + live result on top,
+  // the following-camera pitch below, and a site watermark — so a shared clip is
+  // instantly identifiable. Mirrors the video export (recordReplay.js).
+  if (igStory) {
+    const { hs, as } = runningScore(events, clock);
+    const minNum = Math.floor(clock);
+    const clockLabel = clock >= maxMin ? "FT" : (minNum > 90 ? "90+" + (minNum - 90) : minNum) + "'";
+    return (
+      <div className="replay-pitch ig" style={{ "--scene-scale": sceneScale }}>
+        <div className="ig-header">
+          <div className="ig-brand"><span className="ig-ball">⚽</span> Hoje Há <span className="ig-accent">Bola</span></div>
+          <div className="ig-score">
+            <span className="ig-team" style={{ color: homeColor }}>{(home && home.name) || ""}</span>
+            <span className="ig-num">{hs}<i>–</i>{as}</span>
+            <span className="ig-team" style={{ color: awayColor }}>{(away && away.name) || ""}</span>
+          </div>
+          <div className="ig-clock">{clockLabel}</div>
+        </div>
+        <div className="pitch-region">
+          {pitchWorld}
+          {scene}
+        </div>
+        <div className="ig-foot">hojehabola.com</div>
       </div>
-      {celebrate ? <EventScene key={"sc" + celebrate._m + "-" + celebrate.kind} ev={celebrate} goalLabel={goalLabel} /> : null}
+    );
+  }
+
+  return (
+    <div className="replay-pitch" style={{ "--scene-scale": sceneScale }}>
+      {pitchWorld}
+      {scene}
     </div>
   );
 }

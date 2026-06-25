@@ -72,7 +72,7 @@ function Slider({ label, value, min, max, step, fmt, onChange }) {
 }
 
 export default function ReplayLabPage() {
-  const [cfg, setCfg] = useState(Object.assign({ gameSpeed: 1, eventSpeed: 1, trailLength: 10, camSpeed: 1 }, DEFAULT_CONFIG));
+  const [cfg, setCfg] = useState(Object.assign({ gameSpeed: 0.5, eventSpeed: 1, trailLength: 10, camSpeed: 2.2 }, DEFAULT_CONFIG));
   const set = (k, v) => setCfg((c) => Object.assign({}, c, { [k]: v }));
 
   const [scenarioKey, setScenarioKey] = useState("thriller");
@@ -219,12 +219,17 @@ export default function ReplayLabPage() {
       <div className="sub">Tunes the live <code>MatchPitch</code> component. Adjust, then <b>Export</b> the values into <code>DEFAULT_CONFIG</code> in <code>public/admin/replay-sim.js</code>.</div>
 
       <div className="card" style={{ maxWidth: 660, margin: "0 auto 14px" }}>
-        <div className="replay-board">
-          <span className="rb-team home" style={{ color: homeColor }}>{match.home}</span>
-          <span className="rb-score" key={hs + "-" + as}>{hs}<i>–</i>{as}</span>
-          <span className="rb-team away" style={{ color: awayColor }}>{match.away}</span>
-        </div>
-        <div className="rb-clock">{clockLabel}</div>
+        {/* IG-story renders its own branded scoreboard inside the frame. */}
+        {!igStory ? (
+          <>
+            <div className="replay-board">
+              <span className="rb-team home" style={{ color: homeColor }}>{match.home}</span>
+              <span className="rb-score" key={hs + "-" + as}>{hs}<i>–</i>{as}</span>
+              <span className="rb-team away" style={{ color: awayColor }}>{match.away}</span>
+            </div>
+            <div className="rb-clock">{clockLabel}</div>
+          </>
+        ) : null}
         <MatchPitch home={{ name: match.home, formation: homeForm, color: homeColor }}
           away={{ name: match.away, formation: awayForm, color: awayColor }}
           events={events} stats={stats} config={cfg} clock={clock} seed={seed} celebrate={celebrating}

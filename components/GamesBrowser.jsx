@@ -15,9 +15,11 @@ import {
   ensureEventTv, ensureDetails, loadHighlights, loadedTv, detailsCache,
 } from "@/lib/app-data";
 import { normName } from "@/lib/format";
-import { prepEvents, maxMinute, addShotEvents } from "@/public/admin/replay-sim";
+import { prepEvents, maxMinute, addShotEvents, addPhaseEvents, DEFAULT_CONFIG } from "@/public/admin/replay-sim";
 import MatchPitch from "@/components/MatchPitch";
+import SoccerBall from "@/components/SoccerBall";
 import useReplayClock from "@/components/useReplayClock";
+import { useReplaySound } from "@/components/replaySounds";
 
 const STORAGE_HIDDEN = "ondebola.hiddenLeagues";
 const STORAGE_REMEMBER = "ondebola.rememberFilters";
@@ -220,7 +222,7 @@ function EventRow({ ev, scoreStr, active }) {
     <div className={"event-row " + side + (active ? " active" : "")}>
       <span className="event-min">{ev.min || ""}</span>
       <span className={"event-icon " + kindCls + ev.kind}>
-        {EVENT_ICON[ev.kind] || "•"}
+        {EVENT_ICON[ev.kind] === "⚽" ? <SoccerBall className="event-ball" /> : (EVENT_ICON[ev.kind] || "•")}
         {scoreStr ? <b>{scoreStr}</b> : null}
       </span>
       <span className="event-text">
@@ -252,14 +254,34 @@ function parseStat(v) {
 // while the chronology scrolls below and the stat bars fill toward full time.
 // It's a stylised visual: we have no per-minute or positional data, so spots
 // are inferred from kind/side and stat bars grow proportionally to elapsed time.
-const REPLAY_DURATION_MS = 14000;
+const BASE_DURATION_MS = 14000; // full match at game speed 1×
+
+// Production replay settings, tuned in the admin Animation Lab and exported here.
+// gameSpeed scales how fast the match clock advances (durationMs = base / gameSpeed);
+// eventSpeed scales the on-pitch scene durations; trailLength is the ball trail.
+const REPLAY_CONFIG = Object.assign({ gameSpeed: 0.5, eventSpeed: 1, trailLength: 2, eventFont: 1 }, DEFAULT_CONFIG);
+const REPLAY_DISPLAY = { showNumbers: true, showMarkers: true, showTrail: true, showBallShadow: true };
+
+// App-wide replay defaults saved by the owner in the admin lab (/api/replay-config).
+// Fetched once and shared by every replay; falls back to REPLAY_CONFIG when unset.
+let savedReplay; // undefined = not loaded yet, null = none, object = loaded
+let savedReplayPromise = null;
+function loadSavedReplay() {
+  if (savedReplayPromise) return savedReplayPromise;
+  savedReplayPromise = fetch("/api/replay-config")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => { savedReplay = (j && j.config) || null; return savedReplay; })
+    .catch(() => { savedReplay = null; return null; });
+  return savedReplayPromise;
+}
 
 function MatchReplay({ fx, d, t }) {
   const stats = d.stats || [];
   const events = useMemo(() => {
     const base = prepEvents(d.events);
     const mm = maxMinute(base);
-    return addShotEvents(base, d.stats || [], mm, base.length * 131 + Math.round(mm) * 7);
+    const withShots = addShotEvents(base, d.stats || [], mm, base.length * 131 + Math.round(mm) * 7);
+    return addPhaseEvents(withShots, mm);
   }, [d]);
   const maxMin = useMemo(() => maxMinute(events), [events]);
 
@@ -269,10 +291,33 @@ function MatchReplay({ fx, d, t }) {
   const pitchAway = { name: fx.away, formation: d.lineups && d.lineups.away,
     color: d.lineups && d.lineups.away && d.lineups.away.kit && d.lineups.away.kit.shirt };
 
+  // App-wide saved defaults (owner-tuned in the admin lab), merged over the
+  // built-in config; falls back to the built-ins until/if the fetch resolves.
+  const [saved, setSaved] = useState(savedReplay);
+  useEffect(() => {
+    if (savedReplay !== undefined) { setSaved(savedReplay); return undefined; }
+    let on = true;
+    loadSavedReplay().then((c) => { if (on) setSaved(c); });
+    return () => { on = false; };
+  }, []);
+  const cfg = saved && saved.cfg ? Object.assign({}, REPLAY_CONFIG, saved.cfg) : REPLAY_CONFIG;
+  const disp = (saved && saved.display) || REPLAY_DISPLAY;
+
   // Playback clock — defaults to full time; pauses on each event for its scene.
+  // Game speed scales playback; event speed scales the on-pitch scene durations.
   const feedRef = useRef(null);
-  const { clock, playing, celebrating, toggle, restart, scrub } = useReplayClock(events, maxMin, REPLAY_DURATION_MS);
+  const sceneScale = 1 / (cfg.eventSpeed || 1);
+  const durationMs = BASE_DURATION_MS / (cfg.gameSpeed || 1);
+  const { clock, playing, celebrating, toggle, restart, scrub } = useReplayClock(events, maxMin, durationMs, sceneScale);
   const onScrub = (e) => scrub(Number(e.target.value));
+
+  // Event SFX + background music (off by default; the toggle/▶ are user gestures
+  // that unlock audio). Goal roar / whistle / chime per scene, music bed while
+  // playing.
+  const [soundOn, setSoundOn] = useState(false);
+  const { ensureAudio } = useReplaySound(celebrating, { enabled: soundOn, music: soundOn, playing, progress: maxMin > 0 ? Math.min(1, clock / maxMin) : 1, eventSounds: saved && saved.eventSounds });
+  const onToggle = () => { if (soundOn) ensureAudio(); toggle(); };
+  const onSound = () => { const next = !soundOn; setSoundOn(next); if (next) ensureAudio(); };
 
   const progress = maxMin > 0 ? Math.min(1, clock / maxMin) : 1;
 
@@ -280,7 +325,8 @@ function MatchReplay({ fx, d, t }) {
   let hs = 0, as = 0;
   const shown = [];
   events.forEach((ev, i) => {
-    if (ev._m > clock + 1e-9 || ev.kind === "shot") return; // shots are pitch-only
+    // shots (save/miss) and match phases are pitch/scene-only, not chronology rows
+    if (ev._m > clock + 1e-9 || ev.synthetic || ev.phase) return;
     let scoreStr = "";
     if (ev.kind === "goal" || ev.kind === "pengoal" || ev.kind === "owngoal") {
       const scoresHome = ev.kind === "owngoal" ? (ev.side === "away") : (ev.side === "home");
@@ -307,25 +353,33 @@ function MatchReplay({ fx, d, t }) {
       <h3 className="detail-h">{t("mdReplay")}</h3>
 
       <div className="replay-board">
-        <span className="rb-team home">{fx.home}</span>
+        <span className="rb-team home" style={{ color: pitchHome.color || "#4a90d9" }}>{fx.home}</span>
         <span className="rb-score" key={hs + "-" + as}>{hs}<i>–</i>{as}</span>
-        <span className="rb-team away">{fx.away}</span>
+        <span className="rb-team away" style={{ color: pitchAway.color || "#e8554e" }}>{fx.away}</span>
       </div>
       <div className="rb-clock">{clockLabel}</div>
 
       {events.length ? (
         <MatchPitch home={pitchHome} away={pitchAway} events={events} stats={stats}
-          clock={clock} celebrate={celebrating} goalLabel={t("mdGoal")} />
+          config={cfg} clock={clock} celebrate={celebrating} goalLabel={t("mdGoal")}
+          sceneScale={sceneScale} trailLength={cfg.trailLength} gameSpeed={cfg.gameSpeed} eventFont={cfg.eventFont}
+          phaseLabels={{ kickoff: t("mdKickoff"), halftime: t("mdHalftime"), fulltime: t("mdFulltime") }} missLabel={t("mdMiss")} savedLabel={t("mdSaved")}
+          showTrail={disp.showTrail} showNumbers={disp.showNumbers}
+          showMarkers={disp.showMarkers} ballShadow={disp.showBallShadow} />
       ) : null}
 
       <div className="replay-controls">
-        <button className="replay-btn" type="button" onClick={toggle}
+        <button className="replay-btn" type="button" onClick={onToggle}
           aria-label={playing ? t("mdPause") : t("mdPlay")} title={playing ? t("mdPause") : t("mdPlay")}>
           {playing ? "⏸" : "▶"}
         </button>
         <input className="replay-scrub" type="range" min="0" max={maxMin} step="0.1"
           value={clock} onChange={onScrub} aria-label={t("mdReplay")}
           style={{ background: `linear-gradient(90deg, var(--accent) ${scrubPct}%, var(--line) ${scrubPct}%)` }} />
+        <button className="replay-btn" type="button" onClick={onSound}
+          aria-label={soundOn ? t("mdSoundOff") : t("mdSoundOn")} title={soundOn ? t("mdSoundOff") : t("mdSoundOn")}>
+          {soundOn ? "🔊" : "🔇"}
+        </button>
         <button className="replay-btn" type="button" onClick={restart}
           aria-label={t("mdRestart")} title={t("mdRestart")}>↺</button>
       </div>
@@ -1060,7 +1114,7 @@ export default function GamesBrowser() {
           Array.from({ length: 5 }).map((_, i) => <div className="skeleton" key={i} />)
         ) : grouped.empty ? (
           <div className="empty">
-            <div className="big">⚽</div>
+            <div className="big"><SoccerBall /></div>
             <p dangerouslySetInnerHTML={{
               __html: fixtures.length && grouped.hiddenSome && !search ? t("allFiltered") : t("noSearch"),
             }} />

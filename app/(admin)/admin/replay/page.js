@@ -7,11 +7,12 @@
  * /api/matchdetails. This replaces the old static public/admin/replay.html.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import MatchPitch from "@/components/MatchPitch";
 import useReplayClock from "@/components/useReplayClock";
+import { useReplaySound, SFX_PRESETS, SOUND_EVENTS, DEFAULT_EVENT_SOUNDS } from "@/components/replaySounds";
 import { recordReplayVideo } from "@/components/admin/recordReplay";
-import { prepEvents, maxMinute, runningScore, addShotEvents, num, DEFAULT_CONFIG } from "@/public/admin/replay-sim";
+import { prepEvents, maxMinute, runningScore, addShotEvents, addPhaseEvents, num, DEFAULT_CONFIG } from "@/public/admin/replay-sim";
 
 const SCENARIOS = {
   thriller: {
@@ -72,7 +73,7 @@ function Slider({ label, value, min, max, step, fmt, onChange }) {
 }
 
 export default function ReplayLabPage() {
-  const [cfg, setCfg] = useState(Object.assign({ gameSpeed: 1, eventSpeed: 1, trailLength: 10 }, DEFAULT_CONFIG));
+  const [cfg, setCfg] = useState(Object.assign({ gameSpeed: 0.5, eventSpeed: 1, trailLength: 10, camSpeed: 2.2, eventFont: 1 }, DEFAULT_CONFIG));
   const set = (k, v) => setCfg((c) => Object.assign({}, c, { [k]: v }));
 
   const [scenarioKey, setScenarioKey] = useState("thriller");
@@ -84,6 +85,7 @@ export default function ReplayLabPage() {
   const [possHome, setPossHome] = useState(56);
   const [seed, setSeed] = useState(undefined);
   const [disp, setDisp] = useState({ showNumbers: true, showMarkers: true, showTrail: true, showBallShadow: true, showShots: true });
+  const [igStory, setIgStory] = useState(false);
 
   const match = real || SCENARIOS[scenarioKey];
   const shots = match.shots || [10, 10];
@@ -94,13 +96,15 @@ export default function ReplayLabPage() {
       const others = real.stats.filter((s) => s.key !== "possession" && s.key !== "shots");
       return base.concat(others);
     }
+    // Scenarios have no real "on target" stat — estimate ~45% so saves preview.
+    base.push({ key: "sot", home: Math.round(shots[0] * 0.45), away: Math.round(shots[1] * 0.45) });
     return base;
   }, [real, possHome, shots]);
   const events = useMemo(() => {
     const base = prepEvents(match.events);
-    if (!disp.showShots) return base;
     const mm = maxMinute(base);
-    return addShotEvents(base, stats, mm, base.length * 131 + Math.round(mm) * 7);
+    const withShots = disp.showShots ? addShotEvents(base, stats, mm, base.length * 131 + Math.round(mm) * 7) : base;
+    return addPhaseEvents(withShots, mm);
   }, [match, stats, disp.showShots]);
   const maxMin = useMemo(() => maxMinute(events), [events]);
 
@@ -110,6 +114,14 @@ export default function ReplayLabPage() {
   const durationMs = BASE_DURATION_MS / (cfg.gameSpeed || 1);
   const { clock, playing, celebrating, toggle, restart, scrub } = useReplayClock(events, maxMin, durationMs, sceneScale);
   const onScrub = (e) => scrub(Number(e.target.value));
+
+  // Event SFX + background music for the preview, both also muxed into the export.
+  const [soundOn, setSoundOn] = useState(true);
+  const [musicOn, setMusicOn] = useState(true);
+  const [eventSounds, setEventSounds] = useState(DEFAULT_EVENT_SOUNDS);
+  const setEvSound = (k, v) => setEventSounds((s) => Object.assign({}, s, { [k]: v }));
+  const { ensureAudio } = useReplaySound(celebrating, { enabled: soundOn, music: musicOn, playing, progress: maxMin > 0 ? Math.min(1, clock / maxMin) : 1, eventSounds });
+  const onToggle = () => { if (soundOn || musicOn) ensureAudio(); toggle(); };
 
   const { hs, as } = runningScore(events, clock);
   const progress = maxMin > 0 ? Math.min(1, clock / maxMin) : 1;
@@ -172,10 +184,45 @@ export default function ReplayLabPage() {
     } catch (e) { setHint("error: " + (e && e.message || e)); }
   };
 
+  // ---- saved app-wide defaults ----
+  const [saveHint, setSaveHint] = useState("");
+
+  // Start from the saved app default (if any), so the lab opens on the live values.
+  useEffect(() => {
+    let on = true;
+    fetch("/api/replay-config").then((r) => (r.ok ? r.json() : null)).then((j) => {
+      if (!on || !j || !j.config) return;
+      if (j.config.cfg) setCfg((c) => Object.assign({}, c, j.config.cfg));
+      if (j.config.display) setDisp((dd) => Object.assign({}, dd, j.config.display));
+      if (j.config.eventSounds) setEventSounds((s) => Object.assign({}, s, j.config.eventSounds));
+      if (j.config.audio) { setSoundOn(!!j.config.audio.sound); setMusicOn(!!j.config.audio.music); }
+      setSaveHint("loaded saved default" + (j.config.updatedAt ? " · " + new Date(j.config.updatedAt).toLocaleString() : ""));
+    }).catch(() => {});
+    return () => { on = false; };
+  }, []);
+
+  const saveDefault = async () => {
+    setSaveHint("saving…");
+    try {
+      const r = await fetch("/api/replay-config", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cfg,
+          display: { showNumbers: disp.showNumbers, showMarkers: disp.showMarkers, showTrail: disp.showTrail, showBallShadow: disp.showBallShadow },
+          eventSounds,
+          audio: { sound: soundOn, music: musicOn },
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      setSaveHint(r.ok ? "saved as app default ✓" : "error: " + (j.error || r.status));
+    } catch (e) { setSaveHint("error: " + ((e && e.message) || e)); }
+  };
+
   // ---- export ----
   const [exportTxt, setExportTxt] = useState("");
   const [recHint, setRecHint] = useState("");
   const [recording, setRecording] = useState(false);
+  const [vidScale, setVidScale] = useState(1); // export resolution scale (lower = smaller file)
 
   const exportVideo = async () => {
     if (recording) return;
@@ -184,6 +231,7 @@ export default function ReplayLabPage() {
       const name = await recordReplayVideo({
         events, stats, maxMin, seed, cfg,
         gameSpeed: cfg.gameSpeed, sceneScale, baseDurationMs: BASE_DURATION_MS,
+        igStory, camSpeed: cfg.camSpeed, eventFont: cfg.eventFont, scale: vidScale, sound: soundOn, music: musicOn, eventSounds,
         homeName: match.home, awayName: match.away,
         homeForm, awayForm, homeColor, awayColor, goalLabel: "GOAL!",
         display: { showNumbers: disp.showNumbers, showMarkers: disp.showMarkers, showTrail: disp.showTrail, ballShadow: disp.showBallShadow, trailLength: cfg.trailLength },
@@ -196,7 +244,7 @@ export default function ReplayLabPage() {
   const doExport = () => {
     const out = {
       REPLAY_DURATION_MS: Math.round(BASE_DURATION_MS / (cfg.gameSpeed || 1)), PASS_MIN: cfg.passMin,
-      eventSpeed: cfg.eventSpeed,
+      eventSpeed: cfg.eventSpeed, camSpeed: cfg.camSpeed, eventFont: cfg.eventFont,
       blockFollow: cfg.blockFollow, reactLag: cfg.reactLag,
       jitterAmp: cfg.jitterAmp, jitterSpeed: cfg.jitterSpeed,
       attackPush: cfg.attackPush, defendDrop: cfg.defendDrop,
@@ -217,19 +265,25 @@ export default function ReplayLabPage() {
       <div className="sub">Tunes the live <code>MatchPitch</code> component. Adjust, then <b>Export</b> the values into <code>DEFAULT_CONFIG</code> in <code>public/admin/replay-sim.js</code>.</div>
 
       <div className="card" style={{ maxWidth: 660, margin: "0 auto 14px" }}>
-        <div className="replay-board">
-          <span className="rb-team home">{match.home}</span>
-          <span className="rb-score" key={hs + "-" + as}>{hs}<i>–</i>{as}</span>
-          <span className="rb-team away">{match.away}</span>
-        </div>
-        <div className="rb-clock">{clockLabel}</div>
+        {/* IG-story renders its own branded scoreboard inside the frame. */}
+        {!igStory ? (
+          <>
+            <div className="replay-board">
+              <span className="rb-team home" style={{ color: homeColor }}>{match.home}</span>
+              <span className="rb-score" key={hs + "-" + as}>{hs}<i>–</i>{as}</span>
+              <span className="rb-team away" style={{ color: awayColor }}>{match.away}</span>
+            </div>
+            <div className="rb-clock">{clockLabel}</div>
+          </>
+        ) : null}
         <MatchPitch home={{ name: match.home, formation: homeForm, color: homeColor }}
           away={{ name: match.away, formation: awayForm, color: awayColor }}
           events={events} stats={stats} config={cfg} clock={clock} seed={seed} celebrate={celebrating}
           sceneScale={sceneScale} ballShadow={disp.showBallShadow} trailLength={cfg.trailLength}
+          gameSpeed={cfg.gameSpeed} igStory={igStory} camSpeed={cfg.camSpeed} eventFont={cfg.eventFont}
           showNumbers={disp.showNumbers} showMarkers={disp.showMarkers} showTrail={disp.showTrail} />
         <div className="replay-controls">
-          <button className="replay-btn" type="button" onClick={toggle}>{playing ? "⏸" : "▶"}</button>
+          <button className="replay-btn" type="button" onClick={onToggle}>{playing ? "⏸" : "▶"}</button>
           <input className="replay-scrub" type="range" min="0" max={maxMin} step="0.1" value={clock} onChange={onScrub}
             style={{ background: `linear-gradient(90deg, var(--accent) ${scrubPct}%, var(--line) ${scrubPct}%)` }} />
           <button className="replay-btn" type="button" onClick={restart}>↺</button>
@@ -284,6 +338,7 @@ export default function ReplayLabPage() {
           <Slider label="Player jitter amount" value={cfg.jitterAmp} min={0} max={3} step={0.1} fmt={(v) => v.toFixed(1)} onChange={(v) => set("jitterAmp", v)} />
           <Slider label="Player jitter speed" value={cfg.jitterSpeed} min={0} max={3} step={0.1} fmt={(v) => v.toFixed(1)} onChange={(v) => set("jitterSpeed", v)} />
           <Slider label="Event scene speed" value={cfg.eventSpeed} min={0.3} max={3} step={0.1} fmt={(v) => v.toFixed(1) + "×"} onChange={(v) => set("eventSpeed", v)} />
+          <Slider label="Event text size" value={cfg.eventFont} min={0.5} max={2.5} step={0.05} fmt={(v) => v.toFixed(2) + "×"} onChange={(v) => set("eventFont", v)} />
         </div>
       </div>
 
@@ -332,16 +387,49 @@ export default function ReplayLabPage() {
             <input type="checkbox" style={{ width: "auto" }} checked={disp.showBallShadow} onChange={(e) => setDisp((d) => ({ ...d, showBallShadow: e.target.checked }))} /> Ball shadow</label>
           <label style={{ display: "flex", alignItems: "center", gap: 6, width: "auto", color: "var(--text)" }}>
             <input type="checkbox" style={{ width: "auto" }} checked={disp.showShots} onChange={(e) => setDisp((d) => ({ ...d, showShots: e.target.checked }))} /> Shots</label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, width: "auto", color: "var(--text)" }}>
+            <input type="checkbox" style={{ width: "auto" }} checked={igStory} onChange={(e) => setIgStory(e.target.checked)} /> 📱 IG Story video (9:16)</label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, width: "auto", color: "var(--text)" }}>
+            <input type="checkbox" style={{ width: "auto" }} checked={soundOn} onChange={(e) => { setSoundOn(e.target.checked); if (e.target.checked) ensureAudio(); }} /> 🔊 Event sounds</label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, width: "auto", color: "var(--text)" }}>
+            <input type="checkbox" style={{ width: "auto" }} checked={musicOn} onChange={(e) => { setMusicOn(e.target.checked); if (e.target.checked) ensureAudio(); }} /> 🎵 Background music</label>
         </div>
         <div style={{ maxWidth: 320, marginTop: 8 }}>
           <Slider label="Ball trail length" value={cfg.trailLength} min={2} max={28} step={1} onChange={(v) => set("trailLength", v)} />
+          <Slider label="Camera follow speed" value={cfg.camSpeed} min={0.25} max={4} step={0.05} fmt={(v) => v.toFixed(2) + "×"} onChange={(v) => set("camSpeed", v)} />
+          <Slider label="Export resolution" value={vidScale} min={0.35} max={1} step={0.05}
+            fmt={(v) => (Math.round((igStory ? 1080 : 960) * v / 2) * 2) + "×" + (Math.round((igStory ? 1920 : 664) * v / 2) * 2)}
+            onChange={setVidScale} />
         </div>
         <div className="toolbar">
           <button onClick={doExport}>Export settings</button>
-          <button className="secondary" onClick={exportVideo} disabled={recording}>{recording ? "Recording…" : "🎥 Export video"}</button>
+          <button className="secondary" onClick={exportVideo} disabled={recording}>{recording ? "Recording…" : (igStory ? "🎥 Export story (9:16)" : "🎥 Export video")}</button>
           <span className="pill">{recHint || "JSON for DEFAULT_CONFIG"}</span>
         </div>
         {exportTxt ? <pre style={{ marginTop: 10 }}>{exportTxt}</pre> : null}
+        <div className="toolbar" style={{ marginTop: 10, borderTop: "1px solid var(--line, #243349)", paddingTop: 10 }}>
+          <button onClick={saveDefault}>💾 Save as app default</button>
+          <span className="pill">{saveHint || "applies these settings across the whole app"}</span>
+        </div>
+      </div>
+
+      <div className="card">
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>🔈 Event sounds</div>
+        <div className="sub" style={{ marginBottom: 8 }}>Choose which sound plays for each event (preview + exported video). Pick “None” to silence one.</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px" }}>
+          {SOUND_EVENTS.map((ev) => (
+            <div key={ev.key}>
+              <label>{ev.label}</label>
+              <div style={{ display: "flex", gap: 6 }}>
+                <select style={{ flex: 1 }} value={eventSounds[ev.key] || "none"} onChange={(e) => setEvSound(ev.key, e.target.value)}>
+                  {SFX_PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                </select>
+                <button type="button" className="secondary" title="Play sound" aria-label="Play sound"
+                  onClick={() => { const a = ensureAudio(); if (a) a.playPreset(eventSounds[ev.key] || "none"); }}>▶</button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </>
   );

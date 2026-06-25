@@ -58,22 +58,31 @@ export function maxMinute(events) {
   return Math.ceil(m);
 }
 
-// Add synthetic "shot" events from the aggregate shot counts (minus the goals,
-// which were shots that scored). We have no shot timestamps, so they're spread
-// across the match at seeded minutes — illustrative, like the rest of the sim.
-// The ball visits each shot's goalmouth; the marker fades quickly (no pause).
+// Add synthetic shot events from the aggregate counts. We have no per-shot data,
+// only totals, so we spread them across the match at seeded minutes and split
+// each side's non-goal shots into "save" (on target, kept out) and "miss" (off
+// target) in the real on-target ratio: a shot is on target if it was a goal OR a
+// save, so saves = onTarget − goals and misses = totalShots − onTarget.
 export function addShotEvents(events, stats, maxMin, seed) {
   const sr = (stats || []).find((s) => s.key === "shots") || {};
-  const goalsH = events.filter((e) => (e.kind === "goal" || e.kind === "pengoal") && e.side !== "away").length;
-  const goalsA = events.filter((e) => (e.kind === "goal" || e.kind === "pengoal") && e.side === "away").length;
-  const sh = Math.max(0, Math.min(30, Math.round(num(sr.home)) - goalsH));
-  const sa = Math.max(0, Math.min(30, Math.round(num(sr.away)) - goalsA));
-  if (!sh && !sa) return events;
+  const otr = (stats || []).find((s) => s.key === "sot") || {};
   const rng = mulberry32((((seed || 1) ^ 0x5f3759df) >>> 0) || 1);
   const span = Math.max(1, maxMin - 6);
   const out = events.slice();
-  const add = (side, n) => { for (let i = 0; i < n; i++) { const m = 3 + Math.floor(rng() * span); out.push({ side, kind: "shot", min: m + "'", _m: m, synthetic: true }); } };
-  add("home", sh); add("away", sa);
+  let added = 0;
+  const add = (side, n, kind) => {
+    for (let i = 0; i < n; i++) { const m = 3 + Math.floor(rng() * span); out.push({ side, kind, min: m + "'", _m: m, synthetic: true }); added++; }
+  };
+  const addSide = (isHome) => {
+    const side = isHome ? "home" : "away";
+    const goals = events.filter((e) => (e.kind === "goal" || e.kind === "pengoal") && (e.side !== "away") === isHome).length;
+    const total = Math.max(0, Math.min(30, Math.round(num(isHome ? sr.home : sr.away)) - goals));
+    const saves = Math.max(0, Math.min(total, Math.round(num(isHome ? otr.home : otr.away)) - goals));
+    add(side, saves, "save");
+    add(side, total - saves, "miss");
+  };
+  addSide(true); addSide(false);
+  if (!added) return events;
   out.sort((a, b) => a._m - b._m);
   return out;
 }
@@ -97,20 +106,36 @@ export function markerType(kind) {
   if (kind === "red") return "red";
   if (kind === "yellow") return "yellow";
   if (kind === "sub") return "sub";
-  if (kind === "shot") return "shot";
+  if (kind === "shot" || kind === "save" || kind === "miss") return "shot";
+  if (kind === "kickoff" || kind === "halftime" || kind === "fulltime") return "phase";
   return "other";
+}
+
+// Synthetic match-phase events (kick-off, half-time, full-time) so the replay can
+// announce them with a scene + whistle, like any other event. Half-time only for
+// matches that actually reach it. _m of kick-off is just above 0 so it fires on
+// the first frame (the clock starts at 0).
+export function addPhaseEvents(events, maxMin) {
+  const out = (events || []).slice();
+  out.push({ side: "home", kind: "kickoff", min: "0'", _m: 0.02, phase: true });
+  if (maxMin >= 47) out.push({ side: "home", kind: "halftime", min: "45'", _m: 45, phase: true });
+  out.push({ side: "home", kind: "fulltime", min: maxMin + "'", _m: maxMin, phase: true });
+  out.sort((a, b) => a._m - b._m);
+  return out;
 }
 
 export const MARKER_GLYPH = { goal: "⚽", sub: "↔", red: "", yellow: "", shot: "", other: "" };
 
 // How long (real ms) to hold the match clock while an event's on-pitch scene
 // plays. Must match the CSS scene durations in assets/replay.css.
-export const SCENE_MS = { goal: 2000, card: 2600, sub: 2000 };
+export const SCENE_MS = { goal: 2000, card: 2600, sub: 2000, phase: 1900, shot: 1450 };
 export function sceneMs(ev) {
   const k = markerType(ev && ev.kind);
   if (k === "goal") return SCENE_MS.goal;
   if (k === "sub") return SCENE_MS.sub;
   if (k === "yellow" || k === "red") return SCENE_MS.card;
+  if (k === "phase") return SCENE_MS.phase;
+  if (k === "shot") return SCENE_MS.shot;
   return 0; // no scene → no hold
 }
 
@@ -122,9 +147,10 @@ export function pitchPos(ev, idx) {
   const home = ev.side !== "away";
   const j = ((idx * 41) % 30) - 15; // -15..14, stable per index
   const kind = ev.kind;
+  if (kind === "kickoff" || kind === "halftime" || kind === "fulltime") return { x: 50, y: 50 };
   if (kind === "goal" || kind === "pengoal") return { x: home ? 94 : 6, y: 50 + j * 0.4 };
   if (kind === "owngoal") return { x: home ? 6 : 94, y: 50 + j * 0.4 }; // own net
-  if (kind === "shot") return { x: home ? 90 : 10, y: 50 + j * 0.9 }; // toward opp goal, spread
+  if (kind === "shot" || kind === "save" || kind === "miss") return { x: home ? 90 : 10, y: 50 + j * 0.9 }; // toward opp goal, spread
   if (kind === "sub") return { x: home ? 24 : 76, y: idx % 2 ? 8 : 92 }; // touchline
   return { x: home ? 36 : 64, y: 50 + j }; // cards etc., in the offending half
 }

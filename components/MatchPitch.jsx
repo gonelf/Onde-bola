@@ -19,11 +19,20 @@
  *   goalLabel   : text for the goal flash (localised by the caller)
  */
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
+import SoccerBall from "@/components/SoccerBall";
 import {
   prepEvents, maxMinute, buildSim, formationArr, teamBase, simState,
-  placePlayers, passBall, markerType, pitchPos, MARKER_GLYPH, DEFAULT_CONFIG,
+  placePlayers, passBall, markerType, pitchPos, MARKER_GLYPH, runningScore, DEFAULT_CONFIG,
 } from "@/public/admin/replay-sim";
+
+// IG-story (portrait 9:16) framing: the frame is a top brand/score band plus a
+// camera that zooms into the pitch and pans to follow the ball, matching the
+// video export. The zoom and visible-width fraction come from the pitch region
+// (the 1680px below a 240px header in the 1080×1920 frame).
+const IG_HEADER_PCT = 12.5;                     // top brand/score band (% of the 9:16 frame)
+const IG_ZOOM = 1680 / (1080 * 10 / 16);        // ≈ 2.489 — region height / natural pitch height
+const IG_CAM_HALF = (1 / IG_ZOOM) / 2 * 100;    // ≈ 20.1 — half the visible width (%)
 
 // Marker lifetimes, in simulated minutes: a marker pops in over POP; goals then
 // linger as a dim "shadow"; cards and subs fade out over FADE. The on-pitch
@@ -34,8 +43,25 @@ const POP = 1.4, FADE = 4;
 // The on-pitch "scene" for one event, played on real CSS time (the match clock
 // is frozen by the parent meanwhile). Phases are sequenced via animation-delays
 // in assets/replay.css. Mounted keyed by the event so it plays once.
-function EventScene({ ev, goalLabel }) {
+const PHASE_LABEL = { kickoff: "KICK-OFF", halftime: "HALF-TIME", fulltime: "FULL-TIME" };
+
+function EventScene({ ev, goalLabel, missLabel, savedLabel, phaseLabels }) {
   const type = markerType(ev.kind);
+  if (type === "phase") {
+    return (
+      <div className="ev-overlay">
+        <div className="scene-name phase-name">{(phaseLabels || PHASE_LABEL)[ev.kind] || ""}</div>
+      </div>
+    );
+  }
+  if (type === "shot") {
+    const saved = ev.kind === "save";
+    return (
+      <div className="ev-overlay">
+        <div className={"goal-sweep " + (saved ? "save-sweep" : "miss-sweep")}>{saved ? (savedLabel || "SAVED!") : (missLabel || "MISSED")}</div>
+      </div>
+    );
+  }
   if (type === "goal") {
     return (
       <div className="ev-overlay">
@@ -75,7 +101,8 @@ function Whistle() {
 export default function MatchPitch({
   home, away, events: rawEvents, stats, config, clock, seed, celebrate,
   showNumbers = false, showMarkers = true, showTrail = false, goalLabel = "GOAL!",
-  sceneScale = 1, ballShadow = true, trailLength = 10,
+  sceneScale = 1, ballShadow = true, trailLength = 10, gameSpeed = 1, igStory = false,
+  camSpeed = 1, eventFont = 1, phaseLabels, missLabel, savedLabel,
 }) {
   const cfg = config || DEFAULT_CONFIG;
   const events = useMemo(() => prepEvents(rawEvents), [rawEvents]);
@@ -85,6 +112,12 @@ export default function MatchPitch({
     home: teamBase(formationArr(home && home.formation), true),
     away: teamBase(formationArr(away && away.formation), false),
   }), [home, away]);
+
+  // Eased IG-story camera. Updated in-render off the real clock between renders
+  // (the parent re-renders ~60fps while playing), so the camera glides toward the
+  // ball with a ~0.4s time constant — trailing a couple of beats behind the play.
+  const camRef = useRef(50);
+  const camTsRef = useRef(0);
 
   const homeColor = (home && home.color) || "#4a90d9";
   const awayColor = (away && away.color) || "#e8554e";
@@ -106,6 +139,21 @@ export default function MatchPitch({
     away: placePlayers(bases.away, false, sampleField, clock, cfg),
   };
 
+  // Advance the eased camera toward the ball (clamped so the frame stays on-pitch).
+  let camX = 50;
+  if (igStory) {
+    const target = Math.max(IG_CAM_HALF, Math.min(100 - IG_CAM_HALF, ball.x));
+    const now = (typeof performance !== "undefined" ? performance.now() : 0);
+    const dt = camTsRef.current ? now - camTsRef.current : 0;
+    camTsRef.current = now;
+    const tau = 380 / (camSpeed || 1); // higher camSpeed → shorter lag → snappier follow
+    camRef.current += (target - camRef.current) * (1 - Math.exp(-dt / tau));
+    camX = camRef.current;
+  }
+  const worldStyle = igStory
+    ? { transform: `translate(${(50 - IG_ZOOM * camX).toFixed(3)}%, 0) scale(${IG_ZOOM})` }
+    : undefined;
+
   // Revealed events with their age (dt) at this clock.
   const revealed = [];
   events.forEach((ev, i) => {
@@ -116,7 +164,7 @@ export default function MatchPitch({
 
   // Markers: goals persist (dimmed to a shadow after their pop); cards/subs only
   // linger briefly, then fade away.
-  const markers = revealed.filter((r) => r.type === "goal" || r.dt <= FADE);
+  const markers = revealed.filter((r) => r.type !== "phase" && (r.type === "goal" || r.dt <= FADE));
   const markerStyle = (r) => {
     const pop = r.dt < POP ? 1 + (1 - r.dt / POP) * 1.3 : 1;
     if (r.type === "goal" && r.dt >= POP) {
@@ -129,10 +177,14 @@ export default function MatchPitch({
   };
 
 
+  // Each trail dot samples the ball a fixed REAL-TIME interval ago, so the comet
+  // reflects how fast the ball is actually moving on screen. The sample offset is
+  // in sim-minutes, so scale it by gameSpeed (sim-time advances ∝ gameSpeed): at
+  // slow playback the comet shortens (the ball looks slow), at fast it lengthens.
   const trail = [];
   if (showTrail) {
     for (let k = 1; k <= trailLength; k++) {
-      const c = clock - k * 0.7;
+      const c = clock - k * 0.7 * gameSpeed;
       if (c < 0) break;
       trail.push(ballAt(c));
     }
@@ -145,8 +197,8 @@ export default function MatchPitch({
     </span>
   );
 
-  return (
-    <div className="replay-pitch" style={{ "--scene-scale": sceneScale }}>
+  const pitchWorld = (
+    <div className="pitch-world" style={worldStyle}>
       <div className="pitch-line center" />
       <div className="pitch-circle" />
       <div className="pitch-box left" /><div className="pitch-box right" />
@@ -159,11 +211,47 @@ export default function MatchPitch({
       )) : null}
       {showMarkers ? markers.map((r) => (
         <span key={r.i} className={"pitch-marker " + r.type} style={markerStyle(r)}>
-          <span className="marker-glyph">{MARKER_GLYPH[r.type]}</span>
+          {r.type === "goal" ? <SoccerBall className="marker-ball" /> : <span className="marker-glyph">{MARKER_GLYPH[r.type]}</span>}
         </span>
       )) : null}
-      <span className={"pitch-ball" + (ballShadow ? "" : " no-shadow")} style={{ left: ball.x + "%", top: ball.y + "%" }}>⚽</span>
-      {celebrate ? <EventScene key={"sc" + celebrate._m + "-" + celebrate.kind} ev={celebrate} goalLabel={goalLabel} /> : null}
+      <span className={"pitch-ball" + (ballShadow ? "" : " no-shadow")} style={{ left: ball.x + "%", top: ball.y + "%" }}><SoccerBall /></span>
+    </div>
+  );
+  const scene = celebrate
+    ? <EventScene key={"sc" + celebrate._m + "-" + celebrate.kind} ev={celebrate} goalLabel={goalLabel} missLabel={missLabel} savedLabel={savedLabel} phaseLabels={phaseLabels} />
+    : null;
+
+  // IG-story: a self-contained 9:16 reel frame — branding + live result on top,
+  // the following-camera pitch below, and a site watermark — so a shared clip is
+  // instantly identifiable. Mirrors the video export (recordReplay.js).
+  if (igStory) {
+    const { hs, as } = runningScore(events, clock);
+    const minNum = Math.floor(clock);
+    const clockLabel = clock >= maxMin ? "FT" : (minNum > 90 ? "90+" + (minNum - 90) : minNum) + "'";
+    return (
+      <div className="replay-pitch ig" style={{ "--scene-scale": sceneScale, "--event-font": eventFont }}>
+        <div className="ig-header">
+          <div className="ig-brand"><span className="ig-ball"><SoccerBall /></span> Hoje Há <span className="ig-accent">Bola</span></div>
+          <div className="ig-score">
+            <span className="ig-team" style={{ color: homeColor }}>{(home && home.name) || ""}</span>
+            <span className="ig-num">{hs}<i>–</i>{as}</span>
+            <span className="ig-team" style={{ color: awayColor }}>{(away && away.name) || ""}</span>
+          </div>
+          <div className="ig-clock">{clockLabel}</div>
+        </div>
+        <div className="pitch-region">
+          {pitchWorld}
+          {scene}
+        </div>
+        <div className="ig-foot">hojehabola.com</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="replay-pitch" style={{ "--scene-scale": sceneScale, "--event-font": eventFont }}>
+      {pitchWorld}
+      {scene}
     </div>
   );
 }

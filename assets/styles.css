@@ -64,7 +64,7 @@ body {
   font-size: 1.25rem;
   letter-spacing: -0.02em;
 }
-.brand-ball { font-size: 1.4rem; }
+.brand-ball { display: inline-flex; width: 1.5rem; height: 1.5rem; vertical-align: middle; }
 .brand-name span { color: var(--accent); }
 
 .tagline {
@@ -556,6 +556,7 @@ body {
   color: var(--text-dim);
 }
 .empty .big { font-size: 3rem; }
+.empty .big .soccer-ball { width: 3rem; height: 3rem; margin: 0 auto; }
 
 /* Footer */
 .site-footer {
@@ -582,7 +583,7 @@ body {
   font-size: 1.15rem;
   letter-spacing: -0.02em;
 }
-.footer-brand .brand-ball { font-size: 1.35rem; }
+.footer-brand .brand-ball { width: 1.45rem; height: 1.45rem; }
 .footer-brand .brand-name span { color: var(--accent); }
 .footer-data {
   margin: 12px 0 0;
@@ -792,6 +793,7 @@ body {
   line-height: 1;
 }
 .event-icon b { font-variant-numeric: tabular-nums; font-size: 0.78rem; font-weight: 800; }
+.event-icon .event-ball { width: 15px; height: 15px; display: block; }
 .event-icon.goal { background: var(--accent-soft); }
 .event-icon.card { background: transparent; padding: 0; }
 .event-player { font-weight: 600; }

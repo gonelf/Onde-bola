@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isPaidChannel } from "@/lib/broadcasters";
 import { langFor, makeT, localeFor } from "@/lib/i18n";
+import { DEFAULT_BRAND, brandForHost } from "@/lib/brand";
 import {
   ymd, isSameDay, parseYmd, formatClock, statusOf, hasScore, shareLink,
 } from "@/lib/format";
@@ -612,8 +613,18 @@ export default function GamesBrowser() {
   dateRef.current = date;
   detailIdRef.current = detailId;
 
-  const lang = langFor(primaryCountry);
-  const t = useMemo(() => makeT(lang), [lang]);
+  // Brand is resolved from the request host after mount (window is only available
+  // client-side), mirroring how primaryCountry settles post-hydration — so the
+  // initial render still matches the server. An English-only domain
+  // (footietoday.com / footytoday.co) pins English; otherwise the language
+  // follows the chosen country.
+  const [brand, setBrand] = useState(DEFAULT_BRAND);
+  useEffect(() => {
+    setBrand(brandForHost(window.location.host));
+  }, []);
+
+  const lang = brand.lang || langFor(primaryCountry);
+  const t = useMemo(() => makeT(lang, brand.name), [lang, brand.name]);
   const locale = localeFor(lang);
 
   const fixtureById = useCallback(

@@ -21,6 +21,7 @@ import { getCard } from "@/lib/cardinfo";
 import { isKnownCompetition } from "@/lib/digest-select";
 import { isPaidChannel } from "@/lib/broadcasters";
 import { forwardAuthHeaders } from "@/lib/forward-auth";
+import { brandForHost, brandWordmark } from "@/lib/brand";
 
 export const runtime = "edge";
 
@@ -601,6 +602,8 @@ async function fetchDayListings(origin, date, auth) {
 }
 
 async function renderToday(url, reqHeaders) {
+  const host = reqHeaders.get("x-forwarded-host") || reqHeaders.get("host") || url.host;
+  const wm = brandWordmark(brandForHost(host));
   const sp = url.searchParams;
   const date = /^\d{4}-\d{2}-\d{2}$/.test(sp.get("date") || "") ? sp.get("date") : todayYmd();
   const S = FORMATS[sp.get("format")] || FORMATS.landscape;
@@ -717,8 +720,8 @@ async function renderToday(url, reqHeaders) {
                         "div",
                         { style: { display: "flex", flexDirection: "row", fontSize: S.brandFont, fontWeight: 800 } },
                         [
-                          h("div", { style: { display: "flex", marginRight: Math.round(S.brandFont * 0.26) } }, "Hoje Há"),
-                          h("div", { style: { display: "flex", color: COLOR.accent } }, "Bola"),
+                          h("div", { style: { display: "flex", marginRight: Math.round(S.brandFont * 0.26) } }, wm.head),
+                          h("div", { style: { display: "flex", color: COLOR.accent } }, wm.tail),
                         ]
                       ),
                     ]
@@ -755,6 +758,8 @@ async function renderToday(url, reqHeaders) {
 
 export async function GET(req, ctx) {
   const url = new URL(req.url);
+  const ogHost = req.headers.get("x-forwarded-host") || req.headers.get("host") || url.host;
+  const wm = brandWordmark(brandForHost(ogHost));
   const searchParams = url.searchParams;
   const g = (k) => searchParams.get(k) || "";
   const params = (ctx && ctx.params) ? await ctx.params : {};
@@ -885,8 +890,8 @@ export async function GET(req, ctx) {
                     "div",
                     { style: { display: "flex", flexDirection: "row", fontSize: 34, fontWeight: 800 } },
                     [
-                      h("div", { style: { display: "flex", marginRight: 9 } }, "Hoje Há"),
-                      h("div", { style: { display: "flex", color: COLOR.accent } }, "Bola"),
+                      h("div", { style: { display: "flex", marginRight: 9 } }, wm.head),
+                      h("div", { style: { display: "flex", color: COLOR.accent } }, wm.tail),
                     ]
                   ),
                 ]

@@ -5,12 +5,14 @@
 // cards and the detail modal — lives in the GamesBrowser client island mounted
 // inside <main>.
 
+import { headers } from "next/headers";
 import GamesBrowser from "@/components/GamesBrowser";
 import SoccerBall from "@/components/SoccerBall";
 import AdSlot from "@/components/AdSlot";
 import AdUnits from "@/components/AdUnits";
 import { parseSnippet } from "@/lib/ads-store";
 import { isEnabled } from "@/lib/flags";
+import { brandForHost, brandWordmark } from "@/lib/brand";
 
 // TEMP debug block — bypasses the ads manager (KV store / AdSlot / slot
 // filtering) entirely so this snippet's own behavior on a real top-level
@@ -39,10 +41,10 @@ async function DebugBanner() {
   );
 }
 
-// ISR: the page chrome is static, but the ad slots read the admin-managed list,
-// so regenerate periodically to pick up changes (admin saves also bust it via
-// the "ads" cache tag for a near-immediate refresh).
-export const revalidate = 300;
+// Rendered per request: the page chrome (brand wordmark, copy) is resolved from
+// the request host so each domain shows its own identity. The ad slots read the
+// admin-managed list, kept fresh via the "ads" cache tag.
+export const dynamic = "force-dynamic";
 
 // Evergreen internal links to the most-searched competitions' league hubs.
 // Server-rendered so crawlers and LLMs get real, linkable content even though
@@ -58,7 +60,10 @@ const POPULAR_LEAGUES = [
   ["europa-league", "Europa League"],
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  const h = await headers();
+  const brand = brandForHost(h.get("x-forwarded-host") || h.get("host") || "hojehabola.com");
+  const wm = brandWordmark(brand);
   return (
     <>
       <header className="site-header">
@@ -66,10 +71,10 @@ export default function HomePage() {
           <a className="brand" href="./">
             <span className="brand-ball"><SoccerBall /></span>
             <span className="brand-name">
-              Hoje Há <span>Bola</span>
+              {wm.head ? `${wm.head} ` : ""}<span>{wm.tail}</span>
             </span>
           </a>
-          <p className="tagline">Football worldwide &amp; where to watch it</p>
+          <p className="tagline">{brand.tagline}</p>
         </div>
       </header>
 
@@ -89,7 +94,7 @@ export default function HomePage() {
         <section className="seo-intro" aria-labelledby="seo-intro-title">
           <h2 id="seo-intro-title">Where to watch football on TV today</h2>
           <p id="seo-p1">
-            <strong>Hoje Há Bola</strong> shows you every football (soccer) match
+            <strong>{brand.name}</strong> shows you every football (soccer) match
             being played around the world today and exactly{" "}
             <strong>which TV channels and streaming services are broadcasting
             them in your country</strong> — with live scores, kickoff times,
@@ -125,7 +130,7 @@ export default function HomePage() {
             <a className="footer-brand" href="./">
               <span className="brand-ball"><SoccerBall /></span>
               <span className="brand-name">
-                Hoje Há <span>Bola</span>
+                {wm.head ? `${wm.head} ` : ""}<span>{wm.tail}</span>
               </span>
             </a>
             <p id="footer-data" className="footer-data">
@@ -150,7 +155,7 @@ export default function HomePage() {
 
         <div className="footer-bottom">
           <div className="container">
-            <p id="footer-copy">© 2026 Hoje Há Bola · All rights reserved.</p>
+            <p id="footer-copy">© 2026 {brand.name} · All rights reserved.</p>
             <p id="footer-credits" className="footer-credits">
               Made with ❤️ by{" "}
               <a href="https://x.com/gonelf" target="_blank" rel="noopener">

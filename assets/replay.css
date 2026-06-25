@@ -125,7 +125,7 @@
 }
 .pitch-ball.no-shadow { filter: none; }
 /* The shared soccer-ball image (public/soccerball.svg) fills its wrapper. */
-.soccer-ball { display: block; width: 100%; height: 100%; }
+.soccer-ball { display: block; width: 100%; height: 100%; object-fit: contain; }
 .pitch-marker .marker-ball { width: 80%; height: 80%; }
 /* Transport */
 .replay-controls { display: flex; align-items: center; gap: 10px; margin: 12px 0 14px; }

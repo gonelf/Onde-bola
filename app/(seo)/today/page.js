@@ -6,6 +6,7 @@
 import { headers } from "next/headers";
 import { buildToday, todayYmd, clampN } from "@/lib/digest-render";
 import { langForCountryCode } from "@/lib/i18n";
+import { brandForHost, langForBrand } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +15,11 @@ async function build(searchParams) {
   const proto = (h.get("x-forwarded-proto") || "https").split(",")[0];
   const host = h.get("x-forwarded-host") || h.get("host") || "hojehabola.com";
   const origin = `${proto}://${host}`;
-  const lang = langForCountryCode(
-    h.get("x-vercel-ip-country") || h.get("x-country") || h.get("cf-ipcountry") || ""
+  // English-only domains (footietoday.com / footytoday.co) pin English; the
+  // default brand still follows the visitor's country.
+  const lang = langForBrand(
+    brandForHost(host),
+    langForCountryCode(h.get("x-vercel-ip-country") || h.get("x-country") || h.get("cf-ipcountry") || "")
   );
   const sp = (await searchParams) || {};
   const date = /^\d{4}-\d{2}-\d{2}$/.test(sp.date || "") ? sp.date : todayYmd();
@@ -32,7 +36,7 @@ export async function generateMetadata({ searchParams }) {
     alternates: { canonical: built.canonical },
     openGraph: {
       type: "website",
-      siteName: "Hoje Há Bola",
+      siteName: built.siteName,
       title: built.headline,
       description: built.description,
       url: built.canonical,

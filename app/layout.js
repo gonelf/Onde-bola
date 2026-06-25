@@ -7,13 +7,17 @@
  * inline <style>).
  */
 
+import { headers } from "next/headers";
 import AdDebug from "@/components/AdDebug";
 
-const SITE_URL = "https://hojehabola.com";
-
-export const metadata = {
-  metadataBase: new URL(SITE_URL),
-};
+// metadataBase is host-aware so the per-page canonical/OG URLs resolve to the
+// domain the visitor is actually on (hojehabola.com, footietoday.com, …).
+export async function generateMetadata() {
+  const h = await headers();
+  const proto = (h.get("x-forwarded-proto") || "https").split(",")[0];
+  const host = h.get("x-forwarded-host") || h.get("host") || "hojehabola.com";
+  return { metadataBase: new URL(`${proto}://${host}`) };
+}
 
 export const viewport = {
   themeColor: "#0f1722",

@@ -33,8 +33,12 @@ function loadBallImage() {
   });
 }
 function drawBall(ctx, img, cx, cy, r) {
-  if (img) ctx.drawImage(img, cx - r, cy - r, r * 2, r * 2);
-  else { ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill(); }
+  if (img) {
+    const iw = img.naturalWidth || img.width || 1, ih = img.naturalHeight || img.height || 1;
+    const s = (2 * r) / Math.max(iw, ih); // contain in a 2r box, keep aspect
+    const w = iw * s, h = ih * s;
+    ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
+  } else { ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill(); }
 }
 
 const W = 960, HEADER = 64, PITCHH = 600, H = HEADER + PITCHH;

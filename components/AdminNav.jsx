@@ -18,6 +18,7 @@ const PAGES = [
   { href: "/admin/flags", label: "Feature flags" },
   { href: "/admin/replay", label: "Match animation" },
   { href: "/admin/game-seed", label: "Game: seed squads" },
+  { href: "/admin/game-league", label: "Game: leagues" },
 ];
 
 export default function AdminNav() {

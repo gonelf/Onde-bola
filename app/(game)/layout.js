@@ -26,6 +26,12 @@ export default async function GameLayout({ children }) {
     <div className="game-shell">
       <header className="game-header">
         <span className="brand">⚽ Manager <small>beta</small></span>
+        <nav className="game-nav">
+          <a href="/play">Dashboard</a>
+          <a href="/play/league">League</a>
+          <a href="/play/fixtures">Fixtures</a>
+          <a href="/play/friendly">Friendly</a>
+        </nav>
         <a className="game-btn secondary" href="/">← Site</a>
       </header>
       <main className="game-main">{children}</main>

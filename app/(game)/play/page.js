@@ -58,6 +58,13 @@ export default async function PlayPage() {
       </div>
 
       <div className="game-card">
+        <h2>League</h2>
+        <p className="game-sub">Follow the table and fixtures of the active season.</p>
+        <a className="game-btn secondary" href="/play/league">Table</a>
+        <a className="game-btn secondary" href="/play/fixtures">Fixtures</a>
+      </div>
+
+      <div className="game-card">
         <h2>Your club</h2>
         <p className="game-sub">No club yet — club selection opens soon.</p>
       </div>

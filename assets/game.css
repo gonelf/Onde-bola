@@ -37,6 +37,97 @@
   margin-left: 6px;
 }
 
+.game-nav {
+  display: flex;
+  gap: 14px;
+  flex: 1;
+  margin: 0 16px;
+  flex-wrap: wrap;
+}
+
+.game-nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.game-nav a:hover {
+  color: var(--text);
+}
+
+.game-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.game-table th,
+.game-table td {
+  padding: 7px 8px;
+  text-align: right;
+  border-bottom: 1px solid var(--line);
+}
+
+.game-table th:nth-child(2),
+.game-table td:nth-child(2) {
+  text-align: left;
+  width: 100%;
+}
+
+.game-table thead th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.game-round {
+  font-weight: 700;
+  color: var(--muted);
+  margin: 16px 0 6px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.game-fixture {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.game-fixture .fx-home {
+  flex: 1;
+  text-align: right;
+}
+
+.game-fixture .fx-away {
+  flex: 1;
+  text-align: left;
+}
+
+.game-fixture .fx-score {
+  min-width: 56px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.game-fixture a.fx-score {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.game-fixture .fx-sched {
+  min-width: 56px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .game-main {
   max-width: 720px;
   margin: 0 auto;

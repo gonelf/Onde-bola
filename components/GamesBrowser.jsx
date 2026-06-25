@@ -17,6 +17,7 @@ import { normName } from "@/lib/format";
 import { prepEvents, maxMinute, addShotEvents, DEFAULT_CONFIG } from "@/public/admin/replay-sim";
 import MatchPitch from "@/components/MatchPitch";
 import useReplayClock from "@/components/useReplayClock";
+import { useEventSound } from "@/components/replaySounds";
 
 const STORAGE_HIDDEN = "ondebola.hiddenLeagues";
 const STORAGE_REMEMBER = "ondebola.rememberFilters";
@@ -307,6 +308,13 @@ function MatchReplay({ fx, d, t }) {
   const { clock, playing, celebrating, toggle, restart, scrub } = useReplayClock(events, maxMin, durationMs, sceneScale);
   const onScrub = (e) => scrub(Number(e.target.value));
 
+  // Event sound effects (off by default; the toggle/▶ are user gestures that
+  // unlock audio). Plays a goal roar / whistle / chime as each scene starts.
+  const [soundOn, setSoundOn] = useState(false);
+  const { ensureAudio } = useEventSound(celebrating, soundOn);
+  const onToggle = () => { if (soundOn) ensureAudio(); toggle(); };
+  const onSound = () => { const next = !soundOn; setSoundOn(next); if (next) ensureAudio(); };
+
   const progress = maxMin > 0 ? Math.min(1, clock / maxMin) : 1;
 
   // Running scoreline + revealed events for the scoreboard and chronology feed.
@@ -355,13 +363,17 @@ function MatchReplay({ fx, d, t }) {
       ) : null}
 
       <div className="replay-controls">
-        <button className="replay-btn" type="button" onClick={toggle}
+        <button className="replay-btn" type="button" onClick={onToggle}
           aria-label={playing ? t("mdPause") : t("mdPlay")} title={playing ? t("mdPause") : t("mdPlay")}>
           {playing ? "⏸" : "▶"}
         </button>
         <input className="replay-scrub" type="range" min="0" max={maxMin} step="0.1"
           value={clock} onChange={onScrub} aria-label={t("mdReplay")}
           style={{ background: `linear-gradient(90deg, var(--accent) ${scrubPct}%, var(--line) ${scrubPct}%)` }} />
+        <button className="replay-btn" type="button" onClick={onSound}
+          aria-label={soundOn ? t("mdSoundOff") : t("mdSoundOn")} title={soundOn ? t("mdSoundOff") : t("mdSoundOn")}>
+          {soundOn ? "🔊" : "🔇"}
+        </button>
         <button className="replay-btn" type="button" onClick={restart}
           aria-label={t("mdRestart")} title={t("mdRestart")}>↺</button>
       </div>

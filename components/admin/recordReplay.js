@@ -14,22 +14,33 @@ import {
   buildSim, formationArr, teamBase, simState, placePlayers, passBall,
   markerType, pitchPos, runningScore, sceneMs, DEFAULT_CONFIG,
 } from "@/public/admin/replay-sim";
+import { createReplayAudio } from "@/components/replaySounds";
 
 const W = 960, HEADER = 64, PITCHH = 600, H = HEADER + PITCHH;
 const PX = (x) => (x / 100) * W;
 const PY = (y) => HEADER + (y / 100) * PITCHH;
 
-function pickMime() {
+function pickMime(withAudio) {
   // Prefer MP4 (H.264) so Safari/iOS and recent Chrome export .mp4; fall back to
-  // WebM only where MP4 recording isn't available (older Chrome/Firefox).
-  const cands = [
+  // WebM only where MP4 recording isn't available (older Chrome/Firefox). When
+  // sound is wanted, try codec strings that include an audio track first.
+  const av = [
+    "video/mp4;codecs=avc1.640028,mp4a.40.2", "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+    "video/mp4;codecs=h264,aac",
+    "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus",
+  ];
+  const vonly = [
     "video/mp4;codecs=avc1.640028", "video/mp4;codecs=avc1.42E01E",
     "video/mp4;codecs=h264", "video/mp4",
     "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm",
   ];
+  const cands = withAudio ? av.concat(vonly) : vonly;
   for (const m of cands) { if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(m)) return m; }
   return "";
 }
+
+// Does the chosen mime carry an audio codec (so we should attach an audio track)?
+const mimeHasAudio = (m) => /opus|mp4a|aac/i.test(m || "");
 
 function drawPitch(ctx) {
   const g = ctx.createLinearGradient(0, HEADER, W, H);
@@ -193,8 +204,22 @@ export function recordReplayVideo(opts) {
   }
   const present = () => { if (capCanvas !== canvas) capCtx.drawImage(canvas, 0, 0, OW, OH, 0, 0, outW, outH); };
 
-  const mime = pickMime();
+  const wantSound = opts.sound !== false;
+  const mime = pickMime(wantSound);
   if (!mime || !capCanvas.captureStream) return Promise.reject(new Error("Video recording isn’t supported in this browser"));
+
+  // Event SFX, muxed into the recording via a MediaStreamDestination (only when
+  // the chosen container can carry audio). Best-effort — silent on failure.
+  let audio = null;
+  if (wantSound && mimeHasAudio(mime)) {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      const actx = new AC();
+      const destNode = actx.createMediaStreamDestination();
+      audio = createReplayAudio({ context: actx, destination: destNode, gain: 0.6 });
+      if (audio) { audio.resume(); audio._track = destNode.stream.getAudioTracks()[0]; }
+    } catch (e) { audio = null; }
+  }
 
   const draw = (clock, celeb, sceneP) => {
     ctx.clearRect(0, 0, OW, OH);
@@ -281,6 +306,7 @@ export function recordReplayVideo(opts) {
   // otherwise some browsers record the story at a landscape resolution.
   draw(0, null, 0);
   const stream = capCanvas.captureStream(30);
+  if (audio && audio._track) { try { stream.addTrack(audio._track); } catch (e) { /* noop */ } }
   // Bitrate hint, sized to the output pixels (browsers that honour it benefit;
   // the real size control is the resolution scale above).
   const bitrate = Math.round(outW * outH * 30 * 0.1);
@@ -295,6 +321,7 @@ export function recordReplayVideo(opts) {
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob); a.download = name; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      if (audio && audio.ctx && audio.ctx.close) { try { audio.ctx.close(); } catch (e) { /* noop */ } }
       resolve(name);
     };
     rec.onstop = done;
@@ -331,6 +358,7 @@ export function recordReplayVideo(opts) {
       }
       if (hit) {
         celebrated.add(hit.i); clock = hit.e._m; celeb = hit.e; celebStart = now;
+        if (audio) audio.playAt(hit.e.kind, audio.ctx.currentTime);
         holdUntil = now + sceneMs(hit.e) * sceneScale;
         draw(clock, celeb, 0); requestAnimationFrame(frame); return;
       }

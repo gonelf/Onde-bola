@@ -207,6 +207,7 @@ export default function ReplayLabPage() {
   const [exportTxt, setExportTxt] = useState("");
   const [recHint, setRecHint] = useState("");
   const [recording, setRecording] = useState(false);
+  const [bpp, setBpp] = useState(0.08); // video compression: bits/px/frame (lower = smaller file)
 
   const exportVideo = async () => {
     if (recording) return;
@@ -215,7 +216,7 @@ export default function ReplayLabPage() {
       const name = await recordReplayVideo({
         events, stats, maxMin, seed, cfg,
         gameSpeed: cfg.gameSpeed, sceneScale, baseDurationMs: BASE_DURATION_MS,
-        igStory, camSpeed: cfg.camSpeed, eventFont: cfg.eventFont,
+        igStory, camSpeed: cfg.camSpeed, eventFont: cfg.eventFont, compress: bpp,
         homeName: match.home, awayName: match.away,
         homeForm, awayForm, homeColor, awayColor, goalLabel: "GOAL!",
         display: { showNumbers: disp.showNumbers, showMarkers: disp.showMarkers, showTrail: disp.showTrail, ballShadow: disp.showBallShadow, trailLength: cfg.trailLength },
@@ -377,6 +378,9 @@ export default function ReplayLabPage() {
         <div style={{ maxWidth: 320, marginTop: 8 }}>
           <Slider label="Ball trail length" value={cfg.trailLength} min={2} max={28} step={1} onChange={(v) => set("trailLength", v)} />
           <Slider label="Camera follow speed" value={cfg.camSpeed} min={0.25} max={4} step={0.05} fmt={(v) => v.toFixed(2) + "×"} onChange={(v) => set("camSpeed", v)} />
+          <Slider label="Video compression" value={bpp} min={0.02} max={0.2} step={0.005}
+            fmt={(v) => "~" + Math.round((igStory ? 1080 * 1920 : 960 * 664) * 30 * v / 1e6) + " Mbps"}
+            onChange={setBpp} />
         </div>
         <div className="toolbar">
           <button onClick={doExport}>Export settings</button>

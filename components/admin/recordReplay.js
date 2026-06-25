@@ -179,14 +179,6 @@ export function recordReplayVideo(opts) {
 
   const mime = pickMime();
   if (!mime || !canvas.captureStream) return Promise.reject(new Error("Video recording isn’t supported in this browser"));
-  const stream = canvas.captureStream(30);
-  // Bitrate from pixel area (~0.08 bits/px/frame at 30fps) keeps exports small —
-  // ≈5 Mbps for the 1080×1920 story, ≈1.5 Mbps for landscape — while staying
-  // sharp for these simple vector scenes (and platforms re-encode anyway).
-  const bitrate = Math.round(OW * OH * 30 * 0.08);
-  const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: bitrate });
-  const chunks = [];
-  rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
 
   const draw = (clock, celeb, sceneP) => {
     ctx.clearRect(0, 0, OW, OH);
@@ -266,6 +258,20 @@ export function recordReplayVideo(opts) {
       ctx.restore();
     }
   };
+
+  // Paint one frame at OW×OH BEFORE capturing, so the recorded track locks to the
+  // real canvas size (portrait for IG) rather than an unpainted/default size —
+  // otherwise some browsers record the story at a landscape resolution.
+  draw(0, null, 0);
+  const stream = canvas.captureStream(30);
+  // Bitrate from pixel area (bits/px/frame at 30fps); opts.compress tunes it —
+  // lower = smaller file. Default ≈5 Mbps for the 1080×1920 story. These are
+  // simple flat-colour vector scenes, so they stay sharp at low bitrates.
+  const bpp = opts.compress > 0 ? opts.compress : 0.08;
+  const bitrate = Math.round(OW * OH * 30 * bpp);
+  const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: bitrate });
+  const chunks = [];
+  rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
 
   return new Promise((resolve, reject) => {
     const done = () => {

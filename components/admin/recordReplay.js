@@ -180,7 +180,11 @@ export function recordReplayVideo(opts) {
   const mime = pickMime();
   if (!mime || !canvas.captureStream) return Promise.reject(new Error("Video recording isn’t supported in this browser"));
   const stream = canvas.captureStream(30);
-  const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: ig ? 9000000 : 6000000 });
+  // Bitrate from pixel area (~0.08 bits/px/frame at 30fps) keeps exports small —
+  // ≈5 Mbps for the 1080×1920 story, ≈1.5 Mbps for landscape — while staying
+  // sharp for these simple vector scenes (and platforms re-encode anyway).
+  const bitrate = Math.round(OW * OH * 30 * 0.08);
+  const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: bitrate });
   const chunks = [];
   rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
 

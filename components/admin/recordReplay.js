@@ -117,6 +117,7 @@ export function recordReplayVideo(opts) {
   const sceneScale = opts.sceneScale != null ? opts.sceneScale : 1;
   const d = opts.display || {};
   const trailLength = d.trailLength || 10;
+  const gameSpeed = opts.gameSpeed || 1;
 
   const sampleField = (c) => simState(sim.wp, c);
   const playersNowAt = (c) => ({
@@ -142,7 +143,7 @@ export function recordReplayVideo(opts) {
     // trail
     if (d.showTrail) {
       for (let k = 1; k <= trailLength; k++) {
-        const c = clock - k * 0.7; if (c < 0) break;
+        const c = clock - k * 0.7 * gameSpeed; if (c < 0) break;
         const b = ballAt(c);
         ctx.globalAlpha = (1 - k / trailLength) * 0.4; ctx.fillStyle = "#fff";
         ctx.beginPath(); ctx.arc(PX(b.x), PY(b.y), 9, 0, Math.PI * 2); ctx.fill();

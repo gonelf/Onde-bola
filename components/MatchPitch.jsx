@@ -75,7 +75,7 @@ function Whistle() {
 export default function MatchPitch({
   home, away, events: rawEvents, stats, config, clock, seed, celebrate,
   showNumbers = false, showMarkers = true, showTrail = false, goalLabel = "GOAL!",
-  sceneScale = 1, ballShadow = true, trailLength = 10,
+  sceneScale = 1, ballShadow = true, trailLength = 10, gameSpeed = 1,
 }) {
   const cfg = config || DEFAULT_CONFIG;
   const events = useMemo(() => prepEvents(rawEvents), [rawEvents]);
@@ -129,10 +129,14 @@ export default function MatchPitch({
   };
 
 
+  // Each trail dot samples the ball a fixed REAL-TIME interval ago, so the comet
+  // reflects how fast the ball is actually moving on screen. The sample offset is
+  // in sim-minutes, so scale it by gameSpeed (sim-time advances ∝ gameSpeed): at
+  // slow playback the comet shortens (the ball looks slow), at fast it lengthens.
   const trail = [];
   if (showTrail) {
     for (let k = 1; k <= trailLength; k++) {
-      const c = clock - k * 0.7;
+      const c = clock - k * 0.7 * gameSpeed;
       if (c < 0) break;
       trail.push(ballAt(c));
     }

@@ -324,7 +324,8 @@ function MatchReplay({ fx, d, t }) {
       {events.length ? (
         <MatchPitch home={pitchHome} away={pitchAway} events={events} stats={stats}
           config={cfg} clock={clock} celebrate={celebrating} goalLabel={t("mdGoal")}
-          sceneScale={sceneScale} showTrail trailLength={cfg.trailLength} showNumbers />
+          sceneScale={sceneScale} showTrail trailLength={cfg.trailLength} showNumbers
+          gameSpeed={cfg.gameSpeed} />
       ) : null}
 
       <div className="replay-controls">

@@ -227,6 +227,7 @@ export default function ReplayLabPage() {
           away={{ name: match.away, formation: awayForm, color: awayColor }}
           events={events} stats={stats} config={cfg} clock={clock} seed={seed} celebrate={celebrating}
           sceneScale={sceneScale} ballShadow={disp.showBallShadow} trailLength={cfg.trailLength}
+          gameSpeed={cfg.gameSpeed}
           showNumbers={disp.showNumbers} showMarkers={disp.showMarkers} showTrail={disp.showTrail} />
         <div className="replay-controls">
           <button className="replay-btn" type="button" onClick={toggle}>{playing ? "⏸" : "▶"}</button>

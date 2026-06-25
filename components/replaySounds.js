@@ -111,17 +111,21 @@ export function createReplayAudio(opts) {
     else if (type === "shot") whoosh(t);
   }
 
-  // --- Background music: a looping 4-bar bed (soft pad + bass + light beat +
-  // arp), scheduled ahead off the audio clock so it stays tight during playback
-  // and the real-time video export. Mixed low so the event SFX sit on top.
+  // --- Background music: a looping 4-bar bed that BUILDS with the replay's
+  // progress (0→1) — faster tempo, louder, busier percussion, a higher arp and a
+  // rising tension drone — so it grows more frantic/stressful toward full time.
+  // Scheduled ahead off the audio clock so it stays tight during playback and the
+  // real-time export. Mixed low so the event SFX sit on top.
   const midiFreq = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  const baseGain = o.musicGain != null ? o.musicGain : 0.16;
   let music = null;
+  let musicProgress = 0; // 0..1, driven by setProgress()
   function startMusic() {
     if (music) return;
     if (ctx.state === "suspended" && ctx.resume) ctx.resume();
     const mg = ctx.createGain(); mg.gain.value = 0.0001; mg.connect(master);
-    mg.gain.exponentialRampToValueAtTime(o.musicGain != null ? o.musicGain : 0.16, ctx.currentTime + 0.6);
-    const tempo = 124, spb = 60 / tempo, eighth = spb / 2;
+    mg.gain.exponentialRampToValueAtTime(baseGain, ctx.currentTime + 0.6);
+    const tempo = 122, spb = 60 / tempo, baseEighth = spb / 2;
     const chords = [ // Am – G – C – F, one bar each
       { root: 45, notes: [57, 60, 64] }, { root: 43, notes: [55, 59, 62] },
       { root: 48, notes: [60, 64, 67] }, { root: 41, notes: [57, 60, 65] },
@@ -141,23 +145,45 @@ export function createReplayAudio(opts) {
       g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(1, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
       osc.connect(g); g.connect(mg); osc.start(t); osc.stop(t + 0.2);
     };
-    const hat = (t) => {
+    const hat = (t, peak) => {
       const src = ctx.createBufferSource(); src.buffer = noiseBuffer(ctx, 0.05);
       const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 7000;
       const g = ctx.createGain();
-      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.15, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak || 0.15, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
       src.connect(hp); hp.connect(g); g.connect(mg); src.start(t); src.stop(t + 0.06);
     };
-    const scheduleStep = (s, t) => {
+    const snare = (t) => {
+      const src = ctx.createBufferSource(); src.buffer = noiseBuffer(ctx, 0.18);
+      const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 1800; bp.Q.value = 0.6;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.28, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+      src.connect(bp); bp.connect(g); g.connect(mg); src.start(t); src.stop(t + 0.2);
+    };
+    // ten: eased tension 0..1 (stays calmer early, ramps hard near the end).
+    const scheduleStep = (s, t, e) => {
+      const ten = musicProgress * musicProgress; // ease-in: calmer start, steep finish
+      const spbNow = e * 2;
       const bar = Math.floor(s / 8) % 4, inBar = s % 8;
       const ch = chords[bar];
-      if (inBar % 2 === 0) { kick(t); voice(midiFreq(ch.root), t, eighth * 1.8, "triangle", 0.16); }
-      else hat(t);
-      if (inBar === 0) ch.notes.forEach((n) => voice(midiFreq(n), t, spb * 4 * 0.92, "triangle", 0.05));
-      voice(midiFreq(ch.notes[inBar % ch.notes.length] + 12), t, eighth * 0.9, "sine", 0.05); // arp
+      if (inBar % 2 === 0) { kick(t); voice(midiFreq(ch.root), t, e * 1.8, "triangle", 0.16); }
+      if (inBar % 2 === 1 || ten > 0.4) hat(t, 0.12 + ten * 0.12);   // offbeats, then every eighth
+      if (inBar % 2 === 1 && ten > 0.7) kick(t);                      // driving double-time kick
+      if (inBar === 4 && ten > 0.45) snare(t);                        // backbeat snare
+      if (inBar === 0) ch.notes.forEach((n) => voice(midiFreq(n), t, spbNow * 4 * 0.92, "triangle", 0.05 + ten * 0.03));
+      const arp = ch.notes[inBar % ch.notes.length] + 12 + (ten > 0.5 ? 12 : 0);
+      voice(midiFreq(arp), t, e * 0.9, "sine", 0.05 + ten * 0.06);    // higher + louder with tension
+      if (ten > 0.55 && inBar === 0) {                                // rising tension drone
+        const drone = 71 + Math.round(ten * 10);
+        voice(midiFreq(drone), t, spbNow * 4 * 0.95, "sawtooth", 0.025 + (ten - 0.55) * 0.1);
+      }
     };
     let step = 0, nextTime = ctx.currentTime + 0.08;
-    const tick = () => { while (nextTime < ctx.currentTime + 0.12) { scheduleStep(step, nextTime); step++; nextTime += eighth; } };
+    const tick = () => {
+      const ten = musicProgress * musicProgress;
+      try { mg.gain.setTargetAtTime(baseGain * (0.85 + ten * 1.0), ctx.currentTime, 0.1); } catch (e) { /* noop */ }
+      const e = baseEighth / (1 + ten * 0.4); // up to ~40% faster by the end
+      while (nextTime < ctx.currentTime + 0.12) { scheduleStep(step, nextTime, e); step++; nextTime += e; }
+    };
     tick();
     music = { timer: setInterval(tick, 25), mg };
   }
@@ -179,6 +205,7 @@ export function createReplayAudio(opts) {
     playAt: (kind, when) => playKind(kind, when),
     startMusic,
     stopMusic,
+    setProgress: (p) => { musicProgress = Math.max(0, Math.min(1, p || 0)); },
     resume: () => { if (ctx.resume) return ctx.resume(); },
     setVolume: (v) => { master.gain.value = v; },
     close: () => { stopMusic(); if (!o.context && ctx.close) try { ctx.close(); } catch (e) { /* noop */ } },
@@ -192,6 +219,7 @@ export function createReplayAudio(opts) {
 export function useReplaySound(celebrating, options) {
   const opts = options || {};
   const enabled = !!opts.enabled, music = !!opts.music, playing = !!opts.playing;
+  const progress = opts.progress || 0;
   const engineRef = useRef(null);
   const lastKey = useRef("");
 
@@ -215,6 +243,8 @@ export function useReplaySound(celebrating, options) {
     if (music && playing) eng.startMusic();
     else eng.stopMusic();
   }, [music, playing]);
+
+  useEffect(() => { if (engineRef.current) engineRef.current.setProgress(progress); }, [progress]);
 
   useEffect(() => () => { if (engineRef.current) engineRef.current.close(); }, []);
 

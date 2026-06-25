@@ -312,7 +312,7 @@ function MatchReplay({ fx, d, t }) {
   // that unlock audio). Goal roar / whistle / chime per scene, music bed while
   // playing.
   const [soundOn, setSoundOn] = useState(false);
-  const { ensureAudio } = useReplaySound(celebrating, { enabled: soundOn, music: soundOn, playing });
+  const { ensureAudio } = useReplaySound(celebrating, { enabled: soundOn, music: soundOn, playing, progress: maxMin > 0 ? Math.min(1, clock / maxMin) : 1 });
   const onToggle = () => { if (soundOn) ensureAudio(); toggle(); };
   const onSound = () => { const next = !soundOn; setSoundOn(next); if (next) ensureAudio(); };
 

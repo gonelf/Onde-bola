@@ -368,6 +368,7 @@ export function recordReplayVideo(opts) {
       }
       clock = next;
       draw(clock, null, 0);
+      if (audio) audio.setProgress(clock / maxMin);
       if (opts.onProgress) opts.onProgress(clock / maxMin);
       if (clock >= maxMin) {
         if (!endAt) { endAt = now + 900; if (audio) audio.stopMusic(); } // short tail; fade music out

@@ -116,7 +116,7 @@ export default function ReplayLabPage() {
   // Event SFX + background music for the preview, both also muxed into the export.
   const [soundOn, setSoundOn] = useState(true);
   const [musicOn, setMusicOn] = useState(true);
-  const { ensureAudio } = useReplaySound(celebrating, { enabled: soundOn, music: musicOn, playing });
+  const { ensureAudio } = useReplaySound(celebrating, { enabled: soundOn, music: musicOn, playing, progress: maxMin > 0 ? Math.min(1, clock / maxMin) : 1 });
   const onToggle = () => { if (soundOn || musicOn) ensureAudio(); toggle(); };
 
   const { hs, as } = runningScore(events, clock);

@@ -36,8 +36,8 @@ export default async function LoginPage() {
         </div>
       ) : (
         <p className="game-note">
-          Sign-in isn’t configured yet. Set an OAuth provider’s credentials
-          (e.g. <code>AUTH_GITHUB_ID</code> / <code>AUTH_GITHUB_SECRET</code>) to enable it.
+          Sign-in isn’t configured yet. Set <code>AUTH_GOOGLE_ID</code> /
+          <code>AUTH_GOOGLE_SECRET</code> (and <code>AUTH_SECRET</code>) to enable Google sign-in.
         </p>
       )}
     </div>

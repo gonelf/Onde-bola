@@ -73,7 +73,6 @@ export async function GET() {
     db: { ...dbStat, env: { DATABASE_URL: dbConfigured } },
     auth: {
       secret: !!process.env.AUTH_SECRET,
-      github: !!(process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET),
       google: !!(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET),
     },
   };

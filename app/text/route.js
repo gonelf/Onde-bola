@@ -14,6 +14,7 @@
 
 import { headers } from "next/headers";
 import { buildTextPost } from "@/lib/digest-text";
+import { brandForHost } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,12 @@ export async function GET(req) {
 
   const date = url.searchParams.get("date") || "";
   const n = url.searchParams.get("n") || "";
-  const lang = url.searchParams.get("lang") === "en" ? "en" : "pt";
+  // An explicit ?lang wins; otherwise an English-only domain defaults to English
+  // and everything else keeps the Portuguese default.
+  const langParam = url.searchParams.get("lang");
+  const lang = langParam === "en" || langParam === "pt"
+    ? langParam
+    : (brandForHost(host).lang || "pt");
 
   const { text } = await buildTextPost({ origin, date, n, lang });
 

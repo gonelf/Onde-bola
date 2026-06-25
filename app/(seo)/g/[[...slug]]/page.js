@@ -16,6 +16,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { buildShare, buildLeague } from "@/lib/seo-render";
 import { langForCountryCode } from "@/lib/i18n";
+import { brandForHost, langForBrand } from "@/lib/brand";
 import { forwardAuthHeaders } from "@/lib/forward-auth";
 import AdSlot from "@/components/AdSlot";
 
@@ -27,7 +28,9 @@ async function getContext() {
   const proto = (h.get("x-forwarded-proto") || "https").split(",")[0];
   const host = h.get("x-forwarded-host") || h.get("host") || "hojehabola.com";
   const code = h.get("x-vercel-ip-country") || h.get("x-country") || h.get("cf-ipcountry") || "";
-  return { origin: `${proto}://${host}`, lang: langForCountryCode(code), auth: forwardAuthHeaders(h) };
+  // English-only domains pin English; the default brand follows the visitor.
+  const lang = langForBrand(brandForHost(host), langForCountryCode(code));
+  return { origin: `${proto}://${host}`, lang, auth: forwardAuthHeaders(h) };
 }
 
 async function build(params, searchParams) {
@@ -55,7 +58,7 @@ export async function generateMetadata({ params, searchParams }) {
     alternates: { canonical: built.canonical },
     openGraph: {
       type: built.ogType,
-      siteName: "Hoje Há Bola",
+      siteName: built.siteName,
       title: built.headline,
       description: built.description,
       url: built.canonical,

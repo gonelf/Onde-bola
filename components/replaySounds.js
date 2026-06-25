@@ -188,6 +188,12 @@ export function createReplayAudio(opts) {
     const fn = PRESET[eventSounds[cat]];
     if (fn) fn(when != null ? when : ctx.currentTime);
   }
+  // Audition a preset by id, regardless of the event mapping.
+  function playPreset(id, when) {
+    if (ctx.state === "suspended" && ctx.resume) ctx.resume();
+    const fn = PRESET[id];
+    if (fn) fn(when != null ? when : ctx.currentTime);
+  }
 
   // --- Background music: a looping 4-bar bed that BUILDS with the replay's
   // progress (0→1) — faster tempo, louder, busier percussion, a higher arp and a
@@ -281,6 +287,7 @@ export function createReplayAudio(opts) {
     ctx,
     play: (kind) => { if (ctx.state === "suspended" && ctx.resume) ctx.resume(); playKind(kind); },
     playAt: (kind, when) => playKind(kind, when),
+    playPreset,
     startMusic,
     stopMusic,
     setProgress: (p) => { musicProgress = Math.max(0, Math.min(1, p || 0)); },

@@ -193,6 +193,7 @@ export default function ReplayLabPage() {
       if (j.config.cfg) setCfg((c) => Object.assign({}, c, j.config.cfg));
       if (j.config.display) setDisp((dd) => Object.assign({}, dd, j.config.display));
       if (j.config.eventSounds) setEventSounds((s) => Object.assign({}, s, j.config.eventSounds));
+      if (j.config.audio) { setSoundOn(!!j.config.audio.sound); setMusicOn(!!j.config.audio.music); }
       setSaveHint("loaded saved default" + (j.config.updatedAt ? " · " + new Date(j.config.updatedAt).toLocaleString() : ""));
     }).catch(() => {});
     return () => { on = false; };
@@ -207,6 +208,7 @@ export default function ReplayLabPage() {
           cfg,
           display: { showNumbers: disp.showNumbers, showMarkers: disp.showMarkers, showTrail: disp.showTrail, showBallShadow: disp.showBallShadow },
           eventSounds,
+          audio: { sound: soundOn, music: musicOn },
         }),
       });
       const j = await r.json().catch(() => ({}));
@@ -416,9 +418,13 @@ export default function ReplayLabPage() {
           {SOUND_EVENTS.map((ev) => (
             <div key={ev.key}>
               <label>{ev.label}</label>
-              <select value={eventSounds[ev.key] || "none"} onChange={(e) => setEvSound(ev.key, e.target.value)}>
-                {SFX_PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-              </select>
+              <div style={{ display: "flex", gap: 6 }}>
+                <select style={{ flex: 1 }} value={eventSounds[ev.key] || "none"} onChange={(e) => setEvSound(ev.key, e.target.value)}>
+                  {SFX_PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                </select>
+                <button type="button" className="secondary" title="Play sound" aria-label="Play sound"
+                  onClick={() => { const a = ensureAudio(); if (a) a.playPreset(eventSounds[ev.key] || "none"); }}>▶</button>
+              </div>
             </div>
           ))}
         </div>

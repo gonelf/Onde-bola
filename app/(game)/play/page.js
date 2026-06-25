@@ -52,6 +52,12 @@ export default async function PlayPage() {
       </div>
 
       <div className="game-card">
+        <h2>Friendly match</h2>
+        <p className="game-sub">Pick any two imported clubs and watch a simulated match in the live pitch animation.</p>
+        <a className="game-btn" href="/play/friendly">▶ Play a friendly</a>
+      </div>
+
+      <div className="game-card">
         <h2>Your club</h2>
         <p className="game-sub">No club yet — club selection opens soon.</p>
       </div>

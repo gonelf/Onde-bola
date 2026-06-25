@@ -17,6 +17,7 @@ const PAGES = [
   { href: "/admin/ad-test", label: "Ad script tester" },
   { href: "/admin/flags", label: "Feature flags" },
   { href: "/admin/replay", label: "Match animation" },
+  { href: "/admin/game-seed", label: "Game: seed squads" },
 ];
 
 export default function AdminNav() {

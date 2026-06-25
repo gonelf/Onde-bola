@@ -2,8 +2,14 @@
  * /api/health — read-only diagnostics for the admin page.
  *
  * Reports which TV sources are configured and whether KV is reachable, WITHOUT
- * exposing any secret values (only booleans / non-sensitive config).
+ * exposing any secret values (only booleans / non-sensitive config). Also
+ * reports the manager-game wiring (DB reachable, auth/providers configured,
+ * feature flag on) so the owner can verify setup at a glance.
  */
+
+import { sql } from "drizzle-orm";
+import { db, dbConfigured } from "@/lib/db/client";
+import { isEnabled } from "@/lib/flags";
 
 export const dynamic = "force-dynamic";
 
@@ -43,14 +49,41 @@ function kvEnvPresence() {
   return present;
 }
 
+// Best-effort Postgres reachability check for the game DB. Runs a trivial
+// `SELECT 1`; never throws, never exposes the connection string.
+async function dbPing() {
+  if (!db) return { configured: false, ping: false };
+  try {
+    await db.execute(sql`select 1`);
+    return { configured: true, ping: true };
+  } catch (e) {
+    return { configured: true, ping: false, error: String((e && e.message) || e) };
+  }
+}
+
 export async function GET() {
   const kv = await kvPing();
   kv.env = kvEnvPresence();
+
+  const dbStat = await dbPing();
+  let flagOn = false;
+  try { flagOn = await isEnabled("game"); } catch (e) { flagOn = false; }
+  const game = {
+    flagOn,
+    db: { ...dbStat, env: { DATABASE_URL: dbConfigured } },
+    auth: {
+      secret: !!process.env.AUTH_SECRET,
+      github: !!(process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET),
+      google: !!(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET),
+    },
+  };
+
   return Response.json(
     {
       ok: true,
       time: new Date().toISOString(),
       kv,
+      game,
       thesportsdb: { premiumKey: !!process.env.THESPORTSDB_KEY },
       sofascore: { enabled: process.env.SOFASCORE_DISABLED !== "1" },
       fotmob: {

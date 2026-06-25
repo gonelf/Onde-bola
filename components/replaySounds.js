@@ -15,6 +15,47 @@
 import { useEffect, useRef } from "react";
 import { markerType } from "@/public/admin/replay-sim";
 
+// Selectable sound presets (id → label) for the per-event SFX picker.
+export const SFX_PRESETS = [
+  { id: "none", label: "None" },
+  { id: "roar", label: "Crowd roar" },
+  { id: "horn", label: "Air horn" },
+  { id: "applause", label: "Applause" },
+  { id: "whistleShort", label: "Whistle · short" },
+  { id: "whistleDouble", label: "Whistle · double" },
+  { id: "whistleLong", label: "Whistle · long" },
+  { id: "whistleTriple", label: "Whistle · triple" },
+  { id: "chime", label: "Chime" },
+  { id: "whoosh", label: "Whoosh" },
+];
+
+// The event types the picker exposes (label shown in the UI), and the default
+// sound for each.
+export const SOUND_EVENTS = [
+  { key: "goal", label: "Goal" },
+  { key: "yellow", label: "Yellow card" },
+  { key: "red", label: "Red card" },
+  { key: "sub", label: "Substitution" },
+  { key: "shot", label: "Shot" },
+  { key: "kickoff", label: "Kick-off" },
+  { key: "halftime", label: "Half-time" },
+  { key: "fulltime", label: "Full-time" },
+];
+
+export const DEFAULT_EVENT_SOUNDS = {
+  goal: "roar", yellow: "whistleShort", red: "whistleDouble", sub: "chime",
+  shot: "whoosh", kickoff: "whistleLong", halftime: "whistleDouble", fulltime: "whistleTriple",
+};
+
+// Map an event kind to one of the picker's event-type keys.
+function soundCategory(kind) {
+  if (kind === "kickoff" || kind === "halftime" || kind === "fulltime") return kind;
+  const ty = markerType(kind);
+  if (ty === "goal") return "goal";
+  if (ty === "yellow" || ty === "red" || ty === "sub" || ty === "shot") return ty;
+  return null;
+}
+
 function noiseBuffer(ctx, dur) {
   const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
   const buf = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -64,19 +105,42 @@ export function createReplayAudio(opts) {
     });
   }
 
-  function whistle(t, isRed) {
-    const blow = (start, dur, freq) => {
-      const osc = ctx.createOscillator(); osc.type = "triangle"; osc.frequency.value = freq;
+  function whistleN(t, count, dur) {
+    for (let i = 0; i < count; i++) {
+      const start = t + i * (dur + 0.07);
+      const osc = ctx.createOscillator(); osc.type = "triangle"; osc.frequency.value = 2300;
       const lfo = ctx.createOscillator(); lfo.frequency.value = 18;
-      const lg = ctx.createGain(); lg.gain.value = freq * 0.02;
+      const lg = ctx.createGain(); lg.gain.value = 2300 * 0.02;
       lfo.connect(lg); lg.connect(osc.frequency); lfo.start(start); lfo.stop(start + dur);
       const g = ctx.createGain();
       env(g, start, 0.3, 0.02, dur - 0.06, 0.04);
       osc.connect(g); g.connect(master); osc.start(start); osc.stop(start + dur);
-    };
-    blow(t, 0.16, 2300);
-    blow(t + 0.22, 0.16, 2300);
-    if (isRed) blow(t + 0.44, 0.3, 2050);
+    }
+  }
+
+  function horn(t) {
+    const dur = 0.9;
+    [233, 311, 466].forEach((f) => {
+      const osc = ctx.createOscillator(); osc.type = "sawtooth"; osc.frequency.value = f;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.2, t + 0.04);
+      g.gain.setValueAtTime(0.2, t + dur - 0.12);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(g); g.connect(master); osc.start(t); osc.stop(t + dur + 0.02);
+    });
+  }
+
+  function applause(t) {
+    const dur = 1.5;
+    const src = ctx.createBufferSource(); src.buffer = noiseBuffer(ctx, dur);
+    const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 2000; bp.Q.value = 0.5;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.32, t + 0.2);
+    g.gain.setValueAtTime(0.32, t + dur - 0.45);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(bp); bp.connect(g); g.connect(master); src.start(t); src.stop(t + dur);
   }
 
   function chime(t) {
@@ -102,13 +166,27 @@ export function createReplayAudio(opts) {
     src.connect(bp); bp.connect(g); g.connect(master); src.start(t); src.stop(t + dur);
   }
 
+  // Preset id → synth. "none" is silence.
+  const PRESET = {
+    none: () => {},
+    roar: (t) => goal(t),
+    horn: (t) => horn(t),
+    applause: (t) => applause(t),
+    whistleShort: (t) => whistleN(t, 1, 0.18),
+    whistleDouble: (t) => whistleN(t, 2, 0.16),
+    whistleLong: (t) => whistleN(t, 1, 0.55),
+    whistleTriple: (t) => whistleN(t, 3, 0.42),
+    chime: (t) => chime(t),
+    whoosh: (t) => whoosh(t),
+  };
+  // Event-type → preset id, overridable via setEventSounds().
+  let eventSounds = Object.assign({}, DEFAULT_EVENT_SOUNDS, o.eventSounds || {});
+
   function playKind(kind, when) {
-    const t = when != null ? when : ctx.currentTime;
-    const type = markerType(kind);
-    if (type === "goal") goal(t);
-    else if (type === "yellow" || type === "red") whistle(t, type === "red");
-    else if (type === "sub") chime(t);
-    else if (type === "shot") whoosh(t);
+    const cat = soundCategory(kind);
+    if (!cat) return;
+    const fn = PRESET[eventSounds[cat]];
+    if (fn) fn(when != null ? when : ctx.currentTime);
   }
 
   // --- Background music: a looping 4-bar bed that BUILDS with the replay's
@@ -206,6 +284,7 @@ export function createReplayAudio(opts) {
     startMusic,
     stopMusic,
     setProgress: (p) => { musicProgress = Math.max(0, Math.min(1, p || 0)); },
+    setEventSounds: (m) => { eventSounds = Object.assign({}, DEFAULT_EVENT_SOUNDS, m || {}); },
     resume: () => { if (ctx.resume) return ctx.resume(); },
     setVolume: (v) => { master.gain.value = v; },
     close: () => { stopMusic(); if (!o.context && ctx.close) try { ctx.close(); } catch (e) { /* noop */ } },
@@ -220,14 +299,17 @@ export function useReplaySound(celebrating, options) {
   const opts = options || {};
   const enabled = !!opts.enabled, music = !!opts.music, playing = !!opts.playing;
   const progress = opts.progress || 0;
+  const eventSounds = opts.eventSounds;
   const engineRef = useRef(null);
   const lastKey = useRef("");
 
   const ensureAudio = () => {
-    if (!engineRef.current) engineRef.current = createReplayAudio();
+    if (!engineRef.current) engineRef.current = createReplayAudio({ eventSounds });
     if (engineRef.current) engineRef.current.resume();
     return engineRef.current;
   };
+
+  useEffect(() => { if (engineRef.current && eventSounds) engineRef.current.setEventSounds(eventSounds); }, [eventSounds]);
 
   useEffect(() => {
     if (!enabled || !celebrating) return;

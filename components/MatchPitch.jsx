@@ -42,8 +42,17 @@ const POP = 1.4, FADE = 4;
 // The on-pitch "scene" for one event, played on real CSS time (the match clock
 // is frozen by the parent meanwhile). Phases are sequenced via animation-delays
 // in assets/replay.css. Mounted keyed by the event so it plays once.
-function EventScene({ ev, goalLabel }) {
+const PHASE_LABEL = { kickoff: "KICK-OFF", halftime: "HALF-TIME", fulltime: "FULL-TIME" };
+
+function EventScene({ ev, goalLabel, phaseLabels }) {
   const type = markerType(ev.kind);
+  if (type === "phase") {
+    return (
+      <div className="ev-overlay">
+        <div className="scene-name phase-name">{(phaseLabels || PHASE_LABEL)[ev.kind] || ""}</div>
+      </div>
+    );
+  }
   if (type === "goal") {
     return (
       <div className="ev-overlay">
@@ -84,7 +93,7 @@ export default function MatchPitch({
   home, away, events: rawEvents, stats, config, clock, seed, celebrate,
   showNumbers = false, showMarkers = true, showTrail = false, goalLabel = "GOAL!",
   sceneScale = 1, ballShadow = true, trailLength = 10, gameSpeed = 1, igStory = false,
-  camSpeed = 1, eventFont = 1,
+  camSpeed = 1, eventFont = 1, phaseLabels,
 }) {
   const cfg = config || DEFAULT_CONFIG;
   const events = useMemo(() => prepEvents(rawEvents), [rawEvents]);
@@ -146,7 +155,7 @@ export default function MatchPitch({
 
   // Markers: goals persist (dimmed to a shadow after their pop); cards/subs only
   // linger briefly, then fade away.
-  const markers = revealed.filter((r) => r.type === "goal" || r.dt <= FADE);
+  const markers = revealed.filter((r) => r.type !== "phase" && (r.type === "goal" || r.dt <= FADE));
   const markerStyle = (r) => {
     const pop = r.dt < POP ? 1 + (1 - r.dt / POP) * 1.3 : 1;
     if (r.type === "goal" && r.dt >= POP) {
@@ -200,7 +209,7 @@ export default function MatchPitch({
     </div>
   );
   const scene = celebrate
-    ? <EventScene key={"sc" + celebrate._m + "-" + celebrate.kind} ev={celebrate} goalLabel={goalLabel} />
+    ? <EventScene key={"sc" + celebrate._m + "-" + celebrate.kind} ev={celebrate} goalLabel={goalLabel} phaseLabels={phaseLabels} />
     : null;
 
   // IG-story: a self-contained 9:16 reel frame — branding + live result on top,

@@ -94,6 +94,13 @@ function drawScene(ctx, ev, p, goalLabel, frame) {
       ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 8;
       ctx.fillText(ev.player || "", cx, cy);
     }
+  } else if (type === "phase") {
+    const label = ev.kind === "kickoff" ? "KICK-OFF" : ev.kind === "halftime" ? "HALF-TIME" : "FULL-TIME";
+    const s = Math.min(1, p / 0.3);
+    ctx.globalAlpha = p > 0.85 ? Math.max(0, 1 - (p - 0.85) / 0.15) : 1;
+    ctx.fillStyle = "#fff"; ctx.font = "900 " + (44 * FS * (0.7 + 0.3 * s)) + "px -apple-system, Segoe UI, Roboto, sans-serif";
+    ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 10;
+    ctx.fillText(label, cx, cy);
   } else if (ev.kind === "sub") {
     const out = p < 0.5;
     ctx.globalAlpha = 1; ctx.font = "900 " + (48 * FS) + "px sans-serif";
@@ -219,7 +226,7 @@ export function recordReplayVideo(opts) {
       const AC = window.AudioContext || window.webkitAudioContext;
       const actx = new AC();
       const destNode = actx.createMediaStreamDestination();
-      audio = createReplayAudio({ context: actx, destination: destNode, gain: 0.6 });
+      audio = createReplayAudio({ context: actx, destination: destNode, gain: 0.6, eventSounds: opts.eventSounds });
       if (audio) { audio.resume(); audio._track = destNode.stream.getAudioTracks()[0]; }
     } catch (e) { audio = null; }
   }
@@ -264,6 +271,7 @@ export function recordReplayVideo(opts) {
       events.forEach((ev, i) => {
         if (ev._m > clock + 1e-9) return;
         const type = markerType(ev.kind), dt = clock - ev._m;
+        if (type === "phase") return; // no pitch marker for match phases
         if (type !== "goal" && dt > 4) return; // non-goals fade
         const pos = pitchPos(ev, i);
         let alpha = type === "goal" ? (dt >= 1.4 ? 0.4 : 1) : Math.max(0, 1 - dt / 4);

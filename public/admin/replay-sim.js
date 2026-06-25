@@ -98,19 +98,34 @@ export function markerType(kind) {
   if (kind === "yellow") return "yellow";
   if (kind === "sub") return "sub";
   if (kind === "shot") return "shot";
+  if (kind === "kickoff" || kind === "halftime" || kind === "fulltime") return "phase";
   return "other";
+}
+
+// Synthetic match-phase events (kick-off, half-time, full-time) so the replay can
+// announce them with a scene + whistle, like any other event. Half-time only for
+// matches that actually reach it. _m of kick-off is just above 0 so it fires on
+// the first frame (the clock starts at 0).
+export function addPhaseEvents(events, maxMin) {
+  const out = (events || []).slice();
+  out.push({ side: "home", kind: "kickoff", min: "0'", _m: 0.02, phase: true });
+  if (maxMin >= 47) out.push({ side: "home", kind: "halftime", min: "45'", _m: 45, phase: true });
+  out.push({ side: "home", kind: "fulltime", min: maxMin + "'", _m: maxMin, phase: true });
+  out.sort((a, b) => a._m - b._m);
+  return out;
 }
 
 export const MARKER_GLYPH = { goal: "⚽", sub: "↔", red: "", yellow: "", shot: "", other: "" };
 
 // How long (real ms) to hold the match clock while an event's on-pitch scene
 // plays. Must match the CSS scene durations in assets/replay.css.
-export const SCENE_MS = { goal: 2000, card: 2600, sub: 2000 };
+export const SCENE_MS = { goal: 2000, card: 2600, sub: 2000, phase: 1900 };
 export function sceneMs(ev) {
   const k = markerType(ev && ev.kind);
   if (k === "goal") return SCENE_MS.goal;
   if (k === "sub") return SCENE_MS.sub;
   if (k === "yellow" || k === "red") return SCENE_MS.card;
+  if (k === "phase") return SCENE_MS.phase;
   return 0; // no scene → no hold
 }
 
@@ -122,6 +137,7 @@ export function pitchPos(ev, idx) {
   const home = ev.side !== "away";
   const j = ((idx * 41) % 30) - 15; // -15..14, stable per index
   const kind = ev.kind;
+  if (kind === "kickoff" || kind === "halftime" || kind === "fulltime") return { x: 50, y: 50 };
   if (kind === "goal" || kind === "pengoal") return { x: home ? 94 : 6, y: 50 + j * 0.4 };
   if (kind === "owngoal") return { x: home ? 6 : 94, y: 50 + j * 0.4 }; // own net
   if (kind === "shot") return { x: home ? 90 : 10, y: 50 + j * 0.9 }; // toward opp goal, spread

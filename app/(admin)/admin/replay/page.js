@@ -10,9 +10,9 @@
 import { useEffect, useMemo, useState } from "react";
 import MatchPitch from "@/components/MatchPitch";
 import useReplayClock from "@/components/useReplayClock";
-import { useReplaySound } from "@/components/replaySounds";
+import { useReplaySound, SFX_PRESETS, SOUND_EVENTS, DEFAULT_EVENT_SOUNDS } from "@/components/replaySounds";
 import { recordReplayVideo } from "@/components/admin/recordReplay";
-import { prepEvents, maxMinute, runningScore, addShotEvents, num, DEFAULT_CONFIG } from "@/public/admin/replay-sim";
+import { prepEvents, maxMinute, runningScore, addShotEvents, addPhaseEvents, num, DEFAULT_CONFIG } from "@/public/admin/replay-sim";
 
 const SCENARIOS = {
   thriller: {
@@ -100,9 +100,9 @@ export default function ReplayLabPage() {
   }, [real, possHome, shots]);
   const events = useMemo(() => {
     const base = prepEvents(match.events);
-    if (!disp.showShots) return base;
     const mm = maxMinute(base);
-    return addShotEvents(base, stats, mm, base.length * 131 + Math.round(mm) * 7);
+    const withShots = disp.showShots ? addShotEvents(base, stats, mm, base.length * 131 + Math.round(mm) * 7) : base;
+    return addPhaseEvents(withShots, mm);
   }, [match, stats, disp.showShots]);
   const maxMin = useMemo(() => maxMinute(events), [events]);
 
@@ -116,7 +116,9 @@ export default function ReplayLabPage() {
   // Event SFX + background music for the preview, both also muxed into the export.
   const [soundOn, setSoundOn] = useState(true);
   const [musicOn, setMusicOn] = useState(true);
-  const { ensureAudio } = useReplaySound(celebrating, { enabled: soundOn, music: musicOn, playing, progress: maxMin > 0 ? Math.min(1, clock / maxMin) : 1 });
+  const [eventSounds, setEventSounds] = useState(DEFAULT_EVENT_SOUNDS);
+  const setEvSound = (k, v) => setEventSounds((s) => Object.assign({}, s, { [k]: v }));
+  const { ensureAudio } = useReplaySound(celebrating, { enabled: soundOn, music: musicOn, playing, progress: maxMin > 0 ? Math.min(1, clock / maxMin) : 1, eventSounds });
   const onToggle = () => { if (soundOn || musicOn) ensureAudio(); toggle(); };
 
   const { hs, as } = runningScore(events, clock);
@@ -190,6 +192,7 @@ export default function ReplayLabPage() {
       if (!on || !j || !j.config) return;
       if (j.config.cfg) setCfg((c) => Object.assign({}, c, j.config.cfg));
       if (j.config.display) setDisp((dd) => Object.assign({}, dd, j.config.display));
+      if (j.config.eventSounds) setEventSounds((s) => Object.assign({}, s, j.config.eventSounds));
       setSaveHint("loaded saved default" + (j.config.updatedAt ? " · " + new Date(j.config.updatedAt).toLocaleString() : ""));
     }).catch(() => {});
     return () => { on = false; };
@@ -203,6 +206,7 @@ export default function ReplayLabPage() {
         body: JSON.stringify({
           cfg,
           display: { showNumbers: disp.showNumbers, showMarkers: disp.showMarkers, showTrail: disp.showTrail, showBallShadow: disp.showBallShadow },
+          eventSounds,
         }),
       });
       const j = await r.json().catch(() => ({}));
@@ -223,7 +227,7 @@ export default function ReplayLabPage() {
       const name = await recordReplayVideo({
         events, stats, maxMin, seed, cfg,
         gameSpeed: cfg.gameSpeed, sceneScale, baseDurationMs: BASE_DURATION_MS,
-        igStory, camSpeed: cfg.camSpeed, eventFont: cfg.eventFont, scale: vidScale, sound: soundOn, music: musicOn,
+        igStory, camSpeed: cfg.camSpeed, eventFont: cfg.eventFont, scale: vidScale, sound: soundOn, music: musicOn, eventSounds,
         homeName: match.home, awayName: match.away,
         homeForm, awayForm, homeColor, awayColor, goalLabel: "GOAL!",
         display: { showNumbers: disp.showNumbers, showMarkers: disp.showMarkers, showTrail: disp.showTrail, ballShadow: disp.showBallShadow, trailLength: cfg.trailLength },
@@ -402,6 +406,21 @@ export default function ReplayLabPage() {
         <div className="toolbar" style={{ marginTop: 10, borderTop: "1px solid var(--line, #243349)", paddingTop: 10 }}>
           <button onClick={saveDefault}>💾 Save as app default</button>
           <span className="pill">{saveHint || "applies these settings across the whole app"}</span>
+        </div>
+      </div>
+
+      <div className="card">
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>🔈 Event sounds</div>
+        <div className="sub" style={{ marginBottom: 8 }}>Choose which sound plays for each event (preview + exported video). Pick “None” to silence one.</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px" }}>
+          {SOUND_EVENTS.map((ev) => (
+            <div key={ev.key}>
+              <label>{ev.label}</label>
+              <select value={eventSounds[ev.key] || "none"} onChange={(e) => setEvSound(ev.key, e.target.value)}>
+                {SFX_PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+              </select>
+            </div>
+          ))}
         </div>
       </div>
     </>

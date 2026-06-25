@@ -14,7 +14,7 @@ import {
   ensureEventTv, ensureDetails, loadHighlights, loadedTv, detailsCache,
 } from "@/lib/app-data";
 import { normName } from "@/lib/format";
-import { prepEvents, maxMinute, addShotEvents, DEFAULT_CONFIG } from "@/public/admin/replay-sim";
+import { prepEvents, maxMinute, addShotEvents, addPhaseEvents, DEFAULT_CONFIG } from "@/public/admin/replay-sim";
 import MatchPitch from "@/components/MatchPitch";
 import useReplayClock from "@/components/useReplayClock";
 import { useReplaySound } from "@/components/replaySounds";
@@ -278,7 +278,8 @@ function MatchReplay({ fx, d, t }) {
   const events = useMemo(() => {
     const base = prepEvents(d.events);
     const mm = maxMinute(base);
-    return addShotEvents(base, d.stats || [], mm, base.length * 131 + Math.round(mm) * 7);
+    const withShots = addShotEvents(base, d.stats || [], mm, base.length * 131 + Math.round(mm) * 7);
+    return addPhaseEvents(withShots, mm);
   }, [d]);
   const maxMin = useMemo(() => maxMinute(events), [events]);
 
@@ -312,7 +313,7 @@ function MatchReplay({ fx, d, t }) {
   // that unlock audio). Goal roar / whistle / chime per scene, music bed while
   // playing.
   const [soundOn, setSoundOn] = useState(false);
-  const { ensureAudio } = useReplaySound(celebrating, { enabled: soundOn, music: soundOn, playing, progress: maxMin > 0 ? Math.min(1, clock / maxMin) : 1 });
+  const { ensureAudio } = useReplaySound(celebrating, { enabled: soundOn, music: soundOn, playing, progress: maxMin > 0 ? Math.min(1, clock / maxMin) : 1, eventSounds: saved && saved.eventSounds });
   const onToggle = () => { if (soundOn) ensureAudio(); toggle(); };
   const onSound = () => { const next = !soundOn; setSoundOn(next); if (next) ensureAudio(); };
 
@@ -322,7 +323,8 @@ function MatchReplay({ fx, d, t }) {
   let hs = 0, as = 0;
   const shown = [];
   events.forEach((ev, i) => {
-    if (ev._m > clock + 1e-9 || ev.kind === "shot") return; // shots are pitch-only
+    // shots and match phases are pitch/scene-only, not chronology rows
+    if (ev._m > clock + 1e-9 || ev.kind === "shot" || ev.phase) return;
     let scoreStr = "";
     if (ev.kind === "goal" || ev.kind === "pengoal" || ev.kind === "owngoal") {
       const scoresHome = ev.kind === "owngoal" ? (ev.side === "away") : (ev.side === "home");
@@ -359,6 +361,7 @@ function MatchReplay({ fx, d, t }) {
         <MatchPitch home={pitchHome} away={pitchAway} events={events} stats={stats}
           config={cfg} clock={clock} celebrate={celebrating} goalLabel={t("mdGoal")}
           sceneScale={sceneScale} trailLength={cfg.trailLength} gameSpeed={cfg.gameSpeed} eventFont={cfg.eventFont}
+          phaseLabels={{ kickoff: t("mdKickoff"), halftime: t("mdHalftime"), fulltime: t("mdFulltime") }}
           showTrail={disp.showTrail} showNumbers={disp.showNumbers}
           showMarkers={disp.showMarkers} ballShadow={disp.showBallShadow} />
       ) : null}

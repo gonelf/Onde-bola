@@ -192,6 +192,9 @@
 }
 .gs-name { animation: scene-stay calc(0.7s * var(--scene-scale, 1)) ease calc(1.15s * var(--scene-scale, 1)) both; }
 
+/* Match phase (kick-off / half-time / full-time): a centred label that pops in. */
+.phase-name { letter-spacing: 2px; text-transform: uppercase; animation: scene-stay calc(1.4s * var(--scene-scale, 1)) ease both; }
+
 /* Card: whistle → hand raising the card → player name. */
 .card-whistle { animation: scene-flash calc(0.85s * var(--scene-scale, 1)) ease both; }
 .card-hand { animation: scene-flash calc(1s * var(--scene-scale, 1)) ease calc(0.8s * var(--scene-scale, 1)) both; }

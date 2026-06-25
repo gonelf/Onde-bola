@@ -15,7 +15,27 @@ import {
   markerType, pitchPos, runningScore, sceneMs, DEFAULT_CONFIG,
 } from "@/public/admin/replay-sim";
 import { createReplayAudio } from "@/components/replaySounds";
-import { drawSoccerBall } from "@/lib/soccer-ball";
+import { SOCCER_BALL_SRC } from "@/components/SoccerBall";
+
+// Preload the shared soccer-ball SVG (public/soccerball.svg) as an Image, via a
+// data URI so the canvas never gets tainted (which would break MediaRecorder).
+function loadBallImage() {
+  return new Promise((resolve) => {
+    fetch(SOCCER_BALL_SRC)
+      .then((r) => (r.ok ? r.text() : Promise.reject()))
+      .then((txt) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(txt);
+      })
+      .catch(() => resolve(null));
+  });
+}
+function drawBall(ctx, img, cx, cy, r) {
+  if (img) ctx.drawImage(img, cx - r, cy - r, r * 2, r * 2);
+  else { ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill(); }
+}
 
 const W = 960, HEADER = 64, PITCHH = 600, H = HEADER + PITCHH;
 const PX = (x) => (x / 100) * W;
@@ -135,7 +155,7 @@ function drawScene(ctx, ev, p, goalLabel, frame) {
 // Branding + live-result band for the IG-story (portrait) layout: the "Hoje Há
 // Bola" logo on top, then the scoreline with team names tinted by kit colour,
 // then the clock — so a shared reel is instantly identifiable.
-function drawHeaderIG(ctx, w, h, homeName, awayName, hs, as, clockLabel, homeColor, awayColor) {
+function drawHeaderIG(ctx, w, h, homeName, awayName, hs, as, clockLabel, homeColor, awayColor, ballImg) {
   ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, w, h);
   const cx = w / 2;
   ctx.textBaseline = "middle";
@@ -145,7 +165,7 @@ function drawHeaderIG(ctx, w, h, homeName, awayName, hs, as, clockLabel, homeCol
   const w1 = ctx.measureText(t1).width, w2 = ctx.measureText(t2).width;
   const ballD = 36, gap = 10, total = ballD + gap + w1 + w2;
   let bx = cx - total / 2;
-  drawSoccerBall(ctx, bx + ballD / 2, 52, ballD / 2); bx += ballD + gap;
+  drawBall(ctx, ballImg, bx + ballD / 2, 52, ballD / 2); bx += ballD + gap;
   ctx.textAlign = "left";
   ctx.fillStyle = "#e6edf6"; ctx.fillText(t1, bx, 52);
   ctx.fillStyle = "#38bdf8"; ctx.fillText(t2, bx + w1, 52);
@@ -241,6 +261,8 @@ export function recordReplayVideo(opts) {
     } catch (e) { audio = null; }
   }
 
+  let ballImg = null; // the shared soccer-ball image, preloaded before recording
+  const ballReady = loadBallImage().then((im) => { ballImg = im; });
   const draw = (clock, celeb, sceneP) => {
     ctx.clearRect(0, 0, OW, OH);
     ctx.save();
@@ -289,7 +311,7 @@ export function recordReplayVideo(opts) {
         const r = (type === "shot" ? 15 : 22) * pop;
         ctx.globalAlpha = alpha; ctx.fillStyle = MARK_COLOR[type] || "#cfd8e3";
         ctx.beginPath(); ctx.arc(PX(pos.x), PY(pos.y), r, 0, Math.PI * 2); ctx.fill();
-        if (type === "goal") { ctx.globalAlpha = alpha; drawSoccerBall(ctx, PX(pos.x), PY(pos.y), r * 0.8); }
+        if (type === "goal") { ctx.globalAlpha = alpha; drawBall(ctx, ballImg, PX(pos.x), PY(pos.y), r * 0.8); }
       });
       ctx.globalAlpha = 1;
     }
@@ -301,13 +323,13 @@ export function recordReplayVideo(opts) {
       ctx.beginPath(); ctx.arc(PX(ball.x), PY(ball.y), 16, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
       ctx.restore();
     }
-    drawSoccerBall(ctx, PX(ball.x), PY(ball.y), 16);
+    drawBall(ctx, ballImg, PX(ball.x), PY(ball.y), 16);
     ctx.restore();   // camera transform + pitch clip
     // scoreboard
     const { hs, as } = runningScore(events, clock);
     const mn = Math.floor(clock);
     const label = clock >= maxMin ? "FT" : (mn > 90 ? "90+" + (mn - 90) : mn) + "'";
-    if (ig) drawHeaderIG(ctx, OW, HEADER_IG, opts.homeName || "Home", opts.awayName || "Away", hs, as, label, homeColor, awayColor);
+    if (ig) drawHeaderIG(ctx, OW, HEADER_IG, opts.homeName || "Home", opts.awayName || "Away", hs, as, label, homeColor, awayColor, ballImg);
     else drawHeader(ctx, opts.homeName || "Home", opts.awayName || "Away", hs, as, label);
     // scene (centred on the visible frame; enlarged for the portrait story)
     if (celeb) drawScene(ctx, celeb, sceneP, opts.goalLabel, ig ? { cx: OW / 2, cy: PR.y + PR.h / 2, w: OW, fs: 1.8 * eventFont } : { fs: eventFont });
@@ -372,10 +394,6 @@ export function recordReplayVideo(opts) {
     let clock = 0, holdUntil = 0, celeb = null, celebStart = 0, endAt = 0;
     const celebrated = new Set();
     let last = 0, camTs = 0;
-    acquireWakeLock();
-    try { document.addEventListener("visibilitychange", onVis); } catch (e) { /* noop */ }
-    try { rec.start(1000); } catch (e) { releaseWakeLock(); reject(e); return; } // 1s timeslice → flush chunks, more robust on long clips
-    if (audio && wantMusic) audio.startMusic();
 
     const frame = (now) => {
       // Ease the camera toward the ball every frame (including scene holds), so it
@@ -417,6 +435,14 @@ export function recordReplayVideo(opts) {
       }
       requestAnimationFrame(frame);
     };
-    requestAnimationFrame(frame);
+
+    // Start once the ball image is ready, so every recorded frame has it.
+    ballReady.then(() => {
+      acquireWakeLock();
+      try { document.addEventListener("visibilitychange", onVis); } catch (e) { /* noop */ }
+      try { rec.start(1000); } catch (e) { releaseWakeLock(); reject(e); return; } // 1s timeslice → flush chunks
+      if (audio && wantMusic) audio.startMusic();
+      requestAnimationFrame(frame);
+    });
   });
 }

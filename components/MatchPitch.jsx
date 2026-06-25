@@ -19,11 +19,18 @@
  *   goalLabel   : text for the goal flash (localised by the caller)
  */
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import {
   prepEvents, maxMinute, buildSim, formationArr, teamBase, simState,
   placePlayers, passBall, markerType, pitchPos, MARKER_GLYPH, DEFAULT_CONFIG,
 } from "@/public/admin/replay-sim";
+
+// IG-story (portrait) framing: a virtual camera zooms into the pitch and pans to
+// follow the ball, matching the 9:16 video export. The zoom and the visible width
+// fraction are derived from the portrait pitch viewport (1080×1740): the full
+// pitch height fills the frame, so the camera shows ~1/ZOOM of the width.
+const IG_ZOOM = (1740 / 1080) * (16 / 10);     // ≈ 2.578
+const IG_CAM_HALF = (1 / IG_ZOOM) / 2 * 100;   // ≈ 19.4 — half the visible width (%)
 
 // Marker lifetimes, in simulated minutes: a marker pops in over POP; goals then
 // linger as a dim "shadow"; cards and subs fade out over FADE. The on-pitch
@@ -75,7 +82,7 @@ function Whistle() {
 export default function MatchPitch({
   home, away, events: rawEvents, stats, config, clock, seed, celebrate,
   showNumbers = false, showMarkers = true, showTrail = false, goalLabel = "GOAL!",
-  sceneScale = 1, ballShadow = true, trailLength = 10, gameSpeed = 1,
+  sceneScale = 1, ballShadow = true, trailLength = 10, gameSpeed = 1, igStory = false,
 }) {
   const cfg = config || DEFAULT_CONFIG;
   const events = useMemo(() => prepEvents(rawEvents), [rawEvents]);
@@ -85,6 +92,12 @@ export default function MatchPitch({
     home: teamBase(formationArr(home && home.formation), true),
     away: teamBase(formationArr(away && away.formation), false),
   }), [home, away]);
+
+  // Eased IG-story camera. Updated in-render off the real clock between renders
+  // (the parent re-renders ~60fps while playing), so the camera glides toward the
+  // ball with a ~0.4s time constant — trailing a couple of beats behind the play.
+  const camRef = useRef(50);
+  const camTsRef = useRef(0);
 
   const homeColor = (home && home.color) || "#4a90d9";
   const awayColor = (away && away.color) || "#e8554e";
@@ -105,6 +118,20 @@ export default function MatchPitch({
     home: placePlayers(bases.home, true, sampleField, clock, cfg),
     away: placePlayers(bases.away, false, sampleField, clock, cfg),
   };
+
+  // Advance the eased camera toward the ball (clamped so the frame stays on-pitch).
+  let camX = 50;
+  if (igStory) {
+    const target = Math.max(IG_CAM_HALF, Math.min(100 - IG_CAM_HALF, ball.x));
+    const now = (typeof performance !== "undefined" ? performance.now() : 0);
+    const dt = camTsRef.current ? now - camTsRef.current : 0;
+    camTsRef.current = now;
+    camRef.current += (target - camRef.current) * (1 - Math.exp(-dt / 380));
+    camX = camRef.current;
+  }
+  const worldStyle = igStory
+    ? { transform: `translate(${(50 - IG_ZOOM * camX).toFixed(3)}%, 0) scale(${IG_ZOOM})` }
+    : undefined;
 
   // Revealed events with their age (dt) at this clock.
   const revealed = [];
@@ -150,23 +177,25 @@ export default function MatchPitch({
   );
 
   return (
-    <div className="replay-pitch" style={{ "--scene-scale": sceneScale }}>
-      <div className="pitch-line center" />
-      <div className="pitch-circle" />
-      <div className="pitch-box left" /><div className="pitch-box right" />
-      <div className="pitch-goal left" /><div className="pitch-goal right" />
-      {players.home.map((p, i) => playerDot(p, i, homeColor, "ph"))}
-      {players.away.map((p, i) => playerDot(p, i, awayColor, "pa"))}
-      {showTrail ? trail.map((pt, i) => (
-        <span key={"tr" + i} className="pitch-trail"
-          style={{ left: pt.x + "%", top: pt.y + "%", opacity: (1 - i / trailLength) * 0.4 }} />
-      )) : null}
-      {showMarkers ? markers.map((r) => (
-        <span key={r.i} className={"pitch-marker " + r.type} style={markerStyle(r)}>
-          <span className="marker-glyph">{MARKER_GLYPH[r.type]}</span>
-        </span>
-      )) : null}
-      <span className={"pitch-ball" + (ballShadow ? "" : " no-shadow")} style={{ left: ball.x + "%", top: ball.y + "%" }}>⚽</span>
+    <div className={"replay-pitch" + (igStory ? " ig" : "")} style={{ "--scene-scale": sceneScale }}>
+      <div className="pitch-world" style={worldStyle}>
+        <div className="pitch-line center" />
+        <div className="pitch-circle" />
+        <div className="pitch-box left" /><div className="pitch-box right" />
+        <div className="pitch-goal left" /><div className="pitch-goal right" />
+        {players.home.map((p, i) => playerDot(p, i, homeColor, "ph"))}
+        {players.away.map((p, i) => playerDot(p, i, awayColor, "pa"))}
+        {showTrail ? trail.map((pt, i) => (
+          <span key={"tr" + i} className="pitch-trail"
+            style={{ left: pt.x + "%", top: pt.y + "%", opacity: (1 - i / trailLength) * 0.4 }} />
+        )) : null}
+        {showMarkers ? markers.map((r) => (
+          <span key={r.i} className={"pitch-marker " + r.type} style={markerStyle(r)}>
+            <span className="marker-glyph">{MARKER_GLYPH[r.type]}</span>
+          </span>
+        )) : null}
+        <span className={"pitch-ball" + (ballShadow ? "" : " no-shadow")} style={{ left: ball.x + "%", top: ball.y + "%" }}>⚽</span>
+      </div>
       {celebrate ? <EventScene key={"sc" + celebrate._m + "-" + celebrate.kind} ev={celebrate} goalLabel={goalLabel} /> : null}
     </div>
   );

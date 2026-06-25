@@ -26,7 +26,7 @@ export default function FlagsPage() {
     try {
       const j = await asJson(await fetch("/api/flags", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ flags: flags.map((f) => ({ id: f.id, enabled: f.enabled })) }),
+        body: JSON.stringify({ flags: flags.map((f) => ({ id: f.id, state: f.state })) }),
       }));
       if (j && j.ok) { setFlags(j.flags || []); setHint("saved ✓ (live within a few minutes)"); }
       else setHint((j && j.error) || "error");
@@ -35,24 +35,29 @@ export default function FlagsPage() {
 
   useEffect(() => { load(); }, []);
 
-  const toggle = (id) => setFlags((fl) => fl.map((f) => f.id === id ? Object.assign({}, f, { enabled: !f.enabled }) : f));
+  const setState = (id, state) =>
+    setFlags((fl) => fl.map((f) => f.id === id ? Object.assign({}, f, { state }) : f));
 
   return (
     <>
-      <div className="sub">Toggle app behavior on/off without a deploy.</div>
+      <div className="sub">Promote app behavior up the rollout ladder without a deploy.</div>
       <div className="card">
         <div style={{ fontWeight: 600, marginBottom: 2 }}>🚩 Feature flags</div>
         <div className="sub" style={{ marginBottom: 10 }}>
-          Each flag below is read by the live site; flip it and Save to change behavior within a few
-          minutes. Stored server-side (needs <code>ADMIN_USER</code> / <code>ADMIN_PASSWORD</code> and KV configured).
+          Each flag is read by the live site; pick a state and Save to change behavior within a few
+          minutes. <strong>Off</strong> = nowhere · <strong>Staging</strong> = staging only
+          (<code>hojehabola.cfd</code> &amp; local dev) · <strong>Production</strong> = everywhere.
+          Stored server-side (needs <code>ADMIN_USER</code> / <code>ADMIN_PASSWORD</code> and KV configured).
         </div>
         <div>
           {flags.length ? flags.map((f) => (
             <div className="loader-row" key={f.id}>
               <div className="loader-head">
-                <label className="loader-onlabel">
-                  <input type="checkbox" checked={!!f.enabled} onChange={() => toggle(f.id)} /> on
-                </label>
+                <select value={f.state || "off"} onChange={(e) => setState(f.id, e.target.value)}>
+                  <option value="off">Off</option>
+                  <option value="staging">Staging</option>
+                  <option value="production">Production</option>
+                </select>
                 <strong style={{ marginLeft: 8 }}>{f.label || f.id}</strong>
               </div>
               {f.description ? <div className="sub" style={{ margin: "6px 0 0" }}>{f.description}</div> : null}

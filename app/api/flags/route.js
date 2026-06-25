@@ -4,8 +4,9 @@
  * Gated by HTTP Basic Auth (ADMIN_USER / ADMIN_PASSWORD), both at the edge
  * (middleware.js) and here (defence in depth, fail-closed when creds are unset).
  *
- *   GET   -> { flags:[{id,label,description,default,enabled}], kvConfigured }
- *   POST  { flags:[{id,enabled}] }  -> replace the stored overrides
+ *   GET   -> { flags:[{id,label,description,default,state}], kvConfigured }
+ *   POST  { flags:[{id,state}] }  -> replace the stored overrides
+ *           (state is "off" | "staging" | "production")
  *
  * On save we revalidate the "flags" cache tag so isEnabled() picks up the
  * change promptly.
@@ -14,7 +15,7 @@
 import { revalidateTag } from "next/cache";
 import { isAdmin, adminCredsConfigured } from "@/lib/admin-auth";
 import { kvConfigured } from "@/lib/kv";
-import { loadFlags, saveFlags, isValidFlag, FLAGS_TAG } from "@/lib/flags";
+import { loadFlags, saveFlags, isValidFlag, isValidState, FLAGS_TAG } from "@/lib/flags";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,12 @@ export async function POST(request) {
     const id = String((item && item.id) || "");
     if (!isValidFlag(id)) {
       return Response.json({ error: `unknown flag: ${id}` }, { status: 400, headers: noStore });
+    }
+    if (!isValidState(item && item.state)) {
+      return Response.json(
+        { error: `invalid state for ${id}: ${item && item.state}` },
+        { status: 400, headers: noStore }
+      );
     }
   }
 

@@ -99,13 +99,7 @@ export async function generateMetadata() {
       images: [{ url: OG_IMAGE, alt: ogAlt }],
     },
     icons: {
-      icon: [
-        {
-          url:
-            "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>",
-          type: "image/svg+xml",
-        },
-      ],
+      icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
     },
     other: { "google-adsense-account": "ca-pub-2180847694344203" },
   };

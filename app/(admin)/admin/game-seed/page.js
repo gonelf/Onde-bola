@@ -11,6 +11,7 @@ export default function GameSeedPage() {
   const [leagues, setLeagues] = useState([]);
   const [leagueId, setLeagueId] = useState("");
   const [limit, setLimit] = useState(24);
+  const [source, setSource] = useState("thesportsdb");
   const [hint, setHint] = useState("loading…");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
@@ -29,11 +30,11 @@ export default function GameSeedPage() {
 
   const run = async () => {
     if (!leagueId || busy) return;
-    setBusy(true); setResult(null); setHint("importing… (fetching squads from FotMob, can take ~30s)");
+    setBusy(true); setResult(null); setHint(`importing from ${source}… (can take ~20s)`);
     try {
       const j = await asJson(await fetch("/api/admin/seed-squads", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leagueId: Number(leagueId), limit: Number(limit) }),
+        body: JSON.stringify({ leagueId: Number(leagueId), limit: Number(limit), source }),
       }));
       setResult(j);
       setHint(j && j.ok ? `done ✓ ${j.clubsImported} club(s) imported` : (j && j.error) || "error");
@@ -60,10 +61,21 @@ export default function GameSeedPage() {
             <label>Max clubs</label>
             <input type="number" min="1" max="30" value={limit} onChange={(e) => setLimit(e.target.value)} />
           </div>
+          <div>
+            <label>Source</label>
+            <select value={source} onChange={(e) => setSource(e.target.value)}>
+              <option value="thesportsdb">TheSportsDB (real clubs, recommended)</option>
+              <option value="fotmob">FotMob (real squads, often blocked)</option>
+            </select>
+          </div>
         </div>
         <div className="toolbar">
           <button onClick={run} disabled={busy}>{busy ? "Importing…" : "Import"}</button>
           <span className="pill">{hint}</span>
+        </div>
+        <div className="sub" style={{ marginTop: 6 }}>
+          TheSportsDB gives real club names &amp; badges with generated squads (reliable on Vercel).
+          FotMob gives real player rosters but its endpoints are frequently blocked from server IPs.
         </div>
       </div>
 

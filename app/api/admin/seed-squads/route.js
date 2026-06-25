@@ -21,6 +21,7 @@ import { eq } from "drizzle-orm";
 import {
   ALLOWED_LEAGUES, isAllowedLeague, leagueInfo, fetchLeagueSquads,
 } from "@/lib/game/fotmobSquad";
+import { fetchLeagueSquadsTSDB } from "@/lib/game/sportsdbSquad";
 import { deriveSquad } from "@/lib/game/deriveRatings";
 
 export const dynamic = "force-dynamic";
@@ -53,19 +54,30 @@ export async function POST(request) {
   }
   const info = leagueInfo(leagueId);
   const limit = Math.max(1, Math.min(30, parseInt(body.limit, 10) || 24));
+  // Default to TheSportsDB (reliable club lists); FotMob is opt-in (real squads,
+  // but its endpoints are often blocked from server IPs).
+  const source = body.source === "fotmob" ? "fotmob" : "thesportsdb";
 
-  const { clubs: rawClubs } = await fetchLeagueSquads(leagueId, { limit });
+  const fetched = source === "fotmob"
+    ? await fetchLeagueSquads(leagueId, { limit })
+    : await fetchLeagueSquadsTSDB(leagueId, { limit });
+  const rawClubs = fetched.clubs || [];
   if (!rawClubs.length) {
-    return json({ ok: false, error: "no clubs/squads fetched (FotMob unavailable or off-season)" }, 502);
+    return json({
+      ok: false,
+      error: source === "fotmob"
+        ? "no clubs fetched from FotMob (blocked or off-season) — try source 'thesportsdb'"
+        : "no clubs fetched from TheSportsDB (check league name / THESPORTSDB_KEY)",
+    }, 502);
   }
 
   // One snapshot per import.
   let snapshotId;
   try {
     const snap = await db.insert(snapshots).values({
-      source: "fotmob",
+      source,
       seasonLabel: info.name,
-      notes: `${info.country} · ${info.name} · ${rawClubs.length} clubs`,
+      notes: `${info.country} · ${info.name} · ${rawClubs.length} clubs · via ${source}`,
     }).returning();
     snapshotId = snap[0] && snap[0].id;
   } catch (e) {
@@ -74,11 +86,16 @@ export async function POST(request) {
 
   const summary = [];
   for (const rc of rawClubs) {
-    const derived = deriveSquad(rc, info.strength);
+    // FotMob clubs carry real 0–10 ratings; TheSportsDB clubs have a per-club
+    // strength and null ratings that deriveSquad baselines.
+    const derived = deriveSquad(rc, rc.strength || info.strength);
     if (!derived.length) { summary.push({ club: rc.name, skipped: "no players" }); continue; }
+    const externalId = rc.fotmobTeamId || rc.externalId || null;
     try {
-      // Upsert the club by fotmob team id.
-      const existing = await db.select().from(clubs).where(eq(clubs.fotmobTeamId, rc.fotmobTeamId)).limit(1);
+      // Upsert the club by its external id.
+      const existing = externalId
+        ? await db.select().from(clubs).where(eq(clubs.fotmobTeamId, externalId)).limit(1)
+        : [];
       let clubId;
       if (existing[0]) {
         clubId = existing[0].id;
@@ -88,7 +105,7 @@ export async function POST(request) {
         await db.delete(players).where(eq(players.clubId, clubId));
       } else {
         const ins = await db.insert(clubs).values({
-          fotmobTeamId: rc.fotmobTeamId, name: rc.name, shortName: shortName(rc.name),
+          fotmobTeamId: externalId, name: rc.name, shortName: shortName(rc.name),
           crestUrl: rc.crest, kitColor: rc.kitColor, isAi: true, snapshotId,
         }).returning();
         clubId = ins[0] && ins[0].id;

@@ -61,46 +61,64 @@ function drawHeader(ctx, homeName, awayName, hs, as, clockLabel) {
   ctx.fillText(clockLabel, W / 2, HEADER - 12);
 }
 
-function drawScene(ctx, ev, p, goalLabel) {
-  const cx = W / 2, cy = HEADER + PITCHH / 2;
+function drawScene(ctx, ev, p, goalLabel, frame) {
+  const cx = frame ? frame.cx : W / 2;
+  const cy = frame ? frame.cy : HEADER + PITCHH / 2;
+  const fw = frame ? frame.w : W;
+  const FS = frame && frame.fs ? frame.fs : 1;
   const type = markerType(ev.kind);
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.save();
   if (type === "goal") {
     if (p < 0.62) {
-      const x = (-0.25 + (p / 0.62) * 1.5) * W;
+      const x = (-0.25 + (p / 0.62) * 1.5) * fw;
       ctx.globalAlpha = Math.min(1, 1 - Math.abs(p / 0.62 - 0.5) * 1.6 + 0.4);
-      ctx.fillStyle = "#fff"; ctx.font = "900 64px -apple-system, Segoe UI, Roboto, sans-serif";
+      ctx.fillStyle = "#fff"; ctx.font = "900 " + (64 * FS) + "px -apple-system, Segoe UI, Roboto, sans-serif";
       ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 12;
       ctx.fillText(String(goalLabel || "GOAL!").toUpperCase(), x, cy);
     } else {
       const s = Math.min(1, (p - 0.62) / 0.25);
       ctx.globalAlpha = s; ctx.fillStyle = "#fff";
-      ctx.font = "800 " + (28 * (0.6 + 0.4 * s)) + "px -apple-system, Segoe UI, Roboto, sans-serif";
+      ctx.font = "800 " + (28 * FS * (0.6 + 0.4 * s)) + "px -apple-system, Segoe UI, Roboto, sans-serif";
       ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 8;
       ctx.fillText(ev.player || "", cx, cy);
     }
   } else if (ev.kind === "sub") {
     const out = p < 0.5;
-    ctx.globalAlpha = 1; ctx.font = "900 48px sans-serif";
+    ctx.globalAlpha = 1; ctx.font = "900 " + (48 * FS) + "px sans-serif";
     ctx.fillStyle = out ? "#f87171" : "#f4c430";
-    ctx.fillText(out ? "▼" : "▲", cx, cy - 22);
-    ctx.fillStyle = "#fff"; ctx.font = "800 24px -apple-system, Segoe UI, Roboto, sans-serif";
+    ctx.fillText(out ? "▼" : "▲", cx, cy - 22 * FS);
+    ctx.fillStyle = "#fff"; ctx.font = "800 " + (24 * FS) + "px -apple-system, Segoe UI, Roboto, sans-serif";
     ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 8;
-    ctx.fillText((out ? (ev.note || ev.player) : ev.player) || "", cx, cy + 22);
+    ctx.fillText((out ? (ev.note || ev.player) : ev.player) || "", cx, cy + 22 * FS);
   } else { // card
-    if (p < 0.34) { ctx.font = "60px sans-serif"; ctx.fillText("🔔", cx, cy); }
+    if (p < 0.34) { ctx.font = (60 * FS) + "px sans-serif"; ctx.fillText("🔔", cx, cy); }
     else if (p < 0.67) {
       ctx.fillStyle = type === "red" ? "#f87171" : "#f1c40f";
-      ctx.fillRect(cx - 16, cy - 26, 32, 44);
-      ctx.font = "40px sans-serif"; ctx.fillText("✋", cx, cy - 50);
+      ctx.fillRect(cx - 16 * FS, cy - 26 * FS, 32 * FS, 44 * FS);
+      ctx.font = (40 * FS) + "px sans-serif"; ctx.fillText("✋", cx, cy - 50 * FS);
     } else {
-      ctx.globalAlpha = 1; ctx.fillStyle = "#fff"; ctx.font = "800 26px -apple-system, Segoe UI, Roboto, sans-serif";
+      ctx.globalAlpha = 1; ctx.fillStyle = "#fff"; ctx.font = "800 " + (26 * FS) + "px -apple-system, Segoe UI, Roboto, sans-serif";
       ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 8;
       ctx.fillText(ev.player || "", cx, cy);
     }
   }
   ctx.restore();
+}
+
+// Scoreboard band for the IG-story (portrait) layout: wider/taller than the
+// landscape header, with the team names tinted by their kit colours.
+function drawHeaderIG(ctx, w, h, homeName, awayName, hs, as, clockLabel, homeColor, awayColor) {
+  ctx.fillStyle = "#0b1220"; ctx.fillRect(0, 0, w, h);
+  const cx = w / 2, midY = h / 2 + 10;
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#38bdf8"; ctx.font = "700 30px -apple-system, Segoe UI, Roboto, sans-serif";
+  ctx.textAlign = "center"; ctx.fillText(clockLabel, cx, 42);
+  ctx.fillStyle = "#e6edf6"; ctx.font = "800 64px -apple-system, Segoe UI, Roboto, sans-serif";
+  ctx.fillText(hs + " – " + as, cx, midY);
+  ctx.font = "700 38px -apple-system, Segoe UI, Roboto, sans-serif";
+  ctx.textAlign = "right"; ctx.fillStyle = homeColor || "#e6edf6"; ctx.fillText(homeName, cx - 130, midY);
+  ctx.textAlign = "left"; ctx.fillStyle = awayColor || "#e6edf6"; ctx.fillText(awayName, cx + 130, midY);
 }
 
 const MARK_COLOR = { goal: "#38d39f", yellow: "#f1c40f", red: "#f87171", sub: "#4a90d9", shot: "#ffb347", other: "#cfd8e3" };
@@ -119,6 +137,20 @@ export function recordReplayVideo(opts) {
   const trailLength = d.trailLength || 10;
   const gameSpeed = opts.gameSpeed || 1;
 
+  // IG-story (portrait 9:16) layout + a "broadcast camera" that zooms into the
+  // pitch and pans to follow the ball. The camera centre eases toward the ball
+  // each frame, so it trails a couple of beats behind the action and glides
+  // instead of cutting. Landscape keeps the full pitch with no camera.
+  const ig = !!opts.igStory;
+  const OW = ig ? 1080 : W;
+  const OH = ig ? 1920 : H;
+  const HEADER_IG = 180;
+  const PR = ig ? { x: 0, y: HEADER_IG, w: OW, h: OH - HEADER_IG } : { x: 0, y: HEADER, w: W, h: PITCHH };
+  const camScale = ig ? PR.h / PITCHH : 1;            // world→screen zoom (full pitch height shown)
+  const winXpct = ig ? (PR.w * 100) / (camScale * W) : 100; // pitch width (%) visible in the frame
+  const camHalf = winXpct / 2;
+  let camX = 50;                                      // eased camera centre, pitch %
+
   const sampleField = (c) => simState(sim.wp, c);
   const playersNowAt = (c) => ({
     home: placePlayers(bases.home, true, sampleField, c, cfgNoLag),
@@ -127,18 +159,28 @@ export function recordReplayVideo(opts) {
   const ballAt = (c) => passBall(c, sim.wp, sim.wHome, sim.seed, playersNowAt(c), events, maxMin, cfg);
 
   const canvas = document.createElement("canvas");
-  canvas.width = W; canvas.height = H;
+  canvas.width = OW; canvas.height = OH;
   const ctx = canvas.getContext("2d");
 
   const mime = pickMime();
   if (!mime || !canvas.captureStream) return Promise.reject(new Error("Video recording isn’t supported in this browser"));
   const stream = canvas.captureStream(30);
-  const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6000000 });
+  const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: ig ? 9000000 : 6000000 });
   const chunks = [];
   rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
 
   const draw = (clock, celeb, sceneP) => {
-    ctx.clearRect(0, 0, W, H);
+    ctx.clearRect(0, 0, OW, OH);
+    ctx.save();
+    if (ig) {
+      // Clip to the pitch region, then map world (pitch) coords through the
+      // camera: zoom by camScale and pan so camX sits at the frame centre. All
+      // the pitch drawing below stays in world coords and is scaled crisply.
+      ctx.beginPath(); ctx.rect(PR.x, PR.y, PR.w, PR.h); ctx.clip();
+      ctx.translate(PR.x + PR.w / 2, PR.y + PR.h / 2);
+      ctx.scale(camScale, camScale);
+      ctx.translate(-(camX / 100) * W, -(HEADER + PITCHH / 2));
+    }
     drawPitch(ctx);
     // trail
     if (d.showTrail) {
@@ -184,20 +226,22 @@ export function recordReplayVideo(opts) {
     if (d.ballShadow !== false) { ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 5; ctx.shadowOffsetY = 3; }
     ctx.font = "34px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText("⚽", PX(ball.x), PY(ball.y));
-    ctx.restore();
+    ctx.restore();   // ball shadow
+    ctx.restore();   // camera transform + pitch clip
     // scoreboard
     const { hs, as } = runningScore(events, clock);
     const mn = Math.floor(clock);
     const label = clock >= maxMin ? "FT" : (mn > 90 ? "90+" + (mn - 90) : mn) + "'";
-    drawHeader(ctx, opts.homeName || "Home", opts.awayName || "Away", hs, as, label);
-    // scene
-    if (celeb) drawScene(ctx, celeb, sceneP, opts.goalLabel);
+    if (ig) drawHeaderIG(ctx, OW, HEADER_IG, opts.homeName || "Home", opts.awayName || "Away", hs, as, label, homeColor, awayColor);
+    else drawHeader(ctx, opts.homeName || "Home", opts.awayName || "Away", hs, as, label);
+    // scene (centred on the visible frame; enlarged for the portrait story)
+    if (celeb) drawScene(ctx, celeb, sceneP, opts.goalLabel, ig ? { cx: OW / 2, cy: PR.y + PR.h / 2, w: OW, fs: 1.8 } : null);
   };
 
   return new Promise((resolve, reject) => {
     const done = () => {
       const blob = new Blob(chunks, { type: mime });
-      const name = "match-replay." + (mime.indexOf("mp4") >= 0 ? "mp4" : "webm");
+      const name = (ig ? "match-replay-story." : "match-replay.") + (mime.indexOf("mp4") >= 0 ? "mp4" : "webm");
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob); a.download = name; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
@@ -208,10 +252,18 @@ export function recordReplayVideo(opts) {
 
     let clock = 0, holdUntil = 0, celeb = null, celebStart = 0, endAt = 0;
     const celebrated = new Set();
-    let last = 0;
+    let last = 0, camTs = 0;
     try { rec.start(); } catch (e) { reject(e); return; }
 
     const frame = (now) => {
+      // Ease the camera toward the ball every frame (including scene holds), so it
+      // glides and stays a beat behind the play (~0.4s time constant).
+      if (ig) {
+        const cdt = camTs ? now - camTs : 0; camTs = now;
+        let target = ballAt(clock).x;
+        if (target < camHalf) target = camHalf; else if (target > 100 - camHalf) target = 100 - camHalf;
+        camX += (target - camX) * (1 - Math.exp(-cdt / 380));
+      }
       if (!last) last = now;
       if (now < holdUntil) {
         draw(clock, celeb, (now - celebStart) / Math.max(1, holdUntil - celebStart));

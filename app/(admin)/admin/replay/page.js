@@ -84,6 +84,7 @@ export default function ReplayLabPage() {
   const [possHome, setPossHome] = useState(56);
   const [seed, setSeed] = useState(undefined);
   const [disp, setDisp] = useState({ showNumbers: true, showMarkers: true, showTrail: true, showBallShadow: true, showShots: true });
+  const [igStory, setIgStory] = useState(false);
 
   const match = real || SCENARIOS[scenarioKey];
   const shots = match.shots || [10, 10];
@@ -184,6 +185,7 @@ export default function ReplayLabPage() {
       const name = await recordReplayVideo({
         events, stats, maxMin, seed, cfg,
         gameSpeed: cfg.gameSpeed, sceneScale, baseDurationMs: BASE_DURATION_MS,
+        igStory,
         homeName: match.home, awayName: match.away,
         homeForm, awayForm, homeColor, awayColor, goalLabel: "GOAL!",
         display: { showNumbers: disp.showNumbers, showMarkers: disp.showMarkers, showTrail: disp.showTrail, ballShadow: disp.showBallShadow, trailLength: cfg.trailLength },
@@ -333,13 +335,15 @@ export default function ReplayLabPage() {
             <input type="checkbox" style={{ width: "auto" }} checked={disp.showBallShadow} onChange={(e) => setDisp((d) => ({ ...d, showBallShadow: e.target.checked }))} /> Ball shadow</label>
           <label style={{ display: "flex", alignItems: "center", gap: 6, width: "auto", color: "var(--text)" }}>
             <input type="checkbox" style={{ width: "auto" }} checked={disp.showShots} onChange={(e) => setDisp((d) => ({ ...d, showShots: e.target.checked }))} /> Shots</label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, width: "auto", color: "var(--text)" }}>
+            <input type="checkbox" style={{ width: "auto" }} checked={igStory} onChange={(e) => setIgStory(e.target.checked)} /> 📱 IG Story video (9:16)</label>
         </div>
         <div style={{ maxWidth: 320, marginTop: 8 }}>
           <Slider label="Ball trail length" value={cfg.trailLength} min={2} max={28} step={1} onChange={(v) => set("trailLength", v)} />
         </div>
         <div className="toolbar">
           <button onClick={doExport}>Export settings</button>
-          <button className="secondary" onClick={exportVideo} disabled={recording}>{recording ? "Recording…" : "🎥 Export video"}</button>
+          <button className="secondary" onClick={exportVideo} disabled={recording}>{recording ? "Recording…" : (igStory ? "🎥 Export story (9:16)" : "🎥 Export video")}</button>
           <span className="pill">{recHint || "JSON for DEFAULT_CONFIG"}</span>
         </div>
         {exportTxt ? <pre style={{ marginTop: 10 }}>{exportTxt}</pre> : null}

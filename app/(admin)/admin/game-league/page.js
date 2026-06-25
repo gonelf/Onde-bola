@@ -51,11 +51,36 @@ export default function GameLeaguePage() {
     finally { setBusy(false); }
   };
 
+  const seedDemo = async () => {
+    if (busy) return;
+    setBusy(true); setHint("seeding demo league + simulating a full season…");
+    try {
+      const j = await asJson(await fetch("/api/admin/seed-demo", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clubs: 8 }),
+      }));
+      setHint(j && j.ok ? `demo ready ✓ ${j.clubs} clubs · ${j.fixtures} games simulated — open /fantasygame` : (j && j.error) || "error");
+      await load();
+    } catch (e) { setHint(String(e.message || e)); }
+    finally { setBusy(false); }
+  };
+
   const snaps = data.snapshots.filter((s) => s.clubCount >= 2);
 
   return (
     <>
       <div className="sub">Create a league from imported squads and run the season tick.</div>
+
+      <div className="card">
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>⚡ One-click demo</div>
+        <div className="sub" style={{ marginBottom: 10 }}>
+          Generates a fictional 8-club league and simulates a whole season — no FotMob needed.
+          Use this to populate <code>/fantasygame</code> instantly.
+        </div>
+        <div className="toolbar">
+          <button onClick={seedDemo} disabled={busy}>Seed demo season</button>
+          <span className="pill">{hint}</span>
+        </div>
+      </div>
 
       <div className="card">
         <div style={{ fontWeight: 600, marginBottom: 8 }}>🏆 Create league</div>

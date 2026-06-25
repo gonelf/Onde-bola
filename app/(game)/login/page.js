@@ -1,5 +1,5 @@
 /*
- * /login — manager-game sign-in. If already signed in, bounce to /play.
+ * /login — manager-game sign-in. If already signed in, bounce to /fantasygame.
  * Otherwise render a sign-in button per enabled OAuth provider (GitHub/Google),
  * each wired to the Auth.js `signIn` server action. Providers only appear when
  * their credentials are configured (lib/game/auth.js), so before setup this
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
   const session = await auth();
-  if (session && session.user) redirect("/play");
+  if (session && session.user) redirect("/fantasygame");
 
   return (
     <div className="game-card">
@@ -27,7 +27,7 @@ export default async function LoginPage() {
               key={p.id}
               action={async () => {
                 "use server";
-                await signIn(p.id, { redirectTo: "/play" });
+                await signIn(p.id, { redirectTo: "/fantasygame" });
               }}
             >
               <button className="game-btn" type="submit">Continue with {p.name}</button>

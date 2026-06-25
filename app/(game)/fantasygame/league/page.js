@@ -1,5 +1,5 @@
 /*
- * /play/league — the standings table for an active league. Picks the league
+ * /fantasygame/league — the standings table for an active league. Picks the league
  * from ?league=<id> or the first active one. Auth-gated; flag-gated by layout.
  */
 
@@ -38,7 +38,7 @@ export default async function LeaguePage({ searchParams }) {
       {active.length > 1 ? (
         <p className="game-sub">
           {active.map((l) => (
-            <a key={l.id} href={`/play/league?league=${l.id}`} style={{ marginRight: 12, color: l.id === leagueId ? "var(--text)" : "var(--muted)" }}>{l.name}</a>
+            <a key={l.id} href={`/fantasygame/league?league=${l.id}`} style={{ marginRight: 12, color: l.id === leagueId ? "var(--text)" : "var(--muted)" }}>{l.name}</a>
           ))}
         </p>
       ) : null}
@@ -62,7 +62,7 @@ export default async function LeaguePage({ searchParams }) {
         </tbody>
       </table>
       <p className="game-note">
-        <a href={`/play/fixtures?league=${leagueId}`} className="game-btn secondary">View fixtures →</a>
+        <a href={`/fantasygame/fixtures?league=${leagueId}`} className="game-btn secondary">View fixtures →</a>
       </p>
     </div>
   );

@@ -6,7 +6,7 @@
  * Auth-gated (requireManager) + flag-gated (`game`). POST { homeClubId,
  * awayClubId, seed? }. Loads each club + players, builds an auto-XI, runs the
  * deterministic simulator, and inserts a match_results row (no fixture — a
- * friendly). Returns { resultId } for /play/match/<id>.
+ * friendly). Returns { resultId } for /fantasygame/match/<id>.
  */
 
 import { isEnabled } from "@/lib/flags";

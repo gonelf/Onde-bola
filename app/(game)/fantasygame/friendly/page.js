@@ -1,7 +1,7 @@
 "use client";
 
 /*
- * /play/friendly — pick two imported clubs and simulate a one-off match, then
+ * /fantasygame/friendly — pick two imported clubs and simulate a one-off match, then
  * jump to the replay. The M2 proof slice end to end: choose teams → POST
  * /api/game/friendly → watch the generated match in the shared animation.
  */
@@ -39,7 +39,7 @@ export default function FriendlyPage() {
         body: JSON.stringify({ homeClubId: home, awayClubId: away }),
       });
       const j = await r.json();
-      if (j && j.resultId) router.push("/play/match/" + j.resultId);
+      if (j && j.resultId) router.push("/fantasygame/match/" + j.resultId);
       else { setHint((j && j.error) || "error"); setBusy(false); }
     } catch (e) { setHint(String(e.message || e)); setBusy(false); }
   };

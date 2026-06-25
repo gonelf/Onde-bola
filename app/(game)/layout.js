@@ -1,5 +1,5 @@
 /*
- * (game) layout — the manager-game shell (under /play and /login). Nested under
+ * (game) layout — the manager-game shell (under /fantasygame and /login). Nested under
  * the minimal root layout, so it does NOT render <html>/<body>; it brings the
  * game stylesheet and a slim header.
  *
@@ -27,10 +27,10 @@ export default async function GameLayout({ children }) {
       <header className="game-header">
         <span className="brand">⚽ Manager <small>beta</small></span>
         <nav className="game-nav">
-          <a href="/play">Dashboard</a>
-          <a href="/play/league">League</a>
-          <a href="/play/fixtures">Fixtures</a>
-          <a href="/play/friendly">Friendly</a>
+          <a href="/fantasygame">Dashboard</a>
+          <a href="/fantasygame/league">League</a>
+          <a href="/fantasygame/fixtures">Fixtures</a>
+          <a href="/fantasygame/friendly">Friendly</a>
         </nav>
         <a className="game-btn secondary" href="/">← Site</a>
       </header>

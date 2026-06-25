@@ -1,5 +1,5 @@
 /*
- * /play — the manager dashboard (M1: an empty shell behind accounts). Requires
+ * /fantasygame — the manager dashboard (M1: an empty shell behind accounts). Requires
  * a session; redirects to /login otherwise. Resolves the signed-in user's
  * `managers` row (self-heals if missing) and greets them. The club / squad /
  * league / fixtures panels arrive in later milestones (M2+).
@@ -54,14 +54,14 @@ export default async function PlayPage() {
       <div className="game-card">
         <h2>Friendly match</h2>
         <p className="game-sub">Pick any two imported clubs and watch a simulated match in the live pitch animation.</p>
-        <a className="game-btn" href="/play/friendly">▶ Play a friendly</a>
+        <a className="game-btn" href="/fantasygame/friendly">▶ Play a friendly</a>
       </div>
 
       <div className="game-card">
         <h2>League</h2>
         <p className="game-sub">Follow the table and fixtures of the active season.</p>
-        <a className="game-btn secondary" href="/play/league">Table</a>
-        <a className="game-btn secondary" href="/play/fixtures">Fixtures</a>
+        <a className="game-btn secondary" href="/fantasygame/league">Table</a>
+        <a className="game-btn secondary" href="/fantasygame/fixtures">Fixtures</a>
       </div>
 
       <div className="game-card">

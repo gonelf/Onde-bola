@@ -325,23 +325,44 @@ export function recordReplayVideo(opts) {
   const chunks = [];
   rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
 
+  // Keep the screen awake during the (real-time) recording: if the device sleeps
+  // or the tab is backgrounded, requestAnimationFrame pauses while captureStream
+  // keeps emitting the last frame — which looks like the video "freezing" halfway.
+  let wakeLock = null;
+  const acquireWakeLock = () => {
+    try {
+      if (navigator.wakeLock && navigator.wakeLock.request) {
+        navigator.wakeLock.request("screen").then((wl) => { wakeLock = wl; }).catch(() => {});
+      }
+    } catch (e) { /* noop */ }
+  };
+  const releaseWakeLock = () => { try { if (wakeLock) { wakeLock.release(); wakeLock = null; } } catch (e) { /* noop */ } };
+
+  // Re-acquire the wake lock if it's dropped when returning to the foreground.
+  const onVis = () => { if (document.visibilityState === "visible") acquireWakeLock(); };
+
   return new Promise((resolve, reject) => {
     const done = () => {
+      releaseWakeLock();
+      try { document.removeEventListener("visibilitychange", onVis); } catch (e) { /* noop */ }
       const blob = new Blob(chunks, { type: mime });
       const name = (ig ? "match-replay-story." : "match-replay.") + (mime.indexOf("mp4") >= 0 ? "mp4" : "webm");
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob); a.download = name; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
       if (audio && audio.ctx && audio.ctx.close) { try { audio.ctx.close(); } catch (e) { /* noop */ } }
+      try { stream.getTracks().forEach((tr) => tr.stop()); } catch (e) { /* noop */ }
       resolve(name);
     };
     rec.onstop = done;
-    rec.onerror = (e) => reject(e.error || new Error("recording failed"));
+    rec.onerror = (e) => { releaseWakeLock(); reject(e.error || new Error("recording failed")); };
 
     let clock = 0, holdUntil = 0, celeb = null, celebStart = 0, endAt = 0;
     const celebrated = new Set();
     let last = 0, camTs = 0;
-    try { rec.start(); } catch (e) { reject(e); return; }
+    acquireWakeLock();
+    try { document.addEventListener("visibilitychange", onVis); } catch (e) { /* noop */ }
+    try { rec.start(1000); } catch (e) { releaseWakeLock(); reject(e); return; } // 1s timeslice → flush chunks, more robust on long clips
     if (audio && wantMusic) audio.startMusic();
 
     const frame = (now) => {

@@ -19,13 +19,21 @@ import { markerType } from "@/public/admin/replay-sim";
 export const SFX_PRESETS = [
   { id: "none", label: "None" },
   { id: "roar", label: "Crowd roar" },
+  { id: "cheer", label: "Crowd cheer" },
+  { id: "boo", label: "Crowd boo" },
   { id: "horn", label: "Air horn" },
+  { id: "vuvuzela", label: "Vuvuzela" },
   { id: "applause", label: "Applause" },
   { id: "whistleShort", label: "Whistle · short" },
   { id: "whistleDouble", label: "Whistle · double" },
   { id: "whistleLong", label: "Whistle · long" },
   { id: "whistleTriple", label: "Whistle · triple" },
+  { id: "bell", label: "Bell" },
+  { id: "buzzer", label: "Buzzer" },
   { id: "chime", label: "Chime" },
+  { id: "pop", label: "Pop" },
+  { id: "riser", label: "Riser" },
+  { id: "ballKick", label: "Ball kick" },
   { id: "whoosh", label: "Whoosh" },
 ];
 
@@ -166,17 +174,95 @@ export function createReplayAudio(opts) {
     src.connect(bp); bp.connect(g); g.connect(master); src.start(t); src.stop(t + dur);
   }
 
+  function cheer(t) { // brighter crowd cheer (no brass)
+    const dur = 1.6;
+    const src = ctx.createBufferSource(); src.buffer = noiseBuffer(ctx, dur);
+    const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 0.4;
+    bp.frequency.setValueAtTime(600, t); bp.frequency.exponentialRampToValueAtTime(1600, t + 0.4);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.45, t + 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(bp); bp.connect(g); g.connect(master); src.start(t); src.stop(t + dur);
+  }
+  function boo(t) {
+    const dur = 1.3;
+    const src = ctx.createBufferSource(); src.buffer = noiseBuffer(ctx, dur);
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass";
+    lp.frequency.setValueAtTime(700, t); lp.frequency.exponentialRampToValueAtTime(250, t + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.4, t + 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(lp); lp.connect(g); g.connect(master); src.start(t); src.stop(t + dur);
+  }
+  function vuvuzela(t) {
+    const dur = 1.0;
+    const osc = ctx.createOscillator(); osc.type = "sawtooth"; osc.frequency.value = 233;
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 6; const lg = ctx.createGain(); lg.gain.value = 4;
+    lfo.connect(lg); lg.connect(osc.frequency); lfo.start(t); lfo.stop(t + dur);
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 1200;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.05); g.gain.setValueAtTime(0.25, t + dur - 0.1); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(lp); lp.connect(g); g.connect(master); osc.start(t); osc.stop(t + dur);
+  }
+  function bell(t) {
+    [880, 1760, 2640].forEach((f, i) => {
+      const osc = ctx.createOscillator(); osc.type = "sine"; osc.frequency.value = f;
+      const g = ctx.createGain(); const peak = [0.3, 0.12, 0.06][i];
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+      osc.connect(g); g.connect(master); osc.start(t); osc.stop(t + 1.3);
+    });
+  }
+  function buzzer(t) {
+    const dur = 0.8;
+    const osc = ctx.createOscillator(); osc.type = "square"; osc.frequency.value = 180;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.26, t + 0.01); g.gain.setValueAtTime(0.26, t + dur - 0.05); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(g); g.connect(master); osc.start(t); osc.stop(t + dur);
+  }
+  function pop(t) {
+    const osc = ctx.createOscillator(); osc.type = "sine";
+    osc.frequency.setValueAtTime(440, t); osc.frequency.exponentialRampToValueAtTime(880, t + 0.08);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.3, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    osc.connect(g); g.connect(master); osc.start(t); osc.stop(t + 0.2);
+  }
+  function riser(t) {
+    const dur = 1.2;
+    const src = ctx.createBufferSource(); src.buffer = noiseBuffer(ctx, dur);
+    const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 3;
+    bp.frequency.setValueAtTime(300, t); bp.frequency.exponentialRampToValueAtTime(5000, t + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + dur - 0.1); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(bp); bp.connect(g); g.connect(master); src.start(t); src.stop(t + dur);
+  }
+  function ballKick(t) {
+    const osc = ctx.createOscillator(); osc.type = "sine";
+    osc.frequency.setValueAtTime(220, t); osc.frequency.exponentialRampToValueAtTime(70, t + 0.1);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.6, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+    osc.connect(g); g.connect(master); osc.start(t); osc.stop(t + 0.16);
+    const src = ctx.createBufferSource(); src.buffer = noiseBuffer(ctx, 0.03);
+    const g2 = ctx.createGain(); g2.gain.setValueAtTime(0.3, t); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
+    src.connect(g2); g2.connect(master); src.start(t); src.stop(t + 0.04);
+  }
+
   // Preset id → synth. "none" is silence.
   const PRESET = {
     none: () => {},
     roar: (t) => goal(t),
+    cheer: (t) => cheer(t),
+    boo: (t) => boo(t),
     horn: (t) => horn(t),
+    vuvuzela: (t) => vuvuzela(t),
     applause: (t) => applause(t),
     whistleShort: (t) => whistleN(t, 1, 0.18),
     whistleDouble: (t) => whistleN(t, 2, 0.16),
     whistleLong: (t) => whistleN(t, 1, 0.55),
     whistleTriple: (t) => whistleN(t, 3, 0.42),
+    bell: (t) => bell(t),
+    buzzer: (t) => buzzer(t),
     chime: (t) => chime(t),
+    pop: (t) => pop(t),
+    riser: (t) => riser(t),
+    ballKick: (t) => ballKick(t),
     whoosh: (t) => whoosh(t),
   };
   // Event-type → preset id, overridable via setEventSounds().

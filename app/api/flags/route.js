@@ -6,16 +6,15 @@
  *
  *   GET   -> { flags:[{id,label,description,default,state}], kvConfigured }
  *   POST  { flags:[{id,state}] }  -> replace the stored overrides
- *           (state is "off" | "staging" | "production")
+ *           (state is "off" | "dev" | "staging" | "production")
  *
- * On save we revalidate the "flags" cache tag so isEnabled() picks up the
- * change promptly.
+ * isEnabled() reads flags fresh per request (no time-based cache), so a save is
+ * picked up immediately — no cache-tag revalidation needed here.
  */
 
-import { revalidateTag } from "next/cache";
 import { isAdmin, adminCredsConfigured } from "@/lib/admin-auth";
 import { kvConfigured } from "@/lib/kv";
-import { loadFlags, saveFlags, isValidFlag, isValidState, FLAGS_TAG } from "@/lib/flags";
+import { loadFlags, saveFlags, isValidFlag, isValidState } from "@/lib/flags";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +63,5 @@ export async function POST(request) {
   }
 
   const flags = await saveFlags(body.flags);
-  revalidateTag(FLAGS_TAG);
   return Response.json({ ok: true, flags, kvConfigured }, { headers: noStore });
 }

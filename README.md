@@ -437,8 +437,10 @@ days (and today once all games are finished) are cached permanently, future days
 
 `lib/flags.js` is a small KV-backed store of per-environment switches the owner
 can flip from **`/admin/flags`** without a deploy — no env var, no redeploy.
-A save busts the flag cache tag immediately, so a change is live within ~30s
-(the read is cached with a 30s backstop to avoid hitting KV on every request).
+Flags are read fresh from KV on every request (no time-based cache, unlike
+ads/overrides), so a save is live immediately. Reads are de-duped within a
+single render via React `cache()`, so multiple `isEnabled()` checks on one page
+share one KV read.
 
 Each flag names exactly **where it's on** (four states):
 

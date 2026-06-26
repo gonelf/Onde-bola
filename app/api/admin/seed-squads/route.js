@@ -127,7 +127,10 @@ export async function POST(request) {
   }
 
   const ok = summary.filter((s) => s.players).length;
-  return json({ ok: true, league: info, snapshotId, clubsImported: ok, summary });
+  return json({
+    ok: true, league: info, snapshotId, source, clubsImported: ok,
+    realRosters: fetched.realRosters || 0, summary,
+  });
 }
 
 function shortName(name) {

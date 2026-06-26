@@ -37,7 +37,9 @@ export default function GameSeedPage() {
         body: JSON.stringify({ leagueId: Number(leagueId), limit: Number(limit), source }),
       }));
       setResult(j);
-      setHint(j && j.ok ? `done ✓ ${j.clubsImported} club(s) imported` : (j && j.error) || "error");
+      setHint(j && j.ok
+        ? `done ✓ ${j.clubsImported} club(s) · ${j.realRosters || 0} with real rosters, rest generated`
+        : (j && j.error) || "error");
     } catch (e) { setHint(String(e.message || e)); }
     finally { setBusy(false); }
   };

@@ -146,7 +146,7 @@ lib/format.js                    Shared helpers (dates, slugs, status, share lin
 lib/i18n.js                      EN/PT translation table + language helpers
 lib/broadcasters.js              Free-to-air channel classifier (green vs amber)
 lib/ads-store.js                 Ad unit store (KV-backed): admin-managed snippets + slot assignment, read by <AdSlot> and /api/ads
-lib/flags.js                     Feature flags (KV-backed): on/off switches read via isEnabled(), e.g. <AdSlot>'s "ads" flag — see "Feature flags" below
+lib/flags.js                     Feature flags (KV-backed): off/dev/staging/production per-env switch read via isEnabled(), e.g. <AdSlot>'s "ads" flag — see "Feature flags" below
 lib/ads.js                       Legacy AdSense config — unused; superseded by lib/ads-store.js + /admin/ads
 lib/kv.js                        Vercel KV (Upstash Redis REST) client, shared by the data routes
 lib/cardinfo.js                  Rebuilds a game's share-card data from its match id (FotMob + KV cache)
@@ -435,13 +435,30 @@ days (and today once all games are finished) are cached permanently, future days
 
 ## Feature flags
 
-`lib/flags.js` is a small KV-backed store of on/off switches the owner can flip
-from **`/admin/flags`** without a deploy — no env var, no redeploy, live within
-a few minutes (same cache/refresh window as ads/overrides). Current flags:
+`lib/flags.js` is a small KV-backed store of per-environment switches the owner
+can flip from **`/admin/flags`** without a deploy — no env var, no redeploy.
+Flags are read fresh from KV on every request (no time-based cache, unlike
+ads/overrides), so a save is live immediately. Reads are de-duped within a
+single render via React `cache()`, so multiple `isEnabled()` checks on one page
+share one KV read.
+
+Each flag names exactly **where it's on** (four states):
+
+- **`off`** — on nowhere.
+- **`dev`** — on **only** in local dev.
+- **`staging`** — on **only** on staging.
+- **`production`** — on **all hosts**.
+
+The environment is resolved per-request from the host: `localhost` / `127.0.0.1`
+→ **dev**, `hojehabola.cfd` → **staging**, every other host (`hojehabola.com`,
+`footietoday.com`, `footytoday.co`, …) → **production**. `dev` and `staging` are
+*exact* matches — a `staging` flag is off on localhost and off in production.
+Only `production` is on everywhere. Legacy boolean overrides from the old on/off
+scheme are read as `true → production`, `false → off`. Current flags:
 
 - **`ads`** — site-wide ad slots (`<AdSlot>`: list-top, list-bottom, detail,
   global). A kill switch independent of the ad-unit list in `/admin/ads` —
-  off hides every placement immediately. Defaults **on**.
+  off hides every placement immediately. Defaults **production** (on everywhere).
 - **`homepage-debug-banner`** — a hardcoded test banner in the homepage
   footer that bypasses the ads manager entirely, for checking whether a real
   ad creative renders outside the ad-units pipeline. Defaults **off**.
@@ -449,13 +466,15 @@ a few minutes (same cache/refresh window as ads/overrides). Current flags:
 **Adding a new flag, every time:**
 
 1. Add one entry to `FLAG_DEFS` in `lib/flags.js`: `{ id, label, description,
-   default }`. `/api/flags` and `/admin/flags` read this list, so the new flag
-   shows up there automatically — no other admin-surface changes needed.
+   default }`, where `default` is a state string (`"off"`, `"dev"`, `"staging"`,
+   or `"production"`). `/api/flags` and `/admin/flags` read this list, so the new
+   flag shows up there automatically — no other admin-surface changes needed.
 2. At the point you want to gate, check it:
    ```js
    import { isEnabled } from "@/lib/flags";
    if (!(await isEnabled("your-flag-id"))) return null; // or skip the branch
    ```
-   `isEnabled()` is cached and fails closed to `false` on any error (KV down,
-   misconfigured, etc.), so it's safe to call from a server component without
-   extra error handling.
+   `isEnabled()` resolves the flag's state against the current environment and
+   fails closed to `false` on any error (KV down, misconfigured, etc.). It reads
+   the request host, so calling it opts the surrounding server component into
+   dynamic rendering.

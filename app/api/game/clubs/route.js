@@ -19,7 +19,10 @@ export async function GET() {
 
   try {
     const rows = await db
-      .select({ id: clubs.id, name: clubs.name, crest: clubs.crestUrl, color: clubs.kitColor, formation: clubs.baseFormation })
+      .select({
+        id: clubs.id, name: clubs.name, crest: clubs.crestUrl, color: clubs.kitColor,
+        formation: clubs.baseFormation, isAi: clubs.isAi, ownerManagerId: clubs.ownerManagerId,
+      })
       .from(clubs)
       .orderBy(asc(clubs.name));
     return Response.json({ clubs: rows }, { headers: noStore });

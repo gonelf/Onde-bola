@@ -28,6 +28,8 @@ export default async function GameLayout({ children }) {
         <span className="brand">⚽ Manager <small>beta</small></span>
         <nav className="game-nav">
           <a href="/fantasygame">Dashboard</a>
+          <a href="/fantasygame/squad">Squad</a>
+          <a href="/fantasygame/transfers">Transfers</a>
           <a href="/fantasygame/league">League</a>
           <a href="/fantasygame/fixtures">Fixtures</a>
           <a href="/fantasygame/friendly">Friendly</a>

@@ -10,6 +10,7 @@ import { auth, signOut } from "@/lib/game/auth";
 import { db } from "@/lib/db/client";
 import { managers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import ClubPanel from "@/components/game/ClubPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -38,8 +39,8 @@ export default async function PlayPage() {
       <div className="game-card">
         <h1>Welcome, {name}</h1>
         <p className="game-sub">
-          Your account is set up. Choosing a club, building your squad and joining
-          a league land in the next updates.
+          Claim a club below, build your squad in the transfer market, train your
+          players and climb the league.
         </p>
         <form
           action={async () => {
@@ -64,10 +65,7 @@ export default async function PlayPage() {
         <a className="game-btn secondary" href="/fantasygame/fixtures">Fixtures</a>
       </div>
 
-      <div className="game-card">
-        <h2>Your club</h2>
-        <p className="game-sub">No club yet — club selection opens soon.</p>
-      </div>
+      <ClubPanel />
     </>
   );
 }

@@ -36,12 +36,13 @@ export default async function LeaguePage({ searchParams }) {
     <div className="game-card">
       <h1>{league.name}</h1>
       {active.length > 1 ? (
-        <p className="game-sub">
+        <div className="game-tabs">
           {active.map((l) => (
-            <a key={l.id} href={`/fantasygame/league?league=${l.id}`} style={{ marginRight: 12, color: l.id === leagueId ? "var(--text)" : "var(--muted)" }}>{l.name}</a>
+            <a key={l.id} href={`/fantasygame/league?league=${l.id}`} className={l.id === leagueId ? "active" : undefined}>{l.name}</a>
           ))}
-        </p>
+        </div>
       ) : null}
+      <div className="game-tablewrap">
       <table className="game-table">
         <thead>
           <tr><th>#</th><th>Club</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Pts</th></tr>
@@ -49,8 +50,9 @@ export default async function LeaguePage({ searchParams }) {
         <tbody>
           {table.map((r, i) => {
             const dropping = relegation && i >= table.length - relegation;
+            const promoting = (league.promotionSlots || 0) && i < (league.promotionSlots || 0);
             return (
-              <tr key={r.clubId} style={dropping ? { color: "#e8867e" } : undefined}>
+              <tr key={r.clubId} className={dropping ? "is-relegation" : promoting ? "is-promotion" : undefined}>
                 <td>{i + 1}</td>
                 <td>{r.name}</td>
                 <td>{r.played}</td><td>{r.won}</td><td>{r.drawn}</td><td>{r.lost}</td>
@@ -61,9 +63,10 @@ export default async function LeaguePage({ searchParams }) {
           })}
         </tbody>
       </table>
-      <p className="game-note">
+      </div>
+      <div className="game-actions" style={{ marginTop: 16 }}>
         <a href={`/fantasygame/fixtures?league=${leagueId}`} className="game-btn secondary">View fixtures →</a>
-      </p>
+      </div>
     </div>
   );
 }

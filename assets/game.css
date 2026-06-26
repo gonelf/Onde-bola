@@ -1,72 +1,395 @@
 /*
- * Styles for the manager game route group (app/(game)/*). Scoped to /play and
- * /login by being imported only from the (game) layout, so it never loads on the
- * public app or SEO pages. Reuses the dark palette of the main site.
+ * Styles for the manager game route group (app/(game)/*). Scoped to /fantasygame
+ * and /login by being imported only from the (game) layout, so it never loads on
+ * the public app or SEO pages. Dark, sporty palette built on the site's navy
+ * base with an emerald "pitch" accent.
+ *
+ * Class contract: every class the game pages reference is defined here. Pages
+ * lean on these classes rather than inline styles wherever possible.
  */
 
 .game-shell {
-  --bg: #0f1722;
-  --panel: #182230;
-  --line: #2a3647;
-  --text: #e7edf4;
-  --muted: #93a1b3;
-  --accent: #4a90d9;
+  --bg: #0b1018;
+  --bg-grad: radial-gradient(1100px 520px at 50% -8%, #16263a 0%, rgba(11, 16, 24, 0) 60%);
+  --panel: #141d29;
+  --panel-2: #18222f;
+  --panel-grad: linear-gradient(180deg, #18222f 0%, #131c27 100%);
+  --line: #25313f;
+  --line-soft: #1d2733;
+  --text: #e9eef5;
+  --muted: #8a9bb0;
+  --muted-2: #6f8197;
+  --accent: #20c479;       /* pitch green */
+  --accent-700: #16a366;
+  --accent-glow: rgba(32, 196, 121, 0.35);
+  --info: #4a90d9;
+  --danger: #ec5b52;
+  --danger-soft: #e8867e;
+  --gold: #e7b94e;
+  --pos-gk: #e7b94e;
+  --pos-df: #5aa9f2;
+  --pos-mf: #20c479;
+  --pos-fw: #ec5b52;
+  --radius: 14px;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+
   min-height: 100vh;
-  background: var(--bg);
+  background: var(--bg-grad), var(--bg);
   color: var(--text);
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
+/* ----------------------------------------------------------------- Header */
+
 .game-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  padding: 14px 20px;
+  padding: 10px 16px;
+  background: rgba(11, 16, 24, 0.82);
+  backdrop-filter: saturate(140%) blur(10px);
+  -webkit-backdrop-filter: saturate(140%) blur(10px);
   border-bottom: 1px solid var(--line);
 }
 
 .game-header .brand {
-  font-weight: 700;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 800;
   letter-spacing: 0.2px;
+  font-size: 16px;
+  text-decoration: none;
+  color: var(--text);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.game-header .brand .ball {
+  font-size: 18px;
+  filter: drop-shadow(0 0 6px var(--accent-glow));
+}
+
+.game-header .brand b {
+  background: linear-gradient(180deg, #ffffff, #c9d6e4);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .game-header .brand small {
-  color: var(--muted);
-  font-weight: 500;
-  margin-left: 6px;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  border: 1px solid var(--accent-700);
+  border-radius: 999px;
+  background: rgba(32, 196, 121, 0.1);
+  -webkit-text-fill-color: var(--accent);
 }
 
+/* Nav: horizontal pill row that scrolls on small screens instead of wrapping
+   into an awkward vertical stack. */
 .game-nav {
   display: flex;
-  gap: 14px;
+  align-items: center;
+  gap: 4px;
   flex: 1;
-  margin: 0 16px;
-  flex-wrap: wrap;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 2px;
+  margin: 0 4px;
+  scroll-snap-type: x proximity;
+}
+
+.game-nav::-webkit-scrollbar {
+  display: none;
 }
 
 .game-nav a {
+  position: relative;
   color: var(--muted);
   text-decoration: none;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 9px;
+  white-space: nowrap;
+  scroll-snap-align: start;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .game-nav a:hover {
   color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.game-nav a.active {
+  color: var(--text);
+  background: rgba(32, 196, 121, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(32, 196, 121, 0.35);
+}
+
+.game-header .site-link {
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------------- Main */
+
+.game-main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 18px 72px;
+}
+
+/* ------------------------------------------------------------------ Cards */
+
+.game-card {
+  background: var(--panel-grad);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+}
+
+.game-card h1,
+.game-card h2 {
+  margin: 0 0 8px;
+  line-height: 1.2;
+}
+
+.game-card h1 {
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+
+.game-card h2 {
+  font-size: 17px;
+}
+
+.game-sub {
+  color: var(--muted);
+  margin: 0 0 16px;
+  line-height: 1.55;
+  font-size: 14.5px;
+}
+
+.game-sub b {
+  color: var(--text);
+}
+
+/* A hero/feature card variant with an accent edge. */
+.game-card.feature {
+  border-color: rgba(32, 196, 121, 0.28);
+  background: linear-gradient(180deg, rgba(32, 196, 121, 0.08) 0%, #131c27 55%);
+}
+
+/* Action row to space out buttons. */
+.game-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* ---------------------------------------------------------------- Buttons */
+
+.game-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-700) 100%);
+  color: #05130c;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  line-height: 1;
+  box-shadow: 0 6px 16px -6px var(--accent-glow);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease, opacity 0.12s ease;
+}
+
+.game-btn:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 10px 22px -8px var(--accent-glow);
+  transform: translateY(-1px);
+}
+
+.game-btn:active {
+  transform: translateY(0);
+}
+
+.game-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+  filter: none;
+}
+
+.game-btn.secondary {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  color: var(--text);
+  box-shadow: none;
+}
+
+.game-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: #34465a;
+  filter: none;
+}
+
+.game-btn.danger {
+  background: linear-gradient(180deg, #ef6a61 0%, #d8463d 100%);
+  color: #fff;
+  box-shadow: 0 6px 16px -6px rgba(236, 91, 82, 0.4);
+}
+
+/* Small inline button (used in table action cells). */
+.game-btn.sm {
+  padding: 5px 11px;
+  font-size: 12.5px;
+  border-radius: 8px;
+}
+
+.game-btn + .game-btn {
+  margin-left: 0;
+}
+
+/* ----------------------------------------------------------- Form controls */
+
+.game-field {
+  display: block;
+}
+
+.game-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.game-select,
+.game-input {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 14.5px;
+  font-family: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.game-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238a9bb0' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 34px;
+}
+
+.game-select:focus,
+.game-input:focus {
+  outline: none;
+  border-color: var(--accent-700);
+  box-shadow: 0 0 0 3px rgba(32, 196, 121, 0.18);
+}
+
+/* Pick-two rows (friendly, etc.) */
+.game-versus {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.game-versus .game-field {
+  flex: 1 1 200px;
+}
+
+.game-versus .vs {
+  align-self: center;
+  color: var(--muted);
+  font-weight: 700;
+  padding-bottom: 10px;
+}
+
+/* ------------------------------------------------------------------ Pills */
+
+.game-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.game-pill {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 5px 13px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.game-pill:hover {
+  color: var(--text);
+  border-color: #34465a;
+}
+
+.game-pill.active {
+  color: #05130c;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ----------------------------------------------------------------- Tables */
+
+/* Lets wide tables scroll horizontally on narrow screens instead of pushing
+   action buttons outside the card. */
+.game-tablewrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -6px;
+  padding: 0 6px;
 }
 
 .game-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+  font-variant-numeric: tabular-nums;
 }
 
 .game-table th,
 .game-table td {
-  padding: 7px 8px;
+  padding: 9px 8px;
   text-align: right;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .game-table th:nth-child(2),
@@ -76,117 +399,283 @@
 }
 
 .game-table thead th {
-  color: var(--muted);
-  font-weight: 600;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.game-round {
+  color: var(--muted-2);
   font-weight: 700;
-  color: var(--muted);
-  margin: 16px 0 6px;
-  font-size: 13px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  border-bottom-color: var(--line);
+  position: sticky;
+  top: 0;
+}
+
+.game-table tbody tr {
+  transition: background 0.1s ease;
+}
+
+.game-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.game-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Standings: highlight the manager's row and relegation zone. */
+.game-table tr.is-relegation td {
+  color: var(--danger-soft);
+}
+
+.game-table tr.is-relegation td:first-child {
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
+.game-table tr.is-promotion td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* ------------------------------------------------------------ Mini badges */
+
+.pos-badge {
+  display: inline-block;
+  min-width: 30px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+}
+
+.pos-badge.GK { color: var(--pos-gk); background: rgba(231, 185, 78, 0.13); }
+.pos-badge.DF { color: var(--pos-df); background: rgba(90, 169, 242, 0.13); }
+.pos-badge.MF { color: var(--pos-mf); background: rgba(32, 196, 121, 0.13); }
+.pos-badge.FW { color: var(--pos-fw); background: rgba(236, 91, 82, 0.13); }
+
+.rating-badge {
+  display: inline-block;
+  min-width: 26px;
+  text-align: center;
+  font-weight: 800;
+  font-size: 13px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.rating-badge.elite { color: #06140d; background: var(--accent); }
+.rating-badge.good { color: var(--accent); background: rgba(32, 196, 121, 0.14); }
+.rating-badge.mid { color: var(--gold); background: rgba(231, 185, 78, 0.13); }
+
+/* --------------------------------------------------------------- Money/num */
+
+.game-money {
+  color: var(--accent);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.amt-pos { color: var(--accent); font-weight: 700; }
+.amt-neg { color: var(--danger-soft); font-weight: 700; }
+
+/* --------------------------------------------------------- Stat chip strip */
+
+.game-statline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.game-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  padding: 7px 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.game-chip b {
+  color: var(--text);
+  font-size: 14.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-chip.accent b {
+  color: var(--accent);
+}
+
+/* ---------------------------------------------------------- Round / fixture */
+
+.game-round {
+  font-weight: 800;
+  color: var(--muted-2);
+  margin: 18px 0 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .game-fixture {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--line);
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  transition: background 0.1s ease;
+}
+
+.game-fixture:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.game-fixture + .game-fixture {
+  border-top: 1px solid var(--line-soft);
 }
 
 .game-fixture .fx-home {
   flex: 1;
   text-align: right;
+  font-weight: 600;
 }
 
 .game-fixture .fx-away {
   flex: 1;
   text-align: left;
+  font-weight: 600;
 }
 
 .game-fixture .fx-score {
-  min-width: 56px;
+  min-width: 62px;
   text-align: center;
-  font-weight: 700;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
 }
 
 .game-fixture a.fx-score {
-  color: var(--accent);
+  color: var(--text);
   text-decoration: none;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 4px 0;
+  border: 1px solid transparent;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.game-fixture a.fx-score:hover {
+  border-color: var(--accent-700);
+  background: rgba(32, 196, 121, 0.12);
+  color: var(--accent);
 }
 
 .game-fixture .fx-sched {
-  min-width: 56px;
+  min-width: 62px;
   text-align: center;
-  color: var(--muted);
+  color: var(--muted-2);
   font-size: 12px;
 }
 
-.game-main {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 28px 20px 60px;
+/* --------------------------------------------------------- League switcher */
+
+.game-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
 }
 
-.game-card {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 20px 22px;
-  margin-bottom: 16px;
-}
-
-.game-card h1,
-.game-card h2 {
-  margin: 0 0 8px;
-}
-
-.game-sub {
-  color: var(--muted);
-  margin: 0 0 16px;
-  line-height: 1.5;
-}
-
-.game-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 16px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
+.game-tabs a {
   text-decoration: none;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
 }
 
-.game-btn.secondary {
-  background: transparent;
-  border: 1px solid var(--line);
+.game-tabs a:hover {
   color: var(--text);
 }
 
-.game-btn + .game-btn {
-  margin-left: 10px;
+.game-tabs a.active {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: #34465a;
 }
+
+/* -------------------------------------------------------------- Providers */
 
 .game-providers {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-width: 280px;
+  max-width: 320px;
+}
+
+.game-providers .game-btn {
+  padding: 12px 16px;
+  font-size: 15px;
 }
 
 .game-note {
   color: var(--muted);
   font-size: 13px;
   margin-top: 14px;
+  line-height: 1.55;
+}
+
+.game-note code {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 5px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+/* Inline status hint next to actions. */
+.game-hint {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ----------------------------------------------------------- Empty states */
+
+.game-empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 24px 8px;
+  font-size: 14px;
+}
+
+/* ------------------------------------------------------------- Responsive */
+
+@media (max-width: 560px) {
+  .game-header {
+    flex-wrap: wrap;
+    padding: 10px 12px;
+  }
+  .game-nav {
+    order: 3;
+    width: 100%;
+    flex: 1 1 100%;
+    margin: 2px 0 0;
+  }
+  .game-main {
+    padding: 18px 14px 64px;
+  }
+  .game-card {
+    padding: 18px 16px;
+  }
+  .game-card h1 {
+    font-size: 20px;
+  }
 }

@@ -38,9 +38,9 @@ export default async function FixturesPage({ searchParams }) {
   return (
     <div className="game-card">
       <h1>{league.name} · Fixtures</h1>
-      <p className="game-sub">
-        <a href={`/fantasygame/league?league=${leagueId}`} className="game-btn secondary">← Table</a>
-      </p>
+      <div className="game-actions" style={{ marginBottom: 8 }}>
+        <a href={`/fantasygame/league?league=${leagueId}`} className="game-btn secondary sm">← Table</a>
+      </div>
       {roundNums.map((rn) => (
         <div key={rn}>
           <div className="game-round">Round {rn}</div>

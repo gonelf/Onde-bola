@@ -43,12 +43,11 @@ export default function ChallengePage() {
 
   return (
     <>
-      <div className="game-card">
-        <h1>Challenge a club</h1>
+      <div className="game-card feature">
+        <h1>⚔ Challenge a club</h1>
         <p className="game-sub">Play an instant match against any club. {hint}</p>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <select value={opp} onChange={(e) => setOpp(e.target.value)}
-            style={{ padding: "8px 10px", background: "var(--bg)", color: "var(--text)", border: "1px solid var(--line)", borderRadius: 8, minWidth: 220 }}>
+        <div className="game-actions" style={{ alignItems: "center" }}>
+          <select className="game-select" value={opp} onChange={(e) => setOpp(e.target.value)} style={{ width: "auto", minWidth: 220 }}>
             {data.opponents.map((o) => <option key={o.clubId} value={o.clubId}>{o.name}{o.human ? " (human)" : ""}</option>)}
           </select>
           <button className="game-btn" onClick={play} disabled={busy || !data.opponents.length}>{busy ? "Simulating…" : "⚔ Challenge"}</button>
@@ -58,6 +57,7 @@ export default function ChallengePage() {
       {data.history && data.history.length ? (
         <div className="game-card">
           <h2>Recent challenges</h2>
+          <div className="game-tablewrap">
           <table className="game-table">
             <thead><tr><th>Date</th><th>Result</th><th></th></tr></thead>
             <tbody>
@@ -65,11 +65,12 @@ export default function ChallengePage() {
                 <tr key={h.id}>
                   <td style={{ color: "var(--muted)" }}>{h.createdAt ? new Date(h.createdAt).toISOString().slice(0, 10) : ""}</td>
                   <td>{h.meta && h.meta.home ? h.meta.home.name : "You"} {h.homeScore}–{h.awayScore} {h.meta && h.meta.away ? h.meta.away.name : ""}</td>
-                  <td>{h.resultId ? <a className="game-btn secondary" style={{ padding: "4px 10px" }} href={`/fantasygame/match/${h.resultId}`}>Watch</a> : null}</td>
+                  <td>{h.resultId ? <a className="game-btn secondary sm" href={`/fantasygame/match/${h.resultId}`}>Watch</a> : null}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       ) : null}
     </>

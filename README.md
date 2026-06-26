@@ -456,9 +456,10 @@ The environment is resolved per-request from the host: `localhost` / `127.0.0.1`
 Only `production` is on everywhere. Legacy boolean overrides from the old on/off
 scheme are read as `true → production`, `false → off`. Current flags:
 
-- **`ads`** — site-wide ad slots (`<AdSlot>`: list-top, list-bottom, detail,
-  global). A kill switch independent of the ad-unit list in `/admin/ads` —
-  off hides every placement immediately. Defaults **production** (on everywhere).
+- **`ads`** — ad slots (home-top, home-bottom, fixtures-feed, detail-top,
+  detail-bottom) rendered by `<AdSlot>` and the in-feed/detail injections. A
+  kill switch independent of the ad-unit list in `/admin/ads` — off hides every
+  placement immediately. Defaults **production** (on everywhere).
 - **`homepage-debug-banner`** — a hardcoded test banner in the homepage
   footer that bypasses the ads manager entirely, for checking whether a real
   ad creative renders outside the ad-units pipeline. Defaults **off**.

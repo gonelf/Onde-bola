@@ -105,7 +105,7 @@ const hostOf = (u) => { try { return new URL(u, location.href).host; } catch (e)
 
 export default function AdTestPage() {
   const [snippet, setSnippet] = useState("");
-  const [slot, setSlot] = useState("list-top");
+  const [slot, setSlot] = useState("home-top");
   const [doc, setDoc] = useState(null);
   const [frameHint, setFrameHint] = useState("Paste a snippet above and click Render preview.");
   const [events, setEvents] = useState([]);
@@ -193,10 +193,11 @@ export default function AdTestPage() {
           value={snippet} onChange={(e) => setSnippet(e.target.value)} />
         <div className="toolbar">
           <select style={{ width: "auto" }} value={slot} onChange={(e) => setSlot(e.target.value)}>
-            <option value="list-top">Slot: list-top</option>
-            <option value="list-bottom">Slot: list-bottom</option>
-            <option value="detail">Slot: detail</option>
-            <option value="global">Slot: global (self-placing)</option>
+            <option value="home-top">Slot: home-top</option>
+            <option value="home-bottom">Slot: home-bottom</option>
+            <option value="fixtures-feed">Slot: fixtures-feed</option>
+            <option value="detail-top">Slot: detail-top</option>
+            <option value="detail-bottom">Slot: detail-bottom</option>
           </select>
           <select style={{ width: "auto" }} value="" onChange={(e) => { if (e.target.value && EXAMPLES[e.target.value]) setSnippet(EXAMPLES[e.target.value]); }}>
             <option value="">Load an example…</option>

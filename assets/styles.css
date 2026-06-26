@@ -1147,3 +1147,37 @@ body {
 .ad-slot:empty { display: none; margin: 0; }
 .ad-slot .ad-unit { max-width: 100%; overflow-x: auto; }
 .ad-slot .ad-unit iframe, .ad-slot .ad-unit img { max-width: 100%; }
+
+/* Card-fitted ad: an ad styled to sit inside the card layout — used in-feed
+   (between match cards) and inside the detail view. Matches the match card's
+   surface so the ad reads as part of the list rather than a loose banner. The
+   "Ad" label sits in the corner so it's always disclosed. */
+.ad-slot.ad-card {
+  position: relative;
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 10px 0;
+  padding: 18px 16px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.ad-slot.ad-card .ad-label {
+  position: absolute;
+  top: 6px;
+  left: 12px;
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.ad-slot.ad-card .ad-unit { width: 100%; display: flex; justify-content: center; }
+/* In the detail view the modal already provides the card surface, so the ad
+   sits flush rather than nesting a second card border. */
+.ad-slot.ad-slot-detail-top, .ad-slot.ad-slot-detail-bottom {
+  background: var(--bg-elev);
+  box-shadow: none;
+}

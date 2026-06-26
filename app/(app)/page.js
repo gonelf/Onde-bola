@@ -10,7 +10,7 @@ import GamesBrowser from "@/components/GamesBrowser";
 import SoccerBall from "@/components/SoccerBall";
 import AdSlot from "@/components/AdSlot";
 import AdUnits from "@/components/AdUnits";
-import { parseSnippet } from "@/lib/ads-store";
+import { parseSnippet, slotUnits } from "@/lib/ads-store";
 import { isEnabled } from "@/lib/flags";
 import { brandForHost, brandWordmark } from "@/lib/brand";
 
@@ -64,6 +64,16 @@ export default async function HomePage() {
   const h = await headers();
   const brand = brandForHost(h.get("x-forwarded-host") || h.get("host") || "hojehabola.com");
   const wm = brandWordmark(brand);
+
+  // Ad units for the slots that live inside the GamesBrowser client island (the
+  // in-feed list and the detail modal) are fetched here and passed down — the
+  // server <AdSlot> can't reach into a client component. Gated by the same
+  // "ads" flag as <AdSlot>, so the kill switch covers these too.
+  const adsOn = await isEnabled("ads");
+  const feedAds = adsOn ? await slotUnits("fixtures-feed") : [];
+  const detailTopAds = adsOn ? await slotUnits("detail-top") : [];
+  const detailBottomAds = adsOn ? await slotUnits("detail-bottom") : [];
+
   return (
     <>
       <header className="site-header">
@@ -83,11 +93,11 @@ export default async function HomePage() {
           Football on TV today, worldwide — where to watch every match live
         </h1>
 
-        <AdSlot name="list-top" />
+        <AdSlot name="home-top" />
 
-        <GamesBrowser />
+        <GamesBrowser feedAds={feedAds} detailTopAds={detailTopAds} detailBottomAds={detailBottomAds} />
 
-        <AdSlot name="list-bottom" />
+        <AdSlot name="home-bottom" />
 
         {/* Server-rendered SEO content: gives crawlers and AI assistants real,
             indexable text and internal links to the competition hubs. */}
@@ -174,8 +184,6 @@ export default async function HomePage() {
             Off by default — flip "homepage-debug-banner" at /admin/flags. */}
         <DebugBanner />
       </footer>
-
-      <AdSlot name="global" />
     </>
   );
 }

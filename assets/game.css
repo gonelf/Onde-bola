@@ -1,0 +1,192 @@
+/*
+ * Styles for the manager game route group (app/(game)/*). Scoped to /play and
+ * /login by being imported only from the (game) layout, so it never loads on the
+ * public app or SEO pages. Reuses the dark palette of the main site.
+ */
+
+.game-shell {
+  --bg: #0f1722;
+  --panel: #182230;
+  --line: #2a3647;
+  --text: #e7edf4;
+  --muted: #93a1b3;
+  --accent: #4a90d9;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+}
+
+.game-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.game-header .brand {
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.game-header .brand small {
+  color: var(--muted);
+  font-weight: 500;
+  margin-left: 6px;
+}
+
+.game-nav {
+  display: flex;
+  gap: 14px;
+  flex: 1;
+  margin: 0 16px;
+  flex-wrap: wrap;
+}
+
+.game-nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.game-nav a:hover {
+  color: var(--text);
+}
+
+.game-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.game-table th,
+.game-table td {
+  padding: 7px 8px;
+  text-align: right;
+  border-bottom: 1px solid var(--line);
+}
+
+.game-table th:nth-child(2),
+.game-table td:nth-child(2) {
+  text-align: left;
+  width: 100%;
+}
+
+.game-table thead th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.game-round {
+  font-weight: 700;
+  color: var(--muted);
+  margin: 16px 0 6px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.game-fixture {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.game-fixture .fx-home {
+  flex: 1;
+  text-align: right;
+}
+
+.game-fixture .fx-away {
+  flex: 1;
+  text-align: left;
+}
+
+.game-fixture .fx-score {
+  min-width: 56px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.game-fixture a.fx-score {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.game-fixture .fx-sched {
+  min-width: 56px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.game-main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 28px 20px 60px;
+}
+
+.game-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px 22px;
+  margin-bottom: 16px;
+}
+
+.game-card h1,
+.game-card h2 {
+  margin: 0 0 8px;
+}
+
+.game-sub {
+  color: var(--muted);
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+.game-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.game-btn.secondary {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+
+.game-btn + .game-btn {
+  margin-left: 10px;
+}
+
+.game-providers {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 280px;
+}
+
+.game-note {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 14px;
+}

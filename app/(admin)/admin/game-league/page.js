@@ -64,6 +64,21 @@ export default function GameLeaguePage() {
     finally { setBusy(false); }
   };
 
+  const endSeason = async (leagueId) => {
+    if (busy) return;
+    setBusy(true); setHint("ending season + promotion/relegation…");
+    try {
+      const j = await asJson(await fetch("/api/admin/season", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ leagueId }),
+      }));
+      setHint(j && j.ok
+        ? `new season ✓ ${j.promoted} promoted / ${j.relegated} relegated · fixtures regenerated`
+        : (j && j.error) || "error");
+      await load();
+    } catch (e) { setHint(String(e.message || e)); }
+    finally { setBusy(false); }
+  };
+
   const snaps = data.snapshots.filter((s) => s.clubCount >= 2);
 
   return (
@@ -119,6 +134,7 @@ export default function GameLeaguePage() {
             <div className="toolbar" style={{ marginTop: 6 }}>
               <button className="secondary" onClick={() => advance(l.id, false)} disabled={busy}>Advance due</button>
               <button onClick={() => advance(l.id, true)} disabled={busy}>Advance ALL (sim season)</button>
+              <button className="secondary" onClick={() => endSeason(l.id)} disabled={busy}>End season ↻ (promo/releg)</button>
             </div>
           </div>
         )) : <div className="loader-empty">No leagues yet.</div>}

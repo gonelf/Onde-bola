@@ -149,6 +149,18 @@ reused `MatchPitch` + `useReplayClock` (identical to the admin lab). New thin co
 - **M4 — Transfers + finances + training.** Market UI, gate/prize money, rating progression.
 - **M5 — Async PvP + promotion/relegation.** `challenges` instant-sim, per-fixture lineup
   persistence, end-of-season tier movement.
+- **M6 — Game admin console.** A consolidated `/admin/game` surface (Basic-Auth, alongside the
+  existing `/admin/game-seed` and `/admin/game-league`) for operating the game:
+  - **Overview** (read-only): counts of managers, clubs (claimed vs free), active/finished leagues,
+    last cron-tick time, configured data sources — a one-glance health check (`/api/admin/game`).
+  - **Manager/club tools**: release a claimed club back to AI, reset a manager (clear club),
+    adjust a manager's budget.
+  - **League lifecycle**: reset/delete a league, finish a season, force-sim a specific round
+    (today only "advance due"/"advance all" exist).
+  - **Danger zone**: wipe all game data (clubs, players, leagues, fixtures, results, managers'
+    clubs) for a clean test reset — guarded by a typed confirmation.
+  These are operational tools, not player-facing; they make seeding/testing/running seasons
+  manageable without DB surgery.
 
 ## Critical files
 **Create:** `lib/game/simMatch.js` (most important — the bridge), `lib/game/ratings.js`,

@@ -32,6 +32,7 @@ export default async function GameLayout({ children }) {
           <a href="/fantasygame/transfers">Transfers</a>
           <a href="/fantasygame/league">League</a>
           <a href="/fantasygame/fixtures">Fixtures</a>
+          <a href="/fantasygame/challenge">Challenge</a>
           <a href="/fantasygame/friendly">Friendly</a>
         </nav>
         <a className="game-btn secondary" href="/">← Site</a>

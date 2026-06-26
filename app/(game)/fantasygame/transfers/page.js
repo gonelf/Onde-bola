@@ -13,6 +13,7 @@ function money(n) {
   if (v >= 1000) return "€" + Math.round(v / 1000) + "k";
   return "€" + v;
 }
+const ratingClass = (r) => (r >= 85 ? "elite" : r >= 75 ? "good" : r >= 65 ? "mid" : "");
 
 export default function TransfersPage() {
   const [data, setData] = useState(null);
@@ -51,42 +52,50 @@ export default function TransfersPage() {
     <>
       <div className="game-card">
         <h1>Transfer market</h1>
-        <p className="game-sub">Budget <b style={{ color: "var(--accent)" }}>{money(data.cash)}</b> · squad {data.squadSize} · {hint}</p>
-        <div style={{ marginBottom: 8 }}>
+        <div className="game-statline">
+          <span className="game-chip accent">Budget <b>{money(data.cash)}</b></span>
+          <span className="game-chip">Squad <b>{data.squadSize}</b></span>
+          {hint ? <span className="game-chip">{hint}</span> : null}
+        </div>
+        <div className="game-pills">
           {["ALL", "GK", "DF", "MF", "FW"].map((p) => (
-            <button key={p} className="game-btn secondary" style={{ padding: "4px 10px", opacity: pos === p ? 1 : 0.6 }} onClick={() => setPos(p)}>{p}</button>
+            <button key={p} className={`game-pill ${pos === p ? "active" : ""}`} onClick={() => setPos(p)}>{p}</button>
           ))}
         </div>
+        <div className="game-tablewrap">
         <table className="game-table">
-          <thead><tr><th>Pos</th><th>Player</th><th>Club</th><th>Rating</th><th>Price</th><th></th></tr></thead>
+          <thead><tr><th>Pos</th><th>Player</th><th>Club</th><th>OVR</th><th>Price</th><th></th></tr></thead>
           <tbody>
-            {market.map((p) => (
+            {market.length ? market.map((p) => (
               <tr key={p.id}>
-                <td>{p.position}</td><td>{p.name}</td>
+                <td><span className={`pos-badge ${p.position}`}>{p.position}</span></td><td>{p.name}</td>
                 <td style={{ color: "var(--muted)" }}>{p.clubName || "free agent"}</td>
-                <td><b>{p.rating}</b></td><td>{money(p.value)}</td>
+                <td><span className={`rating-badge ${ratingClass(p.rating)}`}>{p.rating}</span></td><td>{money(p.value)}</td>
                 <td>
-                  <button className="game-btn" style={{ padding: "4px 10px" }} disabled={busy === p.id + "buy" || data.cash < p.value} onClick={() => act("buy", p.id)}>
+                  <button className="game-btn sm" disabled={busy === p.id + "buy" || data.cash < p.value} onClick={() => act("buy", p.id)}>
                     {busy === p.id + "buy" ? "…" : "Buy"}
                   </button>
                 </td>
               </tr>
-            ))}
+            )) : <tr><td colSpan="6" className="game-empty">No players available in this position.</td></tr>}
           </tbody>
         </table>
+        </div>
       </div>
 
       <div className="game-card">
         <h2>Your squad</h2>
+        <div className="game-tablewrap">
         <table className="game-table">
-          <thead><tr><th>Pos</th><th>Player</th><th>Rating</th><th>Sell for</th><th></th></tr></thead>
+          <thead><tr><th>Pos</th><th>Player</th><th>OVR</th><th>Sell for</th><th></th></tr></thead>
           <tbody>
             {(data.squad || []).map((p) => (
               <tr key={p.id}>
-                <td>{p.position}</td><td>{p.name}</td><td><b>{p.rating}</b></td>
+                <td><span className={`pos-badge ${p.position}`}>{p.position}</span></td><td>{p.name}</td>
+                <td><span className={`rating-badge ${ratingClass(p.rating)}`}>{p.rating}</span></td>
                 <td>{money(Math.round((p.value || 0) * 0.9))}</td>
                 <td>
-                  <button className="game-btn secondary" style={{ padding: "4px 10px" }} disabled={busy === p.id + "sell"} onClick={() => act("sell", p.id)}>
+                  <button className="game-btn secondary sm" disabled={busy === p.id + "sell"} onClick={() => act("sell", p.id)}>
                     {busy === p.id + "sell" ? "…" : "Sell"}
                   </button>
                 </td>
@@ -94,6 +103,7 @@ export default function TransfersPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </>
   );

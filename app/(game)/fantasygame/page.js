@@ -48,24 +48,29 @@ export default async function PlayPage() {
             await signOut({ redirectTo: "/login" });
           }}
         >
-          <button className="game-btn secondary" type="submit">Sign out</button>
+          <button className="game-btn secondary sm" type="submit">Sign out</button>
         </form>
       </div>
 
-      <div className="game-card">
-        <h2>Friendly match</h2>
+      <ClubPanel />
+
+      <div className="game-card feature">
+        <h2>⚽ Friendly match</h2>
         <p className="game-sub">Pick any two imported clubs and watch a simulated match in the live pitch animation.</p>
-        <a className="game-btn" href="/fantasygame/friendly">▶ Play a friendly</a>
+        <div className="game-actions">
+          <a className="game-btn" href="/fantasygame/friendly">▶ Play a friendly</a>
+          <a className="game-btn secondary" href="/fantasygame/challenge">⚔ Challenge a club</a>
+        </div>
       </div>
 
       <div className="game-card">
         <h2>League</h2>
         <p className="game-sub">Follow the table and fixtures of the active season.</p>
-        <a className="game-btn secondary" href="/fantasygame/league">Table</a>
-        <a className="game-btn secondary" href="/fantasygame/fixtures">Fixtures</a>
+        <div className="game-actions">
+          <a className="game-btn secondary" href="/fantasygame/league">Table</a>
+          <a className="game-btn secondary" href="/fantasygame/fixtures">Fixtures</a>
+        </div>
       </div>
-
-      <ClubPanel />
     </>
   );
 }

@@ -16,9 +16,9 @@ export default async function LoginPage() {
   if (session && session.user) redirect("/fantasygame");
 
   return (
-    <div className="game-card">
-      <h1>Sign in</h1>
-      <p className="game-sub">Manage your club, set tactics and challenge other managers.</p>
+    <div className="game-card feature">
+      <h1>⚽ Sign in to Manager</h1>
+      <p className="game-sub">Claim a club, build your squad in the transfer market, set tactics and challenge other managers across the season.</p>
 
       {enabledProviders.length ? (
         <div className="game-providers">

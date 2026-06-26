@@ -39,9 +39,11 @@ export default async function MatchPage({ params }) {
       <div className="game-card">
         <ReplayViewer home={home} away={away} events={row.eventsJson || []} stats={row.statsJson || []} />
       </div>
-      <div className="game-card" style={{ textAlign: "center" }}>
-        <a className="game-btn secondary" href="/fantasygame/friendly">↺ Play another</a>
-        <a className="game-btn secondary" href="/fantasygame">Dashboard</a>
+      <div className="game-card">
+        <div className="game-actions" style={{ justifyContent: "center" }}>
+          <a className="game-btn secondary" href="/fantasygame/friendly">↺ Play another</a>
+          <a className="game-btn secondary" href="/fantasygame">Dashboard</a>
+        </div>
       </div>
     </>
   );

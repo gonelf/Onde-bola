@@ -12,6 +12,7 @@
 
 import { notFound } from "next/navigation";
 import { isEnabled } from "@/lib/flags";
+import GameNav from "@/components/game/GameNav";
 import "@/assets/game.css";
 
 export const metadata = {
@@ -25,17 +26,11 @@ export default async function GameLayout({ children }) {
   return (
     <div className="game-shell">
       <header className="game-header">
-        <span className="brand">⚽ Manager <small>beta</small></span>
-        <nav className="game-nav">
-          <a href="/fantasygame">Dashboard</a>
-          <a href="/fantasygame/squad">Squad</a>
-          <a href="/fantasygame/transfers">Transfers</a>
-          <a href="/fantasygame/league">League</a>
-          <a href="/fantasygame/fixtures">Fixtures</a>
-          <a href="/fantasygame/challenge">Challenge</a>
-          <a href="/fantasygame/friendly">Friendly</a>
-        </nav>
-        <a className="game-btn secondary" href="/">← Site</a>
+        <a className="brand" href="/fantasygame">
+          <span className="ball">⚽</span> <b>Manager</b> <small>beta</small>
+        </a>
+        <GameNav />
+        <a className="game-btn secondary sm site-link" href="/">← Site</a>
       </header>
       <main className="game-main">{children}</main>
     </div>

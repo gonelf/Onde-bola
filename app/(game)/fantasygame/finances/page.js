@@ -35,7 +35,11 @@ export default function FinancesPage() {
   return (
     <div className="game-card">
       <h1>Finances</h1>
-      <p className="game-sub">Balance <b style={{ color: "var(--accent)" }}>{money(data.cash)}</b> {hint ? "· " + hint : ""}</p>
+      <div className="game-statline">
+        <span className="game-chip accent">Balance <b>{money(data.cash)}</b></span>
+        {hint ? <span className="game-chip">{hint}</span> : null}
+      </div>
+      <div className="game-tablewrap">
       <table className="game-table">
         <thead><tr><th></th><th>Item</th><th>Amount</th></tr></thead>
         <tbody>
@@ -43,12 +47,13 @@ export default function FinancesPage() {
             <tr key={i}>
               <td style={{ color: "var(--muted)" }}>{r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : ""}</td>
               <td>{LABEL[r.type] || r.type}</td>
-              <td style={{ color: r.amount < 0 ? "#e8867e" : "#5bd18a" }}>{money(r.amount)}</td>
+              <td className={r.amount < 0 ? "amt-neg" : "amt-pos"}>{money(r.amount)}</td>
             </tr>
           ))}
-          {!(data.ledger || []).length ? <tr><td colSpan="3" style={{ color: "var(--muted)" }}>No transactions yet — play league matches to earn gate &amp; prize money.</td></tr> : null}
+          {!(data.ledger || []).length ? <tr><td colSpan="3" className="game-empty">No transactions yet — play league matches to earn gate &amp; prize money.</td></tr> : null}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

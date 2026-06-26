@@ -47,31 +47,28 @@ export default function FriendlyPage() {
   const opts = (sel) => clubs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>);
 
   return (
-    <div className="game-card">
-      <h1>Friendly match</h1>
-      <p className="game-sub">Pick two clubs and watch a simulated match play out.</p>
+    <div className="game-card feature">
+      <h1>⚽ Friendly match</h1>
+      <p className="game-sub">Pick two clubs and watch a simulated match play out in the live pitch animation.</p>
 
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-        <label style={{ flex: "1 1 200px" }}>Home
-          <select value={home} onChange={(e) => setHome(e.target.value)} style={selStyle}>{opts()}</select>
+      <div className="game-versus">
+        <label className="game-field">
+          <span className="game-label">Home</span>
+          <select className="game-select" value={home} onChange={(e) => setHome(e.target.value)}>{opts()}</select>
         </label>
-        <span style={{ alignSelf: "center", color: "var(--muted)" }}>vs</span>
-        <label style={{ flex: "1 1 200px" }}>Away
-          <select value={away} onChange={(e) => setAway(e.target.value)} style={selStyle}>{opts()}</select>
+        <span className="vs">vs</span>
+        <label className="game-field">
+          <span className="game-label">Away</span>
+          <select className="game-select" value={away} onChange={(e) => setAway(e.target.value)}>{opts()}</select>
         </label>
       </div>
 
-      <div style={{ marginTop: 16, display: "flex", gap: 12, alignItems: "center" }}>
+      <div className="game-actions" style={{ marginTop: 16, alignItems: "center" }}>
         <button className="game-btn" onClick={play} disabled={busy || clubs.length < 2}>
           {busy ? "Simulating…" : "▶ Kick off"}
         </button>
-        <span className="game-note" style={{ marginTop: 0 }}>{hint}</span>
+        <span className="game-hint">{hint}</span>
       </div>
     </div>
   );
 }
-
-const selStyle = {
-  display: "block", width: "100%", marginTop: 6, padding: "8px 10px",
-  background: "var(--bg)", color: "var(--text)", border: "1px solid var(--line)", borderRadius: 8,
-};

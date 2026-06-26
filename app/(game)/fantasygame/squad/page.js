@@ -14,6 +14,7 @@ function money(n) {
   return "€" + v;
 }
 const LINE = { GK: 0, DF: 1, MF: 2, FW: 3 };
+const ratingClass = (r) => (r >= 85 ? "elite" : r >= 75 ? "good" : r >= 65 ? "mid" : "");
 
 export default function SquadPage() {
   const [data, setData] = useState(null);
@@ -51,19 +52,24 @@ export default function SquadPage() {
   return (
     <div className="game-card">
       <h1>{data.club.name} · Squad</h1>
-      <p className="game-sub">Budget <b style={{ color: "var(--accent)" }}>{money(cash)}</b> · {squad.length} players · {hint}</p>
+      <div className="game-statline">
+        <span className="game-chip accent">Budget <b>{money(cash)}</b></span>
+        <span className="game-chip">Players <b>{squad.length}</b></span>
+        {hint ? <span className="game-chip">{hint}</span> : null}
+      </div>
+      <div className="game-tablewrap">
       <table className="game-table">
-        <thead><tr><th>Pos</th><th>Player</th><th>Age</th><th>Rating</th><th>Value</th><th></th></tr></thead>
+        <thead><tr><th>Pos</th><th>Player</th><th>Age</th><th>OVR</th><th>Value</th><th></th></tr></thead>
         <tbody>
           {squad.map((p) => (
             <tr key={p.id}>
-              <td>{p.position}</td>
+              <td><span className={`pos-badge ${p.position}`}>{p.position}</span></td>
               <td>{p.name}</td>
               <td>{p.age || "—"}</td>
-              <td><b>{p.rating}</b></td>
+              <td><span className={`rating-badge ${ratingClass(p.rating)}`}>{p.rating}</span></td>
               <td>{money(p.marketValue)}</td>
               <td>
-                <button className="game-btn secondary" style={{ padding: "4px 10px" }}
+                <button className="game-btn secondary sm"
                   disabled={busy === p.id || p.rating >= 90} onClick={() => train(p.id)}>
                   {busy === p.id ? "…" : "Train +1"}
                 </button>
@@ -72,6 +78,7 @@ export default function SquadPage() {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

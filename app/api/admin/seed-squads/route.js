@@ -5,23 +5,21 @@
  * we don't have to touch middleware.js. Scope is enforced by ALLOWED_LEAGUES in
  * lib/game/fotmobSquad (PT + UK only) — any other league id is rejected.
  *
- *   GET                       -> { leagues: ALLOWED_LEAGUES }  (for the admin UI)
- *   POST { leagueId, limit? } -> fetch the league's clubs + squads from FotMob,
- *                                derive ratings, and upsert clubs + players under
- *                                a fresh snapshot. Returns a summary.
+ *   GET                                -> { leagues: ALLOWED_LEAGUES }  (admin UI)
+ *   POST { leagueId, source?, limit? }  -> merge the league's clubs + squads
+ *        across all sources (FotMob truth + Football-Data + TheSportsDB), derive
+ *        ratings, and upsert clubs + players under a fresh snapshot.
+ *        source: "auto" (default, merge all) | "fotmob" | "footballdata" | "thesportsdb".
  *
- * Fail-soft: degrades per-club rather than aborting the whole import; a club
- * with no squad is skipped and reported.
+ * Fail-soft: degrades per-source and per-club rather than aborting the import.
  */
 
 import { isAdmin, adminCredsConfigured } from "@/lib/admin-auth";
 import { db, dbConfigured } from "@/lib/db/client";
 import { snapshots, clubs, players } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import {
-  ALLOWED_LEAGUES, isAllowedLeague, leagueInfo, fetchLeagueSquads,
-} from "@/lib/game/fotmobSquad";
-import { fetchLeagueSquadsTSDB } from "@/lib/game/sportsdbSquad";
+import { ALLOWED_LEAGUES, isAllowedLeague, leagueInfo } from "@/lib/game/fotmobSquad";
+import { ingestLeague } from "@/lib/game/ingest";
 import { deriveSquad } from "@/lib/game/deriveRatings";
 
 export const dynamic = "force-dynamic";
@@ -54,30 +52,30 @@ export async function POST(request) {
   }
   const info = leagueInfo(leagueId);
   const limit = Math.max(1, Math.min(30, parseInt(body.limit, 10) || 24));
-  // Default to TheSportsDB (reliable club lists); FotMob is opt-in (real squads,
-  // but its endpoints are often blocked from server IPs).
-  const source = body.source === "fotmob" ? "fotmob" : "thesportsdb";
+  // "auto" merges every reachable source (FotMob truth + Football-Data +
+  // TheSportsDB). A specific source forces just that one.
+  const SOURCES = ["auto", "fotmob", "footballdata", "thesportsdb"];
+  const source = SOURCES.includes(body.source) ? body.source : "auto";
 
-  const fetched = source === "fotmob"
-    ? await fetchLeagueSquads(leagueId, { limit })
-    : await fetchLeagueSquadsTSDB(leagueId, { limit });
-  const rawClubs = fetched.clubs || [];
+  const fetched = await ingestLeague(leagueId, { only: source === "auto" ? undefined : source });
+  const rawClubs = (fetched.clubs || []).slice(0, limit);
   if (!rawClubs.length) {
     return json({
       ok: false,
-      error: source === "fotmob"
-        ? "no clubs fetched from FotMob (blocked or off-season) — try source 'thesportsdb'"
-        : "no clubs fetched from TheSportsDB (check league name / THESPORTSDB_KEY)",
+      error: "no clubs fetched from any source (FotMob blocked, no FOOTBALL_DATA_TOKEN, TheSportsDB miss?)",
+      sources: fetched.sources || {},
     }, 502);
   }
 
   // One snapshot per import.
   let snapshotId;
   try {
+    const s = fetched.sources || {};
+    const srcNote = `fm:${s.fotmob || 0} fd:${s.footballdata || 0} sd:${s.thesportsdb || 0}`;
     const snap = await db.insert(snapshots).values({
       source,
       seasonLabel: info.name,
-      notes: `${info.country} · ${info.name} · ${rawClubs.length} clubs · via ${source}`,
+      notes: `${info.country} · ${info.name} · ${rawClubs.length} clubs · ${source} (${srcNote})`,
     }).returning();
     snapshotId = snap[0] && snap[0].id;
   } catch (e) {
@@ -120,7 +118,11 @@ export async function POST(request) {
           marketValue: p.marketValue, derived: p.derived,
         }))
       );
-      summary.push({ club: rc.name, players: derived.length, derivedRatings: derived.filter((p) => p.derived).length });
+      summary.push({
+        club: rc.name, players: derived.length,
+        derivedRatings: derived.filter((p) => p.derived).length,
+        roster: rc.provenance && rc.provenance.roster, ratings: rc.provenance && rc.provenance.ratings,
+      });
     } catch (e) {
       summary.push({ club: rc.name, error: String((e && e.message) || e) });
     }
@@ -129,7 +131,7 @@ export async function POST(request) {
   const ok = summary.filter((s) => s.players).length;
   return json({
     ok: true, league: info, snapshotId, source, clubsImported: ok,
-    realRosters: fetched.realRosters || 0, summary,
+    realRosters: fetched.realRosters || 0, sources: fetched.sources || {}, summary,
   });
 }
 

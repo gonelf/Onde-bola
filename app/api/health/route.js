@@ -75,6 +75,11 @@ export async function GET() {
       secret: !!process.env.AUTH_SECRET,
       google: !!(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET),
     },
+    sources: {
+      fotmob: process.env.FOTMOB_DISABLED !== "1",
+      footballdata: !!process.env.FOOTBALL_DATA_TOKEN,
+      thesportsdb: true, // free key always available
+    },
   };
 
   return Response.json(

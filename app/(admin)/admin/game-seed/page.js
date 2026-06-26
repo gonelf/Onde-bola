@@ -11,7 +11,7 @@ export default function GameSeedPage() {
   const [leagues, setLeagues] = useState([]);
   const [leagueId, setLeagueId] = useState("");
   const [limit, setLimit] = useState(24);
-  const [source, setSource] = useState("thesportsdb");
+  const [source, setSource] = useState("auto");
   const [hint, setHint] = useState("loading…");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
@@ -66,8 +66,10 @@ export default function GameSeedPage() {
           <div>
             <label>Source</label>
             <select value={source} onChange={(e) => setSource(e.target.value)}>
-              <option value="thesportsdb">TheSportsDB (real clubs, recommended)</option>
-              <option value="fotmob">FotMob (real squads, often blocked)</option>
+              <option value="auto">Auto — merge all (recommended)</option>
+              <option value="fotmob">FotMob only (truth: real squads + ratings)</option>
+              <option value="footballdata">Football-Data only (real squads)</option>
+              <option value="thesportsdb">TheSportsDB only (clubs + badges)</option>
             </select>
           </div>
         </div>
@@ -76,16 +78,23 @@ export default function GameSeedPage() {
           <span className="pill">{hint}</span>
         </div>
         <div className="sub" style={{ marginTop: 6 }}>
-          TheSportsDB gives real club names &amp; badges with generated squads (reliable on Vercel).
-          FotMob gives real player rosters but its endpoints are frequently blocked from server IPs.
+          <b>Auto</b> merges every reachable source: FotMob is the source of truth (real squads +
+          ratings); Football-Data.org fills real rosters (needs <code>FOOTBALL_DATA_TOKEN</code>);
+          TheSportsDB adds real club badges/colours; anything still missing is generated. So you get
+          the best available data even when FotMob is blocked.
         </div>
       </div>
 
       {result && Array.isArray(result.summary) ? (
         <div className="card">
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>
             {result.league ? `${result.league.country} · ${result.league.name}` : "Result"}
           </div>
+          {result.sources ? (
+            <div className="sub" style={{ marginBottom: 8 }}>
+              Sources reached — FotMob: {result.sources.fotmob || 0} · Football-Data: {result.sources.footballdata || 0} · TheSportsDB: {result.sources.thesportsdb || 0}
+            </div>
+          ) : null}
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <tbody>
               {result.summary.map((s, i) => (
@@ -93,7 +102,7 @@ export default function GameSeedPage() {
                   <td style={{ padding: "4px 0" }}>{s.club}</td>
                   <td style={{ textAlign: "right", color: "var(--muted)" }}>
                     {s.players != null
-                      ? `${s.players} players${s.derivedRatings ? ` · ${s.derivedRatings} derived` : ""}`
+                      ? `${s.players} · roster: ${s.roster || "?"} · ratings: ${s.ratings || "?"}`
                       : (s.skipped || s.error || "—")}
                   </td>
                 </tr>

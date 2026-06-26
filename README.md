@@ -146,7 +146,7 @@ lib/format.js                    Shared helpers (dates, slugs, status, share lin
 lib/i18n.js                      EN/PT translation table + language helpers
 lib/broadcasters.js              Free-to-air channel classifier (green vs amber)
 lib/ads-store.js                 Ad unit store (KV-backed): admin-managed snippets + slot assignment, read by <AdSlot> and /api/ads
-lib/flags.js                     Feature flags (KV-backed): off/staging/production rollout ladder read via isEnabled(), e.g. <AdSlot>'s "ads" flag — see "Feature flags" below
+lib/flags.js                     Feature flags (KV-backed): off/dev/staging/production per-env switch read via isEnabled(), e.g. <AdSlot>'s "ads" flag — see "Feature flags" below
 lib/ads.js                       Legacy AdSense config — unused; superseded by lib/ads-store.js + /admin/ads
 lib/kv.js                        Vercel KV (Upstash Redis REST) client, shared by the data routes
 lib/cardinfo.js                  Rebuilds a game's share-card data from its match id (FotMob + KV cache)
@@ -435,23 +435,23 @@ days (and today once all games are finished) are cached permanently, future days
 
 ## Feature flags
 
-`lib/flags.js` is a small KV-backed store of per-environment rollout switches
-the owner can flip from **`/admin/flags`** without a deploy — no env var, no
-redeploy, live within a few minutes (same cache/refresh window as
-ads/overrides).
+`lib/flags.js` is a small KV-backed store of per-environment switches the owner
+can flip from **`/admin/flags`** without a deploy — no env var, no redeploy,
+live within a few minutes (same cache/refresh window as ads/overrides).
 
-Each flag is a three-state **rollout ladder** rather than a plain on/off:
+Each flag names exactly **where it's on** (four states):
 
 - **`off`** — on nowhere.
-- **`staging`** — on **only** in the staging environment.
-- **`production`** — on **everywhere** (staging + production).
+- **`dev`** — on **only** in local dev.
+- **`staging`** — on **only** on staging.
+- **`production`** — on **all hosts**.
 
-The environment is resolved per-request from the host: **`hojehabola.cfd`** and
-local dev (`localhost` / `127.0.0.1`) count as **staging**; every public domain
-(`hojehabola.com`, `footietoday.com`, …) counts as **production**. So you can
-set a flag to `staging`, verify it on the staging site, then promote it to
-`production`. Legacy boolean overrides from the old on/off scheme are read as
-`true → production`, `false → off`. Current flags:
+The environment is resolved per-request from the host: `localhost` / `127.0.0.1`
+→ **dev**, `hojehabola.cfd` → **staging**, every other host (`hojehabola.com`,
+`footietoday.com`, `footytoday.co`, …) → **production**. `dev` and `staging` are
+*exact* matches — a `staging` flag is off on localhost and off in production.
+Only `production` is on everywhere. Legacy boolean overrides from the old on/off
+scheme are read as `true → production`, `false → off`. Current flags:
 
 - **`ads`** — site-wide ad slots (`<AdSlot>`: list-top, list-bottom, detail,
   global). A kill switch independent of the ad-unit list in `/admin/ads` —
@@ -463,8 +463,8 @@ set a flag to `staging`, verify it on the staging site, then promote it to
 **Adding a new flag, every time:**
 
 1. Add one entry to `FLAG_DEFS` in `lib/flags.js`: `{ id, label, description,
-   default }`, where `default` is a state string (`"off"`, `"staging"`, or
-   `"production"`). `/api/flags` and `/admin/flags` read this list, so the new
+   default }`, where `default` is a state string (`"off"`, `"dev"`, `"staging"`,
+   or `"production"`). `/api/flags` and `/admin/flags` read this list, so the new
    flag shows up there automatically — no other admin-surface changes needed.
 2. At the point you want to gate, check it:
    ```js

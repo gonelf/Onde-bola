@@ -40,13 +40,13 @@ export default function FlagsPage() {
 
   return (
     <>
-      <div className="sub">Promote app behavior up the rollout ladder without a deploy.</div>
+      <div className="sub">Turn app behavior on per environment without a deploy.</div>
       <div className="card">
         <div style={{ fontWeight: 600, marginBottom: 2 }}>🚩 Feature flags</div>
         <div className="sub" style={{ marginBottom: 10 }}>
-          Each flag is read by the live site; pick a state and Save to change behavior within a few
-          minutes. <strong>Off</strong> = nowhere · <strong>Staging</strong> = staging only
-          (<code>hojehabola.cfd</code> &amp; local dev) · <strong>Production</strong> = everywhere.
+          Each flag is read by the live site; pick where it&apos;s on and Save to change behavior within
+          a few minutes. <strong>Off</strong> = nowhere · <strong>Dev</strong> = localhost only ·
+          <strong> Staging</strong> = <code>hojehabola.cfd</code> only · <strong>Production</strong> = all hosts.
           Stored server-side (needs <code>ADMIN_USER</code> / <code>ADMIN_PASSWORD</code> and KV configured).
         </div>
         <div>
@@ -55,6 +55,7 @@ export default function FlagsPage() {
               <div className="loader-head">
                 <select value={f.state || "off"} onChange={(e) => setState(f.id, e.target.value)}>
                   <option value="off">Off</option>
+                  <option value="dev">Dev</option>
                   <option value="staging">Staging</option>
                   <option value="production">Production</option>
                 </select>

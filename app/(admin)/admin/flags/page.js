@@ -28,7 +28,7 @@ export default function FlagsPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ flags: flags.map((f) => ({ id: f.id, state: f.state })) }),
       }));
-      if (j && j.ok) { setFlags(j.flags || []); setHint("saved ✓ (live within a few minutes)"); }
+      if (j && j.ok) { setFlags(j.flags || []); setHint("saved ✓ (live within ~30s)"); }
       else setHint((j && j.error) || "error");
     } catch (e) { setHint(String(e.message || e)); }
   };
@@ -45,7 +45,7 @@ export default function FlagsPage() {
         <div style={{ fontWeight: 600, marginBottom: 2 }}>🚩 Feature flags</div>
         <div className="sub" style={{ marginBottom: 10 }}>
           Each flag is read by the live site; pick where it&apos;s on and Save to change behavior within
-          a few minutes. <strong>Off</strong> = nowhere · <strong>Dev</strong> = localhost only ·
+          ~30s. <strong>Off</strong> = nowhere · <strong>Dev</strong> = localhost only ·
           <strong> Staging</strong> = <code>hojehabola.cfd</code> only · <strong>Production</strong> = all hosts.
           Stored server-side (needs <code>ADMIN_USER</code> / <code>ADMIN_PASSWORD</code> and KV configured).
         </div>

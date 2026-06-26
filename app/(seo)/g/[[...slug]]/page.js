@@ -84,9 +84,9 @@ export default async function GamePage({ params, searchParams }) {
     <>
       <style dangerouslySetInnerHTML={{ __html: built.css }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: built.jsonLd }} />
+      <AdSlot name="detail-top" />
       <div dangerouslySetInnerHTML={{ __html: built.bodyHtml }} />
-      <AdSlot name="detail" />
-      <AdSlot name="global" />
+      <AdSlot name="detail-bottom" />
     </>
   );
 }

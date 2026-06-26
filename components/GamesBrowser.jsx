@@ -17,6 +17,7 @@ import {
 import { normName } from "@/lib/format";
 import { prepEvents, maxMinute, addShotEvents, addPhaseEvents, DEFAULT_CONFIG } from "@/public/admin/replay-sim";
 import MatchPitch from "@/components/MatchPitch";
+import AdUnits from "@/components/AdUnits";
 import SoccerBall from "@/components/SoccerBall";
 import useReplayClock from "@/components/useReplayClock";
 import { useReplaySound } from "@/components/replaySounds";
@@ -58,6 +59,21 @@ function ChannelChip({ name, t }) {
       {paid ? <span className="lock" aria-hidden="true">🔒</span> : null}
       {name}
     </span>
+  );
+}
+
+// A single admin-managed ad unit injected inside a client island (the in-feed
+// list or the detail modal), styled to sit within the card layout. Its scripts
+// run via <AdUnits>; the units array is memoized so a parent re-render (e.g. a
+// refresh tick) doesn't re-inject and reload the creative.
+function AdCard({ unit, slot, className }) {
+  const units = useMemo(() => [unit], [unit]);
+  if (!unit) return null;
+  return (
+    <div className={"ad-slot ad-card ad-slot-" + slot + (className ? " " + className : "")} data-ad-slot={slot}>
+      <span className="ad-label">Ad</span>
+      <AdUnits units={units} />
+    </div>
   );
 }
 
@@ -515,7 +531,7 @@ function DetailChannels({ fx, checking, t, primaryCountry }) {
     : <p className="src-note guide">{t("noListingDetail")}</p>;
 }
 
-function DetailModal({ fx, checking, t, locale, primaryCountry, onClose, onShare }) {
+function DetailModal({ fx, checking, t, locale, primaryCountry, onClose, onShare, topAds = [], bottomAds = [] }) {
   const closeRef = useRef(null);
   useEffect(() => { if (closeRef.current) closeRef.current.focus(); }, []);
 
@@ -546,6 +562,7 @@ function DetailModal({ fx, checking, t, locale, primaryCountry, onClose, onShare
           <button className="detail-close" aria-label={t("close")} ref={closeRef} onClick={onClose}>×</button>
         </div>
         <div className="detail-body">
+          {topAds.map((u) => <AdCard key={u.id} unit={u} slot="detail-top" />)}
           <div className="detail-comp">
             <LeagueLogo url={fx.leagueBadgeUrl} name={fx.competition} />
             <span id="detail-title">{compLabel}</span>
@@ -578,6 +595,7 @@ function DetailModal({ fx, checking, t, locale, primaryCountry, onClose, onShare
           </div>
           <DetailChannels fx={fx} checking={checking} t={t} primaryCountry={primaryCountry} />
           <DetailExtras fx={fx} t={t} />
+          {bottomAds.map((u) => <AdCard key={u.id} unit={u} slot="detail-bottom" />)}
         </div>
       </div>
     </div>
@@ -586,7 +604,7 @@ function DetailModal({ fx, checking, t, locale, primaryCountry, onClose, onShare
 
 // ---- Main browser -------------------------------------------------------
 
-export default function GamesBrowser() {
+export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBottomAds = [] }) {
   const [date, setDate] = useState(() => new Date());
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -1121,25 +1139,43 @@ export default function GamesBrowser() {
           </div>
         ) : (
           <>
-          {visibleOrder.map((comp) => {
-            const games = grouped.groups[comp].slice().sort((a, b) =>
-              new Date(a.kickoff) - new Date(b.kickoff));
-            const badged = games.filter((g) => g.leagueBadgeUrl)[0];
-            const badgeUrl = badged ? badged.leagueBadgeUrl : "";
-            return (
-              <section className="competition" key={comp}>
-                <h2 className="competition-head">
-                  <LeagueLogo url={badgeUrl} name={comp} />
-                  <span className="competition-name">{comp}</span>
-                  <span className="count">{games.length}</span>
-                </h2>
-                {games.map((g) => (
+          {(() => {
+            // Inject an in-feed ad after every N game cards, counting across all
+            // competitions. N comes from the unit (admin-set); multiple units
+            // rotate round-robin at each insertion point.
+            const everyN = feedAds.length ? (feedAds[0].everyN || 5) : 0;
+            let cardCount = 0;
+            let adIdx = 0;
+            return visibleOrder.map((comp) => {
+              const games = grouped.groups[comp].slice().sort((a, b) =>
+                new Date(a.kickoff) - new Date(b.kickoff));
+              const badged = games.filter((g) => g.leagueBadgeUrl)[0];
+              const badgeUrl = badged ? badged.leagueBadgeUrl : "";
+              const items = [];
+              games.forEach((g) => {
+                items.push(
                   <GameCard key={g.id} fx={g} t={t} locale={locale} primaryCountry={primaryCountry}
                     highlightsById={highlightsById} onOpen={openDetails} onShare={onShare} />
-                ))}
-              </section>
-            );
-          })}
+                );
+                cardCount += 1;
+                if (everyN && cardCount % everyN === 0) {
+                  const unit = feedAds[adIdx % feedAds.length];
+                  adIdx += 1;
+                  items.push(<AdCard key={"feedad-" + g.id} unit={unit} slot="fixtures-feed" />);
+                }
+              });
+              return (
+                <section className="competition" key={comp}>
+                  <h2 className="competition-head">
+                    <LeagueLogo url={badgeUrl} name={comp} />
+                    <span className="competition-name">{comp}</span>
+                    <span className="count">{games.length}</span>
+                  </h2>
+                  {items}
+                </section>
+              );
+            });
+          })()}
           {hasMore ? (
             <button type="button" className="show-all-btn" onClick={() => setShowAll(true)}>
               {t("showAllGames")} <span className="n">+{grouped.restGames}</span>
@@ -1156,7 +1192,8 @@ export default function GamesBrowser() {
 
       {detailFx ? (
         <DetailModal fx={detailFx} checking={!detailFx._tvLoaded} t={t} locale={locale}
-          primaryCountry={primaryCountry} onClose={closeDetails} onShare={onShare} />
+          primaryCountry={primaryCountry} onClose={closeDetails} onShare={onShare}
+          topAds={detailTopAds} bottomAds={detailBottomAds} />
       ) : null}
 
       {copiedAt ? (

@@ -56,6 +56,7 @@ export async function POST(request) {
       label: String(item.label || "").trim(),
       enabled: item.enabled !== false,
       slot: isValidSlot(item.slot) ? item.slot : DEFAULT_SLOT,
+      everyN: item.everyN, // in-feed cadence; normalized/clamped in ads-store
     };
 
     const bannerKey = item.banner && typeof item.banner === "object" ? String(item.banner.key || "").trim() : "";

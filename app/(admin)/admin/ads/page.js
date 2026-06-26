@@ -7,10 +7,11 @@ import { useEffect, useRef, useState } from "react";
 import { asJson } from "@/components/admin/adminUtil";
 
 const DEFAULT_SLOTS = [
-  { id: "list-top", label: "Games list — top" },
-  { id: "list-bottom", label: "Games list — bottom" },
-  { id: "detail", label: "Per-game page" },
-  { id: "global", label: "Site-wide (self-placing)" },
+  { id: "home-top", label: "Homepage — top" },
+  { id: "home-bottom", label: "Homepage — bottom" },
+  { id: "fixtures-feed", label: "Fixtures list — in-feed (every N games)" },
+  { id: "detail-top", label: "Details page — top" },
+  { id: "detail-bottom", label: "Details page — bottom" },
 ];
 
 // Mirrors lib/ads-store.js#bannerSnippet — client-side, for Preview only.
@@ -39,10 +40,10 @@ function toRow(u) {
   u = u || {};
   const isBanner = !!(u.banner && u.banner.key);
   return {
-    uid: UID++, enabled: u.enabled !== false, slot: u.slot || "global",
+    uid: UID++, enabled: u.enabled !== false, slot: u.slot || "home-top",
     kind: isBanner ? "banner" : "snippet", script: u.script || "", label: u.label || "",
     key: (u.banner && u.banner.key) || "", width: (u.banner && u.banner.width) || 468,
-    height: (u.banner && u.banner.height) || 60, preview: false,
+    height: (u.banner && u.banner.height) || 60, everyN: u.everyN || 5, preview: false,
   };
 }
 
@@ -67,10 +68,11 @@ export default function AdsPage() {
 
   const upd = (uid, patch) => setRows((rs) => rs.map((r) => r.uid === uid ? Object.assign({}, r, patch) : r));
   const del = (uid) => setRows((rs) => rs.filter((r) => r.uid !== uid));
-  const add = () => setRows((rs) => rs.concat([toRow({ enabled: true, slot: "list-top" })]));
+  const add = () => setRows((rs) => rs.concat([toRow({ enabled: true, slot: "home-top" })]));
 
   const collect = () => rows.map((r) => {
     const common = { label: r.label.trim(), enabled: r.enabled, slot: r.slot };
+    if (r.slot === "fixtures-feed") common.everyN = Number(r.everyN) || 5;
     if (r.kind === "banner") {
       if (!String(r.key).trim()) return null;
       common.banner = { key: String(r.key).trim(), width: Number(r.width) || 468, height: Number(r.height) || 60 };
@@ -123,6 +125,13 @@ export default function AdsPage() {
                   <select className="loader-slot" value={r.slot} onChange={(e) => upd(r.uid, { slot: e.target.value })}>
                     {slots.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                   </select>
+                  {r.slot === "fixtures-feed" ? (
+                    <label className="loader-everyn">every
+                      <input type="number" min={1} max={50} value={r.everyN}
+                        onChange={(e) => upd(r.uid, { everyN: e.target.value })} />
+                      games
+                    </label>
+                  ) : null}
                   <button type="button" className="loader-del" title="Remove" onClick={() => del(r.uid)}>✕</button>
                 </div>
                 {r.kind === "snippet" ? (

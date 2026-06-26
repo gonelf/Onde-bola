@@ -29,6 +29,9 @@ input, select, button {
 .loader-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .loader-head .loader-slot { flex: 1 1 auto; }
 .loader-head .loader-kind { flex: none; width: auto; }
+.loader-everyn { display: flex; align-items: center; gap: 4px; flex: none; width: auto;
+                 font-size: 13px; color: var(--text-dim); white-space: nowrap; }
+.loader-everyn input { width: 56px; }
 .loader-banner-view { margin-bottom: 8px; }
 .loader-onlabel { display: flex; align-items: center; gap: 6px; width: auto; flex: none;
                   font-size: 13px; color: var(--text); white-space: nowrap; }

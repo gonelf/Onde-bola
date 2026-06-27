@@ -84,8 +84,10 @@ and the data sources are Next.js route handlers under `app/api/`.
   the square card (`/image/<tomorrow>/square`, which Buffer fetches itself) with
   the caption (`/image/<tomorrow>/text`) and queues the update for **09:00 UTC**
   the next day. Set `BUFFER_ACCESS_TOKEN` and `BUFFER_PROFILE_IDS` (and, if used,
-  `CRON_SECRET`); pass `?date=YYYY-MM-DD` to target another day. See
-  `lib/buffer-post`.
+  `CRON_SECRET`); pass `?date=YYYY-MM-DD` to target another day. Every run is
+  recorded in a KV log. The admin page **`/admin/buffer`** shows the config and
+  that log, previews a day's card + caption, and schedules a post on demand
+  (gated by Basic Auth, like the other admin pages). See `lib/buffer-post`.
 - **Date navigation** — jump to previous/next day or back to today.
 - **Live scores & status** — in-play matches show the current score, the
   minute (e.g. `67'`) or `HT`, and a pulsing live badge; finished games show
@@ -140,6 +142,7 @@ app/
   api/overrides/route.js         Admin CRUD for manual TV overrides (Basic Auth: ADMIN_USER / ADMIN_PASSWORD)
   api/ads/route.js               Admin CRUD for the ad units list (lib/ads-store.js), consumed by <AdSlot> (Basic Auth)
   api/flags/route.js             Admin CRUD for feature flags (lib/flags.js), consumed via isEnabled() (Basic Auth)
+  api/buffer/route.js            Admin Buffer management + schedule log; schedule a post on demand (Basic Auth)
   api/matchdetails/route.js      Per-match FotMob detail (venue, timeline, lineups, h2h, stats)
   api/highlights/route.js        Reads the collected highlights back as a feed
   api/cron-listings/route.js     Daily pre-warm of the upcoming window (shares lib/listings-build.js with on-visit refresh)
@@ -167,15 +170,15 @@ lib/digest-render.js             Renders the /today and /image pages
 lib/digest-select.js             Shared "day's top games" selection (well-known competitions + ranking) for every digest surface
 lib/digest-image-endpoint.js     Factory for the /image/{landscape,square,portrait} ready-to-post PNGs
 lib/digest-text.js               Builds the /text plain-text digest (ranking, flags, one PT channel per game)
-lib/buffer-post.js               Schedules a Buffer update (square card + caption); used by /api/cron-buffer
+lib/buffer-post.js               Schedules a Buffer update (square card + caption) + a KV schedule log; used by /api/cron-buffer and /api/buffer
 lib/country-flags.js             National-team name → flag emoji (EN + PT names) for the text digest
 lib/sitemap-sweep.js             Builds the canonical SEO URL map + KV registry helpers, shared by the sitemap, its cron and /api/seo
 assets/styles.css                Styling (imported by the app layout)
-public/admin/                    Admin console (noindex): /admin connections debugger, /admin/overrides, /admin/seo, /admin/ads, /admin/ad-test, /admin/flags
+public/admin/                    Admin console (noindex): /admin connections debugger, /admin/overrides, /admin/seo, /admin/ads, /admin/ad-test, /admin/flags, /admin/buffer
 public/assets/og-image.svg       Default social share / Open Graph card
 public/robots.txt                Crawl rules (allows the site, disallows /admin + /api)
 public/llms.txt                  Site summary for LLM/AI crawlers
-middleware.js                    Edge HTTP Basic Auth gating /admin + /api/overrides + /api/ads + /api/seo + /api/flags (ADMIN_USER / ADMIN_PASSWORD)
+middleware.js                    Edge HTTP Basic Auth gating /admin + /api/overrides + /api/ads + /api/seo + /api/flags + /api/buffer (ADMIN_USER / ADMIN_PASSWORD)
 vercel.json                      Crons → /api/cron-sitemap + /api/cron-listings + /api/cron-tick + /api/cron-buffer (all daily; listings also revalidates on visit)
 next.config.js                   Next.js config
 package.json                     next, react, @vercel/og, @vercel/analytics

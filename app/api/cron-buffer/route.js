@@ -7,13 +7,13 @@
  *
  * If CRON_SECRET is set, gate it with `Authorization: Bearer <secret>` or `?key=`.
  * Configure Buffer via BUFFER_ACCESS_TOKEN and BUFFER_PROFILE_IDS (see
- * lib/buffer-post). Can also be triggered by hand to schedule the next post.
+ * lib/buffer-post). Each run is recorded in the Buffer log shown at /admin/buffer.
  *
  * Override the target day with ?date=YYYY-MM-DD (defaults to tomorrow, UTC); the
  * post is always scheduled for 09:00 UTC on that day.
  */
 
-import { bufferConfigured, scheduleBufferUpdate } from "@/lib/buffer-post";
+import { bufferConfigured, scheduleDayPost, tomorrowYmd } from "@/lib/buffer-post";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -25,13 +25,6 @@ function authorized(request, key) {
   const auth = request.headers.get("authorization") || "";
   const bearer = auth.replace(/^Bearer\s+/i, "");
   return bearer === SECRET || key === SECRET;
-}
-
-// Tomorrow (UTC) as YYYY-MM-DD — the day the scheduled post is about and goes out.
-function tomorrowYmd() {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
 }
 
 export async function GET(request) {
@@ -55,41 +48,7 @@ export async function GET(request) {
 
   const qDate = url.searchParams.get("date") || "";
   const day = /^\d{4}-\d{2}-\d{2}$/.test(qDate) ? qDate : tomorrowYmd();
-  const imageUrl = `${origin}/image/${day}/square`;
-  const textUrl = `${origin}/image/${day}/text`;
-  // Publish at 09:00 UTC on the day the card is about.
-  const scheduledAt = `${day}T09:00:00Z`;
 
-  // Pull the caption from the new text endpoint (the same words /image shows).
-  // Buffer fetches the square image itself, so we only need to hand it the URL.
-  let text = "";
-  try {
-    const r = await fetch(textUrl, { headers: { Accept: "text/plain" } });
-    if (r.ok) text = (await r.text()).trim();
-  } catch (e) { /* handled below */ }
-
-  if (!text) {
-    return Response.json(
-      { ok: false, error: "could not build post text", textUrl },
-      { status: 502, headers: noStore }
-    );
-  }
-
-  const res = await scheduleBufferUpdate({ text, photo: imageUrl, scheduledAt });
-  return Response.json(
-    {
-      ok: res.ok,
-      date: day,
-      scheduledAt,
-      imageUrl,
-      textUrl,
-      status: res.status,
-      buffer: safeJson(res.body),
-    },
-    { status: res.ok ? 200 : 502, headers: noStore }
-  );
-}
-
-function safeJson(s) {
-  try { return JSON.parse(s); } catch (e) { return s; }
+  const result = await scheduleDayPost({ origin, date: day, trigger: "cron" });
+  return Response.json(result, { status: result.ok ? 200 : 502, headers: noStore });
 }

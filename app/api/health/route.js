@@ -73,7 +73,7 @@ export async function GET() {
     db: { ...dbStat, env: { DATABASE_URL: dbConfigured } },
     auth: {
       secret: !!process.env.AUTH_SECRET,
-      google: !!(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET),
+      resend: !!(process.env.AUTH_RESEND_KEY && (process.env.EMAIL_FROM || process.env.AUTH_EMAIL_FROM)),
     },
     sources: {
       fotmob: process.env.FOTMOB_DISABLED !== "1",

@@ -36,7 +36,7 @@ clubs → promotion/relegation at season's end.
 | D2 | **Deterministic, seeded simulator** (`mulberry32` from the existing engine) | Same seed → identical result, so replays are byte-reproducible and frozen results never drift | Live/random sim (non-reproducible) |
 | D3 | **Freeze results** (`match_results.events_json`/`stats_json`) | A played match is immutable history; the viewer needs zero recompute and is stable across `sim_version` changes | Recompute on view |
 | D4 | **Neon Postgres + Drizzle ORM** | Serverless HTTP driver survives Vercel's ephemeral per-request lifecycle (no pool exhaustion); Drizzle has no binary/codegen, fits a plain-JS repo | Vercel Postgres direct; Prisma (engine binary, cold start); KV-only (relational queries hard) |
-| D5 | **Auth.js v5, Google OAuth, database sessions** | App-Router-native; user chose Google-only (dropped the email/magic-link + nodemailer path mid-build) | Magic-link email (needs SMTP); credentials/passwords (own the security) |
+| D5 | **Auth.js v5, Resend magic-link (email only), database sessions** | App-Router-native, passwordless; one method keeps the flow simple. Resend's HTTP API sends the link with no SMTP server to run and isn't blocked from Vercel like SMTP often is | Google/OAuth (replaced — required per-provider client setup); SMTP/nodemailer (own a mail server); credentials/passwords (own the security) |
 | D6 | **Coexist with the existing admin Basic-Auth, don't fight over middleware** | `/admin` stays Basic-Auth in `middleware.js`; the game is gated at the layout/route level with `auth()` — keeps public/SEO routes session-free | Putting Auth.js in the edge middleware |
 | D7 | **Whole mode behind the existing `game` feature flag** (default off) | Deploys dark; owner flips it on at `/admin/flags` with no redeploy; reuses the app's generic flag system (one `FLAG_DEFS` entry) | A bespoke gate; env-var toggle |
 | D8 | **Multi-source ingestion, FotMob as source of truth, merged** | FotMob's squad/league endpoints are frequently **blocked from Vercel IPs**; merging Football-Data + TheSportsDB fills clubs/rosters/badges so seeding always yields the best available data | Single source (fragile); FotMob-only (failed in practice) |
@@ -120,7 +120,8 @@ editor without a local connection string.
 |-----|---------|----------|
 | `DATABASE_URL` | Neon Postgres (app reads this name) | Yes (game) |
 | `AUTH_SECRET` | Auth.js session secret | Yes (game) |
-| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google OAuth | Yes (sign-in) |
+| `AUTH_RESEND_KEY` | Resend API key (sends the magic link) | Yes (sign-in) |
+| `EMAIL_FROM` | Verified Resend sender, e.g. `Onde Bola <no-reply@yourdomain>` | Yes (sign-in) |
 | `ADMIN_USER` / `ADMIN_PASSWORD` | Admin Basic-Auth | Yes (admin) |
 | `FOOTBALL_DATA_TOKEN` | Real rosters (PL/ELC/PPL) | Optional |
 | `THESPORTSDB_KEY` | Defaults to free `123` | Optional |
@@ -136,11 +137,12 @@ client degrades to `null` like `lib/kv.js`).
 1. Set the env vars above; **redeploy** (Vercel injects on deploy).
 2. Create tables — run the consolidated `schema.sql` in the Neon SQL editor, or
    `npm run db:push` locally (the Drizzle config auto-loads `.env.local`).
-3. Verify at `/api/health` → `game.db.ping: true`, `auth.google: true`.
+3. Verify at `/api/health` → `game.db.ping: true`, `auth.resend: true`.
 4. Enable the **Manager game** flag at `/admin/flags`.
 5. Seed: `/admin/game-league → Seed demo season` (no external deps), or
    `/admin/game-seed` (real PT/UK clubs, source **Auto**) then create a league.
-6. Sign in (Google), open `/fantasygame`, claim a club, play.
+6. Sign in (enter your email → click the magic link), open `/fantasygame`,
+   claim a club, play.
 
 ---
 

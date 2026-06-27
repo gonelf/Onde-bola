@@ -9,6 +9,8 @@
  *            log: newest-first list of schedule attempts (see lib/buffer-post)
  *   POST  { action: "schedule", date? }  -> build + schedule the day's post on
  *            Buffer now (date defaults to tomorrow, UTC) and append to the log
+ *         { action: "channels" }         -> discover the account's Buffer channel
+ *            ids (so they can be put in BUFFER_CHANNEL_IDS)
  *         { action: "clear" }            -> clear the schedule log
  *
  * The square image and caption are pulled from the public /image/<date>/{square,
@@ -23,6 +25,7 @@ import {
   readBufferLog,
   clearBufferLog,
   scheduleDayPost,
+  listBufferChannels,
   tomorrowYmd,
 } from "@/lib/buffer-post";
 
@@ -66,6 +69,14 @@ export async function POST(request) {
     }
     await clearBufferLog();
     return Response.json({ ok: true, log: [] }, { headers: noStore });
+  }
+
+  if (action === "channels") {
+    if (!bufferConfig().tokenSet) {
+      return Response.json({ ok: false, error: "set BUFFER_ACCESS_TOKEN first" }, { status: 400, headers: noStore });
+    }
+    const r = await listBufferChannels();
+    return Response.json(r, { status: r.ok ? 200 : 502, headers: noStore });
   }
 
   if (action === "schedule") {

@@ -22,6 +22,8 @@ export default function BufferPage() {
   const [textHint, setTextHint] = useState("");
   const [hint, setHint] = useState("loading…");
   const [busy, setBusy] = useState(false);
+  const [channels, setChannels] = useState(null);
+  const [channelHint, setChannelHint] = useState("");
 
   const load = async () => {
     setHint("loading…");
@@ -72,6 +74,21 @@ export default function BufferPage() {
     setBusy(false);
   };
 
+  const discoverChannels = async () => {
+    if (busy) return;
+    setBusy(true);
+    setChannelHint("discovering…");
+    try {
+      const j = await asJson(await fetch("/api/buffer", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "channels" }),
+      }));
+      setChannels(Array.isArray(j.channels) ? j.channels : []);
+      setChannelHint(`${(j.channels || []).length} channel(s) — copy ids into BUFFER_CHANNEL_IDS`);
+    } catch (e) { setChannels([]); setChannelHint(String(e.message || e)); }
+    setBusy(false);
+  };
+
   const clearLog = async () => {
     if (busy) return;
     if (!window.confirm("Clear the Buffer schedule log?")) return;
@@ -101,16 +118,32 @@ export default function BufferPage() {
         <div style={{ fontWeight: 600, marginBottom: 2 }}>⚙️ Configuration</div>
         {config ? (
           <div className="sub" style={{ marginBottom: 0 }}>
-            Access token: <strong>{config.tokenSet ? "set ✓" : "missing ✗"}</strong> ·{" "}
-            Profiles: <strong>{config.profileCount}</strong>
-            {config.profileIds && config.profileIds.length ? <> (<code>{config.profileIds.join(", ")}</code>)</> : null} ·{" "}
+            API key: <strong>{config.tokenSet ? "set ✓" : "missing ✗"}</strong> ·{" "}
+            Channels: <strong>{config.channelCount}</strong>
+            {config.channelIds && config.channelIds.length ? <> (<code>{config.channelIds.join(", ")}</code>)</> : null} ·{" "}
             Status: <strong>{config.configured ? "ready ✓" : "not configured ✗"}</strong>
             {config.configured ? null : (
-              <> — set <code>BUFFER_ACCESS_TOKEN</code> and <code>BUFFER_PROFILE_IDS</code> in the environment.</>
+              <> — set <code>BUFFER_ACCESS_TOKEN</code> (a Buffer personal API key) and <code>BUFFER_CHANNEL_IDS</code> in the environment.</>
             )}
             {kvConfigured ? null : <> · <span style={{ color: "var(--warn)" }}>KV not configured — the log won&apos;t persist.</span></>}
           </div>
         ) : <div className="sub" style={{ marginBottom: 0 }}>—</div>}
+        <div className="toolbar">
+          <button className="secondary" onClick={discoverChannels} disabled={busy || !(config && config.tokenSet)}>Discover channels</button>
+          {channelHint ? <span className="pill">{channelHint}</span> : null}
+        </div>
+        {channels && channels.length ? (
+          <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
+            {channels.map((c) => (
+              <div className="loader-row" key={c.id} style={{ marginBottom: 0, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <code>{c.id}</code>
+                <strong>{c.name || "(unnamed)"}</strong>
+                {c.service ? <span className="pill">{c.service}</span> : null}
+                {c.organizationName ? <span className="sub" style={{ margin: 0 }}>· {c.organizationName}</span> : null}
+              </div>
+            ))}
+          </div>
+        ) : (channels && !channels.length ? <div className="loader-empty" style={{ marginTop: 10 }}>No channels found.</div> : null)}
       </div>
 
       <div className="card">
@@ -172,7 +205,6 @@ export default function BufferPage() {
                 <div className="sub" style={{ margin: 0 }}>
                   {e.ok ? "scheduled" : "failed"}
                   {typeof e.status === "number" && e.status ? <> · HTTP {e.status}</> : null}
-                  {e.bufferId ? <> · id <code>{e.bufferId}</code></> : null}
                   {e.message ? <> · {e.message}</> : null}
                 </div>
               </div>

@@ -81,13 +81,18 @@ and the data sources are Next.js route handlers under `app/api/`.
   leagues and competitions**, ranked by prominence, live-ness and kickoff.
 - **Scheduled social posts (Buffer)** — **`/api/cron-buffer`** is a daily Vercel
   cron that schedules tomorrow's post on [Buffer](https://buffer.com): it pairs
-  the square card (`/image/<tomorrow>/square`, which Buffer fetches itself) with
-  the caption (`/image/<tomorrow>/text`) and queues the update for **09:00 UTC**
-  the next day. Set `BUFFER_ACCESS_TOKEN` and `BUFFER_PROFILE_IDS` (and, if used,
-  `CRON_SECRET`); pass `?date=YYYY-MM-DD` to target another day. Every run is
-  recorded in a KV log. The admin page **`/admin/buffer`** shows the config and
-  that log, previews a day's card + caption, and schedules a post on demand
-  (gated by Basic Auth, like the other admin pages). See `lib/buffer-post`.
+  the square card (`/image/<tomorrow>/square`, which Buffer fetches itself via
+  `imageUrl`) with the caption (`/image/<tomorrow>/text`) and queues the post for
+  **09:00 UTC** the next day. Uses Buffer's **GraphQL API**
+  (`https://api.buffer.com`): a `createPost` per channel with
+  `mode: customScheduled` + a `dueAt` timestamp. Set `BUFFER_ACCESS_TOKEN` (a
+  Buffer personal API key) and `BUFFER_CHANNEL_IDS` (comma-separated channel ids;
+  legacy `BUFFER_PROFILE_IDS` still read as a fallback), plus `CRON_SECRET` if
+  used; pass `?date=YYYY-MM-DD` to target another day. Every run is recorded in a
+  KV log. The admin page **`/admin/buffer`** shows the config and that log,
+  discovers your channel ids, previews a day's card + caption, and schedules a
+  post on demand (gated by Basic Auth, like the other admin pages). See
+  `lib/buffer-post`.
 - **Date navigation** — jump to previous/next day or back to today.
 - **Live scores & status** — in-play matches show the current score, the
   minute (e.g. `67'`) or `HT`, and a pulsing live badge; finished games show
@@ -170,7 +175,7 @@ lib/digest-render.js             Renders the /today and /image pages
 lib/digest-select.js             Shared "day's top games" selection (well-known competitions + ranking) for every digest surface
 lib/digest-image-endpoint.js     Factory for the /image/{landscape,square,portrait} ready-to-post PNGs
 lib/digest-text.js               Builds the /text plain-text digest (ranking, flags, one PT channel per game)
-lib/buffer-post.js               Schedules a Buffer update (square card + caption) + a KV schedule log; used by /api/cron-buffer and /api/buffer
+lib/buffer-post.js               Buffer GraphQL client: schedule a post per channel (createPost) + channel discovery + a KV schedule log; used by /api/cron-buffer and /api/buffer
 lib/country-flags.js             National-team name → flag emoji (EN + PT names) for the text digest
 lib/sitemap-sweep.js             Builds the canonical SEO URL map + KV registry helpers, shared by the sitemap, its cron and /api/seo
 assets/styles.css                Styling (imported by the app layout)

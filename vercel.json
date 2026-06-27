@@ -4,6 +4,7 @@
   "crons": [
     { "path": "/api/cron-sitemap", "schedule": "0 5 * * *" },
     { "path": "/api/cron-listings", "schedule": "0 4 * * *" },
-    { "path": "/api/cron-tick", "schedule": "0 2 * * *" }
+    { "path": "/api/cron-tick", "schedule": "0 2 * * *" },
+    { "path": "/api/cron-buffer", "schedule": "0 7 * * *" }
   ]
 }

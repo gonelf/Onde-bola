@@ -19,7 +19,7 @@ import { prepEvents, maxMinute, addShotEvents, addPhaseEvents, DEFAULT_CONFIG } 
 import MatchPitch from "@/components/MatchPitch";
 import AdUnits from "@/components/AdUnits";
 import SoccerBall from "@/components/SoccerBall";
-import HandGestures from "@/components/HandGestures";
+import useSwipe from "@/components/useSwipe";
 import useReplayClock from "@/components/useReplayClock";
 import { useReplaySound } from "@/components/replaySounds";
 
@@ -536,6 +536,10 @@ function DetailModal({ fx, checking, t, locale, primaryCountry, onClose, onShare
   const closeRef = useRef(null);
   useEffect(() => { if (closeRef.current) closeRef.current.focus(); }, []);
 
+  // Swipe right to dismiss the modal (a "back" gesture). Horizontal-only, so it
+  // never fights the vertical scrolling of the detail body.
+  const swipe = useSwipe({ onRight: onClose });
+
   const st = statusOf(fx, t);
   const kickoff = new Date(fx.kickoff);
   const dateStr = kickoff.toLocaleDateString(locale || [], {
@@ -550,7 +554,7 @@ function DetailModal({ fx, checking, t, locale, primaryCountry, onClose, onShare
 
   return (
     <div className="detail-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+      <div className="detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title" {...swipe}>
         <div className="detail-actions">
           <button className="detail-share" type="button" aria-label={t("shareGame")} title={t("shareGame")}
             onClick={(e) => onShare(fx, e.currentTarget)}>
@@ -961,6 +965,10 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
   };
   const goToday = () => { const d = new Date(); setDate(d); dateRef.current = d; loadFixtures(); };
 
+  // Swipe the fixtures list left/right to page through days (matches the ‹ ›
+  // buttons): swipe left → next day, swipe right → previous day.
+  const daySwipe = useSwipe({ onLeft: () => shiftDay(1), onRight: () => shiftDay(-1) });
+
   const dateLabel = isSameDay(date, new Date())
     ? t("today")
     : date.toLocaleDateString(locale || [], { weekday: "long", day: "numeric", month: "long" });
@@ -1060,9 +1068,6 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
           <span className="current-date">{dateLabel}</span>
         </div>
         <div className="toolbar-right">
-          <HandGestures t={t}
-            onPrev={() => shiftDay(-1)} onNext={() => shiftDay(1)} onToday={goToday}
-            onBack={() => { if (detailIdRef.current) closeDetails(); }} />
           <div className="country-pick">
             <label htmlFor="country-select" className="country-label">{t("yourCountry")}</label>
             <select id="country-select" aria-label={t("countryAria")}
@@ -1109,6 +1114,8 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
         </div>
       </section>
 
+      <p className="swipe-hint" aria-hidden="true">{t("swipeHint")}</p>
+
       {refreshingTv ? (
         <div className="status refreshing" role="status" aria-live="polite">
           <span className="badge">⏳</span>
@@ -1131,7 +1138,7 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
         </div>
       ) : null}
 
-      <section className="games" aria-live="polite">
+      <section className="games" aria-live="polite" {...daySwipe}>
         {skeleton ? (
           Array.from({ length: 5 }).map((_, i) => <div className="skeleton" key={i} />)
         ) : grouped.empty ? (

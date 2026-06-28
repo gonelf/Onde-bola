@@ -607,6 +607,60 @@ function DetailModal({ fx, checking, t, locale, primaryCountry, onClose, onShare
   );
 }
 
+// Day-change "book page" transition. Keeps the outgoing day mounted while the
+// incoming one slides in, so the two tile edge-to-edge into a single filmstrip
+// (old day exits one side as the new day enters from the other). `pageKey`
+// changes per day; `dir` (-1/0/1) is the travel direction. Same-key updates
+// (live score refreshes) just swap content in place with no transition.
+function PageSlide({ pageKey, dir, children }) {
+  const [cur, setCur] = useState({ key: pageKey, node: children });
+  const [leaving, setLeaving] = useState(null); // { key, node, dir } of the page sliding out
+  const keyRef = useRef(pageKey);
+  const dirRef = useRef(dir);
+  const curRef = useRef(cur);
+  dirRef.current = dir;
+  curRef.current = cur;
+
+  useEffect(() => {
+    if (pageKey === keyRef.current) {
+      setCur({ key: pageKey, node: children }); // same day — refresh content only
+      return;
+    }
+    const old = curRef.current;
+    keyRef.current = pageKey;
+    setLeaving({ key: old.key, node: old.node, dir: dirRef.current });
+    setCur({ key: pageKey, node: children });
+  }, [pageKey, children]);
+
+  // Retire the outgoing page once its slide finishes. Keyed on `leaving` (not the
+  // main effect) so a same-day content refresh can't cancel this timer and leave
+  // the old page stranded on top.
+  useEffect(() => {
+    if (!leaving) return undefined;
+    const id = setTimeout(() => setLeaving(null), 420);
+    return () => clearTimeout(id);
+  }, [leaving]);
+
+  const dirClass = (d, kind) =>
+    d > 0 ? (kind === "in" ? "from-right" : "to-left")
+      : d < 0 ? (kind === "in" ? "from-left" : "to-right")
+      : (kind === "in" ? "fade-in" : "fade-out");
+
+  return (
+    <div className="page-viewport">
+      {leaving ? (
+        <div className={"page-layer leaving " + dirClass(leaving.dir, "out")}
+          key={leaving.key} aria-hidden="true">
+          {leaving.node}
+        </div>
+      ) : null}
+      <div className={"page-layer" + (leaving ? " " + dirClass(leaving.dir, "in") : "")} key={cur.key}>
+        {cur.node}
+      </div>
+    </div>
+  );
+}
+
 // ---- Main browser -------------------------------------------------------
 
 export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBottomAds = [] }) {
@@ -1146,8 +1200,7 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
       ) : null}
 
       <section className="games" aria-live="polite" {...daySwipe}>
-        <div key={ymd(date)}
-          className={"games-anim " + (navDir > 0 ? "from-right" : navDir < 0 ? "from-left" : "fade")}>
+        <PageSlide pageKey={ymd(date)} dir={navDir}>
         {skeleton ? (
           Array.from({ length: 5 }).map((_, i) => <div className="skeleton" key={i} />)
         ) : grouped.empty ? (
@@ -1208,7 +1261,7 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
           ) : null}
           </>
         )}
-        </div>
+        </PageSlide>
       </section>
 
       {detailFx ? (

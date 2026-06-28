@@ -278,21 +278,31 @@ body {
   }
 }
 
-/* Day-change transition: the fixtures list slides in the direction of travel
-   (set per nav in GamesBrowser and re-triggered by a date-keyed wrapper). Kept
-   subtle — a small offset + fade reads as a page turn without overflow. */
-.games-anim { animation: games-fade 240ms ease-out both; }
-.games-anim.from-right { animation: games-in-right 260ms cubic-bezier(0.22, 0.61, 0.36, 1) both; }
-.games-anim.from-left { animation: games-in-left 260ms cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+/* Day-change "book page" transition. The viewport clips horizontally (it grows
+   to the height of the current page, so tall lists are never cut) while the two
+   day pages slide across it as one filmstrip: the leaving page is taken out of
+   flow and animates off one edge while the entering page slides in from the
+   other. With equal width and duration they tile edge-to-edge — no overlap, no
+   gap — like turning pages in an endless book. */
+.page-viewport { position: relative; overflow: hidden; }
+.page-layer { width: 100%; }
+.page-layer.leaving {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 1;
+}
+.page-layer.from-right { animation: page-from-right 380ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+.page-layer.from-left { animation: page-from-left 380ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+.page-layer.to-left { animation: page-to-left 380ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+.page-layer.to-right { animation: page-to-right 380ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+.page-layer.fade-in { animation: games-fade 240ms ease-out both; }
+.page-layer.fade-out { animation: page-fade-out 240ms ease-out both; }
+@keyframes page-from-right { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes page-from-left { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes page-to-left { from { transform: none; } to { transform: translateX(-100%); } }
+@keyframes page-to-right { from { transform: none; } to { transform: translateX(100%); } }
 @keyframes games-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes games-in-right {
-  from { opacity: 0; transform: translateX(28px); }
-  to { opacity: 1; transform: none; }
-}
-@keyframes games-in-left {
-  from { opacity: 0; transform: translateX(-28px); }
-  to { opacity: 1; transform: none; }
-}
+@keyframes page-fade-out { from { opacity: 1; } to { opacity: 0; } }
 
 /* Detail modal entrance: backdrop fades, the card rises and settles. */
 .detail-overlay { animation: overlay-in 180ms ease-out both; }
@@ -304,7 +314,8 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .games-anim, .detail-overlay, .detail-modal { animation: none; }
+  .page-layer, .detail-overlay, .detail-modal { animation: none !important; }
+  .page-layer.leaving { display: none; }
 }
 
 /* Status */

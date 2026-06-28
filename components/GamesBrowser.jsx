@@ -11,7 +11,7 @@ import {
   CODE_TO_COUNTRY, countryFlag, initials, orderCountries, orderChannels,
   groupByCountry, compRank, ytIdOf, highlightLink,
   fetchFotMobFixtures, fetchTv, attachTv, fetchFotMobDay, fetchRichListings,
-  mergeTv, teamMatch,
+  mergeTv, teamMatch, fetchStandings,
   ensureEventTv, ensureDetails, loadHighlights, loadedTv, detailsCache,
 } from "@/lib/app-data";
 import { normName } from "@/lib/format";
@@ -120,6 +120,63 @@ function legacyCopy(text) {
   } catch (e) {
     return false;
   }
+}
+
+// ---- Competition classification (league table) -------------------------
+
+// The standings for one competition, fetched on demand from /api/standings and
+// shown inline under its header. A normal league is one table; group/multi-stage
+// tournaments come back as several named groups. FotMob tags promotion/relegation
+// rows with a colour (row.qual), rendered as a coloured edge on the rank cell.
+function StandingsTable({ loading, data, t }) {
+  if (loading) return <p className="standings-note">{t("tableLoading")}</p>;
+  if (!data || !data.ok || !data.groups || !data.groups.length) {
+    return <p className="standings-note">{t("tableNone")}</p>;
+  }
+  const multi = data.groups.length > 1;
+  return (
+    <div className="standings">
+      {data.groups.map((g, gi) => (
+        <div className="standings-group" key={gi}>
+          {multi && g.name ? <div className="standings-gname">{g.name}</div> : null}
+          <div className="standings-scroll">
+            <table className="standings-table">
+              <thead>
+                <tr>
+                  <th className="st-pos">{t("tblPos")}</th>
+                  <th className="st-club">{t("tblClub")}</th>
+                  <th title={t("tblPlayedFull")}>{t("tblP")}</th>
+                  <th title={t("tblWonFull")}>{t("tblW")}</th>
+                  <th title={t("tblDrawnFull")}>{t("tblD")}</th>
+                  <th title={t("tblLostFull")}>{t("tblL")}</th>
+                  <th title={t("tblGFFull")}>{t("tblGF")}</th>
+                  <th title={t("tblGAFull")}>{t("tblGA")}</th>
+                  <th title={t("tblGDFull")}>{t("tblGD")}</th>
+                  <th className="st-pts" title={t("tblPtsFull")}>{t("tblPts")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {g.rows.map((r, i) => (
+                  <tr key={r.id || r.name || i}>
+                    <td className="st-pos" style={r.qual ? { boxShadow: "inset 3px 0 0 " + r.qual } : undefined}>{r.rank || i + 1}</td>
+                    <td className="st-club">{r.name}</td>
+                    <td>{r.played}</td>
+                    <td>{r.won}</td>
+                    <td>{r.drawn}</td>
+                    <td>{r.lost}</td>
+                    <td>{r.gf}</td>
+                    <td>{r.ga}</td>
+                    <td>{r.gd > 0 ? "+" + r.gd : r.gd}</td>
+                    <td className="st-pts"><b>{r.points}</b></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // ---- Card channel summary ----------------------------------------------
@@ -617,6 +674,9 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
   const [refreshingTv, setRefreshingTv] = useState(false); // background listings build in flight
   const tvFollowup = useRef(false); // guards the one-shot re-fetch after a build
   const [detailId, setDetailId] = useState(null);
+  const [openTable, setOpenTable] = useState(null);   // competition whose table is expanded
+  const [standings, setStandings] = useState({});     // leagueId -> { ok, groups }
+  const [tableLoading, setTableLoading] = useState({}); // leagueId -> bool
   const [panelOpen, setPanelOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [skeleton, setSkeleton] = useState(true);
@@ -627,9 +687,13 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
   const fixturesRef = useRef([]);
   const dateRef = useRef(date);
   const detailIdRef = useRef(null);
+  const openTableRef = useRef(null);
+  const standingsRef = useRef({});
   fixturesRef.current = fixtures;
   dateRef.current = date;
   detailIdRef.current = detailId;
+  openTableRef.current = openTable;
+  standingsRef.current = standings;
 
   // Brand is resolved from the request host after mount (window is only available
   // client-side), mirroring how primaryCountry settles post-hydration — so the
@@ -908,6 +972,21 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
     }
   }, [fixtureById, bump]);
 
+  // Expand/collapse a competition's classification, fetching it on first open.
+  // fetchStandings caches at the module level, so a re-open is instant.
+  const toggleTable = useCallback((comp, leagueId) => {
+    const willOpen = openTableRef.current !== comp;
+    setOpenTable(willOpen ? comp : null);
+    if (!willOpen) return;
+    const id = String(leagueId == null ? "" : leagueId);
+    if (!id || standingsRef.current[id]) return;
+    setTableLoading((m) => ({ ...m, [id]: true }));
+    fetchStandings(id).then((data) => {
+      setStandings((m) => ({ ...m, [id]: data }));
+      setTableLoading((m) => { const n = { ...m }; delete n[id]; return n; });
+    });
+  }, []);
+
   const closeDetails = useCallback((opts) => {
     opts = opts || {};
     if (!detailIdRef.current) return;
@@ -1151,6 +1230,9 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
                 new Date(a.kickoff) - new Date(b.kickoff));
               const badged = games.filter((g) => g.leagueBadgeUrl)[0];
               const badgeUrl = badged ? badged.leagueBadgeUrl : "";
+              const leagueId = (games.find((g) => g.leagueId != null) || {}).leagueId;
+              const sid = String(leagueId == null ? "" : leagueId);
+              const tableOpen = openTable === comp;
               const items = [];
               games.forEach((g) => {
                 items.push(
@@ -1170,7 +1252,17 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
                     <LeagueLogo url={badgeUrl} name={comp} />
                     <span className="competition-name">{comp}</span>
                     <span className="count">{games.length}</span>
+                    {leagueId != null ? (
+                      <button type="button" className={"comp-table-btn" + (tableOpen ? " is-open" : "")}
+                        aria-expanded={tableOpen} aria-label={t("tableAria")}
+                        onClick={() => toggleTable(comp, leagueId)}>
+                        {tableOpen ? t("tableHide") : t("tableShow")}
+                      </button>
+                    ) : null}
                   </h2>
+                  {tableOpen ? (
+                    <StandingsTable loading={!!tableLoading[sid]} data={standings[sid]} t={t} />
+                  ) : null}
                   {items}
                 </section>
               );

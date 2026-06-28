@@ -331,6 +331,79 @@ body {
   padding: 0;
 }
 
+/* Competition classification (league table) */
+.comp-table-btn {
+  margin-left: auto;
+  flex: 0 0 auto;
+  background: var(--bg-elev);
+  color: var(--text-dim);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.comp-table-btn:hover { color: var(--text); border-color: var(--accent); }
+.comp-table-btn.is-open {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.standings {
+  margin: 0 0 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 6px;
+}
+.standings-group + .standings-group { margin-top: 10px; }
+.standings-gname {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 8px 8px 4px;
+}
+.standings-scroll { overflow-x: auto; }
+.standings-note {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  padding: 14px 12px;
+  margin: 0;
+  text-align: center;
+}
+.standings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+.standings-table th {
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 0.7rem;
+  text-align: right;
+  padding: 6px 6px;
+  border-bottom: 1px solid var(--line);
+}
+.standings-table td {
+  text-align: right;
+  padding: 7px 6px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-dim);
+}
+.standings-table tbody tr:last-child td { border-bottom: 0; }
+.standings-table .st-pos { text-align: center; width: 1.8rem; color: var(--text); }
+.standings-table .st-club { text-align: left; width: 99%; color: var(--text); font-weight: 600; }
+.standings-table .st-pts { color: var(--text); }
+.standings-table tbody tr:hover td { background: var(--bg-elev); }
+
 /* Show all / fewer games */
 .show-all-btn {
   display: block;

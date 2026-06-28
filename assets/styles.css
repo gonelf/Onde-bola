@@ -331,6 +331,99 @@ body {
   padding: 0;
 }
 
+/* Competition classification (league table) */
+.standings {
+  margin: 0 0 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 6px;
+}
+.standings-group + .standings-group { margin-top: 10px; }
+.standings-gname {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 8px 8px 4px;
+}
+.standings-scroll { overflow-x: auto; }
+.standings-note {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  padding: 14px 12px;
+  margin: 0;
+  text-align: center;
+}
+.standings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+.standings-table th {
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 0.7rem;
+  text-align: right;
+  padding: 6px 6px;
+  border-bottom: 1px solid var(--line);
+}
+.standings-table td {
+  text-align: right;
+  padding: 7px 6px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-dim);
+}
+.standings-table tbody tr:last-child td { border-bottom: 0; }
+.standings-table .st-pos { text-align: center; width: 1.8rem; color: var(--text); }
+.standings-table .st-club { text-align: left; width: 99%; color: var(--text); font-weight: 600; }
+.standings-table .st-pts { color: var(--text); }
+.standings-table tbody tr:hover td { background: var(--bg-elev); }
+.standings-table tbody tr.is-team td { background: var(--accent-soft); }
+.standings-table tbody tr.is-team .st-club { color: var(--accent); }
+
+/* Next round of fixtures (match modal) */
+.next-games {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.next-game {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+}
+.next-game .ng-home { text-align: right; font-weight: 600; }
+.next-game .ng-away { text-align: left; font-weight: 600; }
+.next-game .ng-time { color: var(--text-dim); font-variant-numeric: tabular-nums; min-width: 48px; text-align: center; }
+.next-game .ng-score { color: var(--accent); font-weight: 800; font-variant-numeric: tabular-nums; min-width: 48px; text-align: center; }
+.champ-link-row { margin: 2px 0 4px; }
+.champ-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+.champ-link:hover { border-color: var(--accent); color: var(--accent); }
+
 /* Show all / fewer games */
 .show-all-btn {
   display: block;

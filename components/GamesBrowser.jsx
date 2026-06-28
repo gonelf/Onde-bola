@@ -5,13 +5,13 @@ import { isPaidChannel } from "@/lib/broadcasters";
 import { langFor, makeT, localeFor } from "@/lib/i18n";
 import { DEFAULT_BRAND, brandForHost } from "@/lib/brand";
 import {
-  ymd, isSameDay, parseYmd, formatClock, statusOf, hasScore, shareLink,
+  ymd, isSameDay, parseYmd, formatClock, statusOf, hasScore, shareLink, leagueSlugFor,
 } from "@/lib/format";
 import {
   CODE_TO_COUNTRY, countryFlag, initials, orderCountries, orderChannels,
   groupByCountry, compRank, ytIdOf, highlightLink,
   fetchFotMobFixtures, fetchTv, attachTv, fetchFotMobDay, fetchRichListings,
-  mergeTv, teamMatch,
+  mergeTv, teamMatch, fetchStandings,
   ensureEventTv, ensureDetails, loadHighlights, loadedTv, detailsCache,
 } from "@/lib/app-data";
 import { normName } from "@/lib/format";
@@ -120,6 +120,153 @@ function legacyCopy(text) {
   } catch (e) {
     return false;
   }
+}
+
+// ---- Competition classification (league table) -------------------------
+
+// FotMob team-logo URLs embed the team id (…/teamlogo/<id>.png); pull it out so
+// we can highlight the two clubs of the opened match in the table.
+function teamIdFromBadge(url) {
+  const m = String(url || "").match(/teamlogo\/(\d+)/);
+  return m ? m[1] : "";
+}
+
+// Does a FotMob group name ("Group A", "Grupo B") refer to the match's group
+// letter (fx.group, e.g. "A")? Tolerates language + spacing differences.
+function groupMatches(groupName, letter) {
+  if (!letter) return false;
+  const n = String(groupName || "").toUpperCase().replace(/\s+/g, " ").trim();
+  const L = String(letter).toUpperCase().trim();
+  return n === L || n.endsWith(" " + L);
+}
+
+// The standings for one competition. A normal league is one table; group/multi-
+// stage tournaments come back as several named groups. FotMob tags promotion/
+// relegation rows with a colour (row.qual), rendered as a coloured edge on the
+// rank cell. The two clubs of the opened match (highlightIds) are emphasised.
+function StandingsTable({ loading, data, t, highlightIds = [] }) {
+  if (loading) return <p className="standings-note">{t("tableLoading")}</p>;
+  if (!data || !data.ok || !data.groups || !data.groups.length) {
+    return <p className="standings-note">{t("tableNone")}</p>;
+  }
+  const hi = new Set(highlightIds.filter(Boolean).map(String));
+  const multi = data.groups.length > 1;
+  return (
+    <div className="standings">
+      {data.groups.map((g, gi) => (
+        <div className="standings-group" key={gi}>
+          {multi && g.name ? <div className="standings-gname">{g.name}</div> : null}
+          <div className="standings-scroll">
+            <table className="standings-table">
+              <thead>
+                <tr>
+                  <th className="st-pos">{t("tblPos")}</th>
+                  <th className="st-club">{t("tblClub")}</th>
+                  <th title={t("tblPlayedFull")}>{t("tblP")}</th>
+                  <th title={t("tblWonFull")}>{t("tblW")}</th>
+                  <th title={t("tblDrawnFull")}>{t("tblD")}</th>
+                  <th title={t("tblLostFull")}>{t("tblL")}</th>
+                  <th title={t("tblGFFull")}>{t("tblGF")}</th>
+                  <th title={t("tblGAFull")}>{t("tblGA")}</th>
+                  <th title={t("tblGDFull")}>{t("tblGD")}</th>
+                  <th className="st-pts" title={t("tblPtsFull")}>{t("tblPts")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {g.rows.map((r, i) => (
+                  <tr key={r.id || r.name || i} className={r.id && hi.has(String(r.id)) ? "is-team" : undefined}>
+                    <td className="st-pos" style={r.qual ? { boxShadow: "inset 3px 0 0 " + r.qual } : undefined}>{r.rank || i + 1}</td>
+                    <td className="st-club">{r.name}</td>
+                    <td>{r.played}</td>
+                    <td>{r.won}</td>
+                    <td>{r.drawn}</td>
+                    <td>{r.lost}</td>
+                    <td>{r.gf}</td>
+                    <td>{r.ga}</td>
+                    <td>{r.gd > 0 ? "+" + r.gd : r.gd}</td>
+                    <td className="st-pts"><b>{r.points}</b></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// The next round of fixtures in a competition (home – kickoff/score – away).
+function NextGames({ matches, locale, t }) {
+  if (!matches || !matches.length) return null;
+  return (
+    <ul className="next-games">
+      {matches.map((m, i) => {
+        const played = m.finished || (m.homeScore != null && m.awayScore != null && m.started);
+        const mid = played
+          ? <span className="ng-score">{m.homeScore}–{m.awayScore}</span>
+          : <span className="ng-time">{m.kickoff ? formatClock(new Date(m.kickoff), locale) : t("vs")}</span>;
+        return (
+          <li className="next-game" key={m.id || i}>
+            <span className="ng-home">{m.home}</span>
+            {mid}
+            <span className="ng-away">{m.away}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+// Competition-level extras for the match modal: the classification (the match's
+// group only, when it's a group tournament) with both clubs highlighted, and the
+// competition's next round of fixtures. Fetched once per league on open.
+function CompetitionExtras({ fx, t, locale }) {
+  const [state, setState] = useState({ loading: true, data: null });
+  useEffect(() => {
+    if (fx.leagueId == null) { setState({ loading: false, data: null }); return undefined; }
+    let on = true;
+    setState({ loading: true, data: null });
+    fetchStandings(fx.leagueId).then((d) => { if (on) setState({ loading: false, data: d }); });
+    return () => { on = false; };
+  }, [fx.leagueId]);
+
+  if (fx.leagueId == null) return null;
+  const { loading, data } = state;
+
+  // Narrow a grouped tournament's table to the match's own group.
+  let tableData = data;
+  if (data && data.groups && data.groups.length > 1 && fx.group) {
+    const g = data.groups.find((gr) => groupMatches(gr.name, fx.group));
+    if (g) tableData = { ...data, groups: [g] };
+  }
+  const hasTable = data && data.ok && data.groups && data.groups.length;
+  const next = (data && data.next && data.next.matches) || [];
+  const highlightIds = [teamIdFromBadge(fx.homeBadge), teamIdFromBadge(fx.awayBadge)];
+
+  return (
+    <>
+      {loading || hasTable ? (
+        <>
+          <h3 className="detail-h">{t("tableShow")}</h3>
+          <StandingsTable loading={loading} data={tableData} t={t} highlightIds={highlightIds} />
+          {hasTable ? (
+            <div className="champ-link-row">
+              <a className="champ-link" href={"/g/" + leagueSlugFor(fx.competition, fx.kickoff)}>
+                {t("championshipPage")}
+              </a>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+      {next.length ? (
+        <>
+          <h3 className="detail-h">{t("nextGames")}</h3>
+          <NextGames matches={next} locale={locale} t={t} />
+        </>
+      ) : null}
+    </>
+  );
 }
 
 // ---- Card channel summary ----------------------------------------------
@@ -595,6 +742,7 @@ function DetailModal({ fx, checking, t, locale, primaryCountry, onClose, onShare
           </div>
           <DetailChannels fx={fx} checking={checking} t={t} primaryCountry={primaryCountry} />
           <DetailExtras fx={fx} t={t} />
+          <CompetitionExtras fx={fx} t={t} locale={locale} />
           {bottomAds.map((u) => <AdCard key={u.id} unit={u} slot="detail-bottom" />)}
         </div>
       </div>

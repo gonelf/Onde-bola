@@ -5,13 +5,15 @@
  * (middleware.js) and here (defence in depth, fail-closed when creds are unset).
  *
  *   GET   -> { config, kvConfigured, nextDate, log }
- *            config: { configured, tokenSet, profileCount, profileIds }
+ *            config: { configured, tokenSet, storedChannelIds, envChannelIds, … }
  *            log: newest-first list of schedule attempts (see lib/buffer-post)
- *   POST  { action: "schedule", date? }  -> build + schedule the day's post on
+ *   POST  { action: "schedule", date? }      -> build + schedule the day's post on
  *            Buffer now (date defaults to tomorrow, UTC) and append to the log
- *         { action: "channels" }         -> discover the account's Buffer channel
- *            ids (so they can be put in BUFFER_CHANNEL_IDS)
- *         { action: "clear" }            -> clear the schedule log
+ *         { action: "channels" }             -> discover the account's Buffer
+ *            channels (id, name, service)
+ *         { action: "saveChannels", channelIds:[…] } -> save which channels to
+ *            post to (empty list clears the selection → env/auto-default)
+ *         { action: "clear" }                -> clear the schedule log
  *
  * The square image and caption are pulled from the public /image/<date>/{square,
  * text} endpoints, so this shares exactly what the daily cron schedules.
@@ -26,6 +28,7 @@ import {
   clearBufferLog,
   scheduleDayPost,
   listBufferChannels,
+  saveStoredChannelIds,
   tomorrowYmd,
 } from "@/lib/buffer-post";
 
@@ -49,9 +52,9 @@ function originOf(request) {
 
 export async function GET(request) {
   if (!isAdmin(request)) return deny();
-  const log = await readBufferLog();
+  const [config, log] = await Promise.all([bufferConfig(), readBufferLog()]);
   return Response.json(
-    { config: bufferConfig(), kvConfigured, nextDate: tomorrowYmd(), log },
+    { config, kvConfigured, nextDate: tomorrowYmd(), log },
     { headers: noStore }
   );
 }
@@ -72,11 +75,20 @@ export async function POST(request) {
   }
 
   if (action === "channels") {
-    if (!bufferConfig().tokenSet) {
+    if (!bufferConfigured()) {
       return Response.json({ ok: false, error: "set BUFFER_ACCESS_TOKEN first" }, { status: 400, headers: noStore });
     }
     const r = await listBufferChannels();
     return Response.json(r, { status: r.ok ? 200 : 502, headers: noStore });
+  }
+
+  if (action === "saveChannels") {
+    if (!kvConfigured) {
+      return Response.json({ ok: false, error: "KV not configured — selection can't be saved" }, { status: 503, headers: noStore });
+    }
+    const ids = Array.isArray(body && body.channelIds) ? body.channelIds : [];
+    const saved = await saveStoredChannelIds(ids);
+    return Response.json({ ok: true, storedChannelIds: saved }, { headers: noStore });
   }
 
   if (action === "schedule") {

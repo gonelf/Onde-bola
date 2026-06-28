@@ -13,6 +13,13 @@ function fmtWhen(iso) {
   try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
 }
 
+// Services auto-selected by default (Facebook, Instagram, Twitter/X) — mirrors
+// lib/buffer-post's resolveChannelIds so the pre-checked boxes match the cron.
+function isDefaultService(service) {
+  const s = String(service || "").toLowerCase();
+  return s === "x" || s.includes("twitter") || s === "facebook" || s === "instagram";
+}
+
 export default function BufferPage() {
   const [config, setConfig] = useState(null);
   const [kvConfigured, setKvConfigured] = useState(true);
@@ -24,6 +31,7 @@ export default function BufferPage() {
   const [busy, setBusy] = useState(false);
   const [channels, setChannels] = useState(null);
   const [channelHint, setChannelHint] = useState("");
+  const [selected, setSelected] = useState({}); // channelId -> true
 
   const load = async () => {
     setHint("loading…");
@@ -58,7 +66,7 @@ export default function BufferPage() {
 
   const scheduleNow = async () => {
     if (busy) return;
-    if (!config || !config.configured) { setHint("⚠️ set BUFFER_ACCESS_TOKEN and BUFFER_PROFILE_IDS first"); return; }
+    if (!config || !config.configured) { setHint("⚠️ set BUFFER_ACCESS_TOKEN first"); return; }
     if (!window.confirm(`Schedule the ${date} post on Buffer for ${date} 09:00 UTC?`)) return;
     setBusy(true);
     setHint("scheduling…");
@@ -83,9 +91,36 @@ export default function BufferPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "channels" }),
       }));
-      setChannels(Array.isArray(j.channels) ? j.channels : []);
-      setChannelHint(`${(j.channels || []).length} channel(s) — copy ids into BUFFER_CHANNEL_IDS`);
+      const list = Array.isArray(j.channels) ? j.channels : [];
+      setChannels(list);
+      // Pre-select the saved channels if any, otherwise the default services
+      // (Facebook / Instagram / X) — matching what the cron would use.
+      const stored = (config && config.storedChannelIds) || [];
+      const sel = {};
+      if (stored.length) stored.forEach((id) => { sel[id] = true; });
+      else list.forEach((c) => { if (isDefaultService(c.service)) sel[c.id] = true; });
+      setSelected(sel);
+      setChannelHint(`${list.length} channel(s) — tick the ones to post to, then Save`);
     } catch (e) { setChannels([]); setChannelHint(String(e.message || e)); }
+    setBusy(false);
+  };
+
+  const toggleChannel = (id) =>
+    setSelected((s) => Object.assign({}, s, { [id]: !s[id] }));
+
+  const saveChannels = async () => {
+    if (busy) return;
+    const channelIds = (channels || []).map((c) => c.id).filter((id) => selected[id]);
+    setBusy(true);
+    setChannelHint("saving…");
+    try {
+      const j = await asJson(await fetch("/api/buffer", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "saveChannels", channelIds }),
+      }));
+      setConfig((c) => (c ? Object.assign({}, c, { storedChannelIds: j.storedChannelIds || [] }) : c));
+      setChannelHint(`saved ✓ — ${(j.storedChannelIds || []).length} channel(s)`);
+    } catch (e) { setChannelHint(String(e.message || e)); }
     setBusy(false);
   };
 
@@ -119,28 +154,39 @@ export default function BufferPage() {
         {config ? (
           <div className="sub" style={{ marginBottom: 0 }}>
             API key: <strong>{config.tokenSet ? "set ✓" : "missing ✗"}</strong> ·{" "}
-            Channels: <strong>{config.channelCount}</strong>
-            {config.channelIds && config.channelIds.length ? <> (<code>{config.channelIds.join(", ")}</code>)</> : null} ·{" "}
             Status: <strong>{config.configured ? "ready ✓" : "not configured ✗"}</strong>
             {config.configured ? null : (
-              <> — set <code>BUFFER_ACCESS_TOKEN</code> (a Buffer personal API key) and <code>BUFFER_CHANNEL_IDS</code> in the environment.</>
+              <> — set <code>BUFFER_ACCESS_TOKEN</code> (a Buffer personal API key) in the environment.</>
             )}
-            {kvConfigured ? null : <> · <span style={{ color: "var(--warn)" }}>KV not configured — the log won&apos;t persist.</span></>}
+            <br />
+            Channels: {config.storedChannelIds && config.storedChannelIds.length
+              ? <>saved — <code>{config.storedChannelIds.join(", ")}</code></>
+              : (config.envChannelIds && config.envChannelIds.length
+                ? <>from <code>BUFFER_CHANNEL_IDS</code> — <code>{config.envChannelIds.join(", ")}</code></>
+                : <>none saved — defaults to your <strong>Facebook, Instagram &amp; Twitter/X</strong> channels</>)}
+            {kvConfigured ? null : <> · <span style={{ color: "var(--warn)" }}>KV not configured — selection &amp; log won&apos;t persist.</span></>}
           </div>
         ) : <div className="sub" style={{ marginBottom: 0 }}>—</div>}
+        <div className="sub" style={{ margin: "10px 0 0" }}>
+          Discover your account&apos;s channels, tick the ones to post to and Save. With none saved, the post goes to
+          your Facebook, Instagram and Twitter/X channels by default.
+        </div>
         <div className="toolbar">
           <button className="secondary" onClick={discoverChannels} disabled={busy || !(config && config.tokenSet)}>Discover channels</button>
+          {channels && channels.length ? <button onClick={saveChannels} disabled={busy || !kvConfigured}>Save channels</button> : null}
           {channelHint ? <span className="pill">{channelHint}</span> : null}
         </div>
         {channels && channels.length ? (
           <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
             {channels.map((c) => (
-              <div className="loader-row" key={c.id} style={{ marginBottom: 0, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <code>{c.id}</code>
+              <label className="loader-row" key={c.id} htmlFor={`ch-${c.id}`}
+                style={{ marginBottom: 0, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", cursor: "pointer" }}>
+                <input id={`ch-${c.id}`} type="checkbox" checked={!!selected[c.id]} onChange={() => toggleChannel(c.id)} style={{ width: "auto" }} />
                 <strong>{c.name || "(unnamed)"}</strong>
                 {c.service ? <span className="pill">{c.service}</span> : null}
+                <code>{c.id}</code>
                 {c.organizationName ? <span className="sub" style={{ margin: 0 }}>· {c.organizationName}</span> : null}
-              </div>
+              </label>
             ))}
           </div>
         ) : (channels && !channels.length ? <div className="loader-empty" style={{ marginTop: 10 }}>No channels found.</div> : null)}
@@ -204,7 +250,7 @@ export default function BufferPage() {
                 </div>
                 <div className="sub" style={{ margin: 0 }}>
                   {e.ok ? "scheduled" : "failed"}
-                  {typeof e.status === "number" && e.status ? <> · HTTP {e.status}</> : null}
+                  {e.channelSource ? <> · channels: {e.channelSource}</> : null}
                   {e.message ? <> · {e.message}</> : null}
                 </div>
               </div>

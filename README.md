@@ -86,11 +86,13 @@ and the data sources are Next.js route handlers under `app/api/`.
   **09:00 UTC** the next day. Uses Buffer's **GraphQL API**
   (`https://api.buffer.com`): a `createPost` per channel with
   `mode: customScheduled` + a `dueAt` timestamp. Set `BUFFER_ACCESS_TOKEN` (a
-  Buffer personal API key) and `BUFFER_CHANNEL_IDS` (comma-separated channel ids;
-  legacy `BUFFER_PROFILE_IDS` still read as a fallback), plus `CRON_SECRET` if
-  used; pass `?date=YYYY-MM-DD` to target another day. Every run is recorded in a
-  KV log. The admin page **`/admin/buffer`** shows the config and that log,
-  discovers your channel ids, previews a day's card + caption, and schedules a
+  Buffer personal API key), plus `CRON_SECRET` if used; pass `?date=YYYY-MM-DD`
+  to target another day. **Which channels** to post to is managed from
+  **`/admin/buffer`** (saved in KV) — resolution is saved selection →
+  `BUFFER_CHANNEL_IDS` env (legacy `BUFFER_PROFILE_IDS` still read) → otherwise
+  **auto-default to your Facebook, Instagram and Twitter/X channels**. Every run
+  is recorded in a KV log. The admin page shows the config and that log,
+  discovers/selects channels, previews a day's card + caption, and schedules a
   post on demand (gated by Basic Auth, like the other admin pages). See
   `lib/buffer-post`.
 - **Date navigation** — jump to previous/next day or back to today.

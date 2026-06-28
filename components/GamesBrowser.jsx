@@ -124,15 +124,32 @@ function legacyCopy(text) {
 
 // ---- Competition classification (league table) -------------------------
 
-// The standings for one competition, fetched on demand from /api/standings and
-// shown inline under its header. A normal league is one table; group/multi-stage
-// tournaments come back as several named groups. FotMob tags promotion/relegation
-// rows with a colour (row.qual), rendered as a coloured edge on the rank cell.
-function StandingsTable({ loading, data, t }) {
+// FotMob team-logo URLs embed the team id (…/teamlogo/<id>.png); pull it out so
+// we can highlight the two clubs of the opened match in the table.
+function teamIdFromBadge(url) {
+  const m = String(url || "").match(/teamlogo\/(\d+)/);
+  return m ? m[1] : "";
+}
+
+// Does a FotMob group name ("Group A", "Grupo B") refer to the match's group
+// letter (fx.group, e.g. "A")? Tolerates language + spacing differences.
+function groupMatches(groupName, letter) {
+  if (!letter) return false;
+  const n = String(groupName || "").toUpperCase().replace(/\s+/g, " ").trim();
+  const L = String(letter).toUpperCase().trim();
+  return n === L || n.endsWith(" " + L);
+}
+
+// The standings for one competition. A normal league is one table; group/multi-
+// stage tournaments come back as several named groups. FotMob tags promotion/
+// relegation rows with a colour (row.qual), rendered as a coloured edge on the
+// rank cell. The two clubs of the opened match (highlightIds) are emphasised.
+function StandingsTable({ loading, data, t, highlightIds = [] }) {
   if (loading) return <p className="standings-note">{t("tableLoading")}</p>;
   if (!data || !data.ok || !data.groups || !data.groups.length) {
     return <p className="standings-note">{t("tableNone")}</p>;
   }
+  const hi = new Set(highlightIds.filter(Boolean).map(String));
   const multi = data.groups.length > 1;
   return (
     <div className="standings">
@@ -157,7 +174,7 @@ function StandingsTable({ loading, data, t }) {
               </thead>
               <tbody>
                 {g.rows.map((r, i) => (
-                  <tr key={r.id || r.name || i}>
+                  <tr key={r.id || r.name || i} className={r.id && hi.has(String(r.id)) ? "is-team" : undefined}>
                     <td className="st-pos" style={r.qual ? { boxShadow: "inset 3px 0 0 " + r.qual } : undefined}>{r.rank || i + 1}</td>
                     <td className="st-club">{r.name}</td>
                     <td>{r.played}</td>
@@ -176,6 +193,72 @@ function StandingsTable({ loading, data, t }) {
         </div>
       ))}
     </div>
+  );
+}
+
+// The next round of fixtures in a competition (home – kickoff/score – away).
+function NextGames({ matches, locale, t }) {
+  if (!matches || !matches.length) return null;
+  return (
+    <ul className="next-games">
+      {matches.map((m, i) => {
+        const played = m.finished || (m.homeScore != null && m.awayScore != null && m.started);
+        const mid = played
+          ? <span className="ng-score">{m.homeScore}–{m.awayScore}</span>
+          : <span className="ng-time">{m.kickoff ? formatClock(new Date(m.kickoff), locale) : t("vs")}</span>;
+        return (
+          <li className="next-game" key={m.id || i}>
+            <span className="ng-home">{m.home}</span>
+            {mid}
+            <span className="ng-away">{m.away}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+// Competition-level extras for the match modal: the classification (the match's
+// group only, when it's a group tournament) with both clubs highlighted, and the
+// competition's next round of fixtures. Fetched once per league on open.
+function CompetitionExtras({ fx, t, locale }) {
+  const [state, setState] = useState({ loading: true, data: null });
+  useEffect(() => {
+    if (fx.leagueId == null) { setState({ loading: false, data: null }); return undefined; }
+    let on = true;
+    setState({ loading: true, data: null });
+    fetchStandings(fx.leagueId).then((d) => { if (on) setState({ loading: false, data: d }); });
+    return () => { on = false; };
+  }, [fx.leagueId]);
+
+  if (fx.leagueId == null) return null;
+  const { loading, data } = state;
+
+  // Narrow a grouped tournament's table to the match's own group.
+  let tableData = data;
+  if (data && data.groups && data.groups.length > 1 && fx.group) {
+    const g = data.groups.find((gr) => groupMatches(gr.name, fx.group));
+    if (g) tableData = { ...data, groups: [g] };
+  }
+  const hasTable = data && data.ok && data.groups && data.groups.length;
+  const next = (data && data.next && data.next.matches) || [];
+  const highlightIds = [teamIdFromBadge(fx.homeBadge), teamIdFromBadge(fx.awayBadge)];
+
+  return (
+    <>
+      {loading || hasTable ? (
+        <>
+          <h3 className="detail-h">{t("tableShow")}</h3>
+          <StandingsTable loading={loading} data={tableData} t={t} highlightIds={highlightIds} />
+        </>
+      ) : null}
+      {next.length ? (
+        <>
+          <h3 className="detail-h">{t("nextGames")}</h3>
+          <NextGames matches={next} locale={locale} t={t} />
+        </>
+      ) : null}
+    </>
   );
 }
 
@@ -652,6 +735,7 @@ function DetailModal({ fx, checking, t, locale, primaryCountry, onClose, onShare
           </div>
           <DetailChannels fx={fx} checking={checking} t={t} primaryCountry={primaryCountry} />
           <DetailExtras fx={fx} t={t} />
+          <CompetitionExtras fx={fx} t={t} locale={locale} />
           {bottomAds.map((u) => <AdCard key={u.id} unit={u} slot="detail-bottom" />)}
         </div>
       </div>
@@ -674,9 +758,6 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
   const [refreshingTv, setRefreshingTv] = useState(false); // background listings build in flight
   const tvFollowup = useRef(false); // guards the one-shot re-fetch after a build
   const [detailId, setDetailId] = useState(null);
-  const [openTable, setOpenTable] = useState(null);   // competition whose table is expanded
-  const [standings, setStandings] = useState({});     // leagueId -> { ok, groups }
-  const [tableLoading, setTableLoading] = useState({}); // leagueId -> bool
   const [panelOpen, setPanelOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [skeleton, setSkeleton] = useState(true);
@@ -687,13 +768,9 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
   const fixturesRef = useRef([]);
   const dateRef = useRef(date);
   const detailIdRef = useRef(null);
-  const openTableRef = useRef(null);
-  const standingsRef = useRef({});
   fixturesRef.current = fixtures;
   dateRef.current = date;
   detailIdRef.current = detailId;
-  openTableRef.current = openTable;
-  standingsRef.current = standings;
 
   // Brand is resolved from the request host after mount (window is only available
   // client-side), mirroring how primaryCountry settles post-hydration — so the
@@ -972,21 +1049,6 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
     }
   }, [fixtureById, bump]);
 
-  // Expand/collapse a competition's classification, fetching it on first open.
-  // fetchStandings caches at the module level, so a re-open is instant.
-  const toggleTable = useCallback((comp, leagueId) => {
-    const willOpen = openTableRef.current !== comp;
-    setOpenTable(willOpen ? comp : null);
-    if (!willOpen) return;
-    const id = String(leagueId == null ? "" : leagueId);
-    if (!id || standingsRef.current[id]) return;
-    setTableLoading((m) => ({ ...m, [id]: true }));
-    fetchStandings(id).then((data) => {
-      setStandings((m) => ({ ...m, [id]: data }));
-      setTableLoading((m) => { const n = { ...m }; delete n[id]; return n; });
-    });
-  }, []);
-
   const closeDetails = useCallback((opts) => {
     opts = opts || {};
     if (!detailIdRef.current) return;
@@ -1230,9 +1292,6 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
                 new Date(a.kickoff) - new Date(b.kickoff));
               const badged = games.filter((g) => g.leagueBadgeUrl)[0];
               const badgeUrl = badged ? badged.leagueBadgeUrl : "";
-              const leagueId = (games.find((g) => g.leagueId != null) || {}).leagueId;
-              const sid = String(leagueId == null ? "" : leagueId);
-              const tableOpen = openTable === comp;
               const items = [];
               games.forEach((g) => {
                 items.push(
@@ -1252,17 +1311,7 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
                     <LeagueLogo url={badgeUrl} name={comp} />
                     <span className="competition-name">{comp}</span>
                     <span className="count">{games.length}</span>
-                    {leagueId != null ? (
-                      <button type="button" className={"comp-table-btn" + (tableOpen ? " is-open" : "")}
-                        aria-expanded={tableOpen} aria-label={t("tableAria")}
-                        onClick={() => toggleTable(comp, leagueId)}>
-                        {tableOpen ? t("tableHide") : t("tableShow")}
-                      </button>
-                    ) : null}
                   </h2>
-                  {tableOpen ? (
-                    <StandingsTable loading={!!tableLoading[sid]} data={standings[sid]} t={t} />
-                  ) : null}
                   {items}
                 </section>
               );

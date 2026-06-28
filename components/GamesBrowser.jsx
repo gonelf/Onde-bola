@@ -687,6 +687,8 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
   const fixturesRef = useRef([]);
   const dateRef = useRef(date);
   const detailIdRef = useRef(null);
+  const dayCache = useRef({});        // ymd -> processed fixtures, so adjacent days render instantly
+  const neighborInflight = useRef({}); // ymd -> true while a neighbour prefetch is running
   fixturesRef.current = fixtures;
   dateRef.current = date;
   detailIdRef.current = detailId;
@@ -806,53 +808,122 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
     pump();
   }, [isHidden, bump]);
 
-  // ---- Load fixtures ----
-  const loadFixtures = useCallback((silent) => {
-    if (!silent) setSkeleton(true);
-    loadToken.current += 1;
-    const token = loadToken.current;
-    const day = ymd(dateRef.current);
-
+  // ---- Build one day (fetch + merge), no UI state ----
+  // Fetches a day's fixtures and folds in every TV source, returning the same
+  // shape the cards render. Pure data: callers decide whether to display it,
+  // cache it, or both — which is what lets adjacent days be prefetched.
+  const buildDay = useCallback((day) => {
     let feedReachable = true;
     const fixturesReq = fetchFotMobFixtures(day).catch(() => { feedReachable = false; return []; });
-
     return Promise.all([fixturesReq, fetchTv(day), fetchFotMobDay(day), fetchRichListings(day)])
       .then((res) => {
-      if (token !== loadToken.current) return;
-      let fx = res[0] || [];
-      const tv = res[1];
-      const dayMaps = res[2] || [];
-      const rich = res[3] || {};            // { matches, refreshing } from /api/listings
-      const richMatches = rich.matches || {}; // accumulated store, keyed by FotMob match id
-      attachTv(fx, tv);
+        let fx = res[0] || [];
+        const tv = res[1];
+        const dayMaps = res[2] || [];
+        const rich = res[3] || {};            // { matches, refreshing } from /api/listings
+        const richMatches = rich.matches || {}; // accumulated store, keyed by FotMob match id
+        attachTv(fx, tv);
 
-      if (dayMaps.length) {
+        if (dayMaps.length) {
+          fx.forEach((f) => {
+            const h = normName(f.home), a = normName(f.away);
+            for (let i = 0; i < dayMaps.length; i++) {
+              const e = dayMaps[i];
+              // Join by FotMob match id when both sides carry it — robust against
+              // per-country localized team names (e.g. "Suíça"/"Bósnia"); fall back
+              // to name matching only when an id isn't available.
+              const idJoin = e.id && f.fmid && String(e.id) === String(f.fmid);
+              const matched = idJoin ||
+                (e.rows && e.rows.length && teamMatch(h, e.h) && teamMatch(a, e.a));
+              if (matched && e.rows && e.rows.length) f.tv = mergeTv(f.tv, e.rows);
+            }
+          });
+        }
+
+        // Accumulated daily store (cron-listings): exact id join, richest source.
         fx.forEach((f) => {
-          const h = normName(f.home), a = normName(f.away);
-          for (let i = 0; i < dayMaps.length; i++) {
-            const e = dayMaps[i];
-            // Join by FotMob match id when both sides carry it — robust against
-            // per-country localized team names (e.g. "Suíça"/"Bósnia"); fall back
-            // to name matching only when an id isn't available.
-            const idJoin = e.id && f.fmid && String(e.id) === String(f.fmid);
-            const matched = idJoin ||
-              (e.rows && e.rows.length && teamMatch(h, e.h) && teamMatch(a, e.a));
-            if (matched && e.rows && e.rows.length) f.tv = mergeTv(f.tv, e.rows);
+          const r = f.fmid && richMatches[String(f.fmid)];
+          if (r && r.rows && r.rows.length) f.tv = mergeTv(f.tv, r.rows);
+        });
+
+        fx.forEach((f) => {
+          if (loadedTv[f.id]) { f.tv = mergeTv(f.tv, loadedTv[f.id]); f._tvLoaded = true; }
+          if (f.fmid && Object.prototype.hasOwnProperty.call(detailsCache, f.fmid)) {
+            f._details = detailsCache[f.fmid];
+            f._detailsLoaded = true;
           }
         });
-      }
 
-      // Accumulated daily store (cron-listings): exact id join, richest source.
-      fx.forEach((f) => {
-        const r = f.fmid && richMatches[String(f.fmid)];
-        if (r && r.rows && r.rows.length) f.tv = mergeTv(f.tv, r.rows);
+        return { fx, feedReachable, refreshing: !!rich.refreshing };
       });
+  }, []);
+
+  // Push a built day into the UI (fixtures + status). `token` gates the per-event
+  // listings prefetch; pass null to skip it (e.g. when showing a cached day that a
+  // background refresh will follow up).
+  const applyDay = useCallback((fx, day, opts) => {
+    opts = opts || {};
+    setSkeleton(false);
+    if (!fx.length) {
+      if (opts.silent) return;
+      setFixtures([]);
+      setStatus({ kind: "error", badge: "NONE", text: opts.feedReachable === false ? t("feedDown") : t("noFixtures") });
+      return;
+    }
+    const comps = {};
+    fx.forEach((f) => { comps[f.competition] = true; });
+    const live = fx.filter((f) => statusOf(f, t).state === "live").length;
+    const withTv = fx.filter((f) => f.tv && f.tv.length).length;
+    const nGames = fx.length, nComps = Object.keys(comps).length;
+    const base = nGames + " " + t(nGames === 1 ? "game" : "games") + " · " +
+      nComps + " " + t(nComps === 1 ? "competition" : "competitions") +
+      (live ? " · " + live + " " + t("liveNow") : "");
+    setFixtures(fx);
+    setStatus({
+      kind: "ok", badge: live ? t("live") : "OK", text: base,
+      tvCount: withTv, updated: formatClock(new Date(), locale),
+    });
+    if (opts.token != null) prefetchListings(opts.token, fx, day);
+  }, [t, locale, prefetchListings]);
+
+  // Warm the cache for the days on either side of `centerDate`, so the next swipe
+  // lands on real fixtures instead of the loading skeleton. Bounded: at most one
+  // in-flight fetch per day, and the cache is pruned to a window around the
+  // current day so long paging sessions don't grow it without bound.
+  const prefetchNeighbors = useCallback((centerDate) => {
+    const center = ymd(centerDate);
+    Object.keys(dayCache.current).forEach((k) => {
+      const diff = Math.abs((parseYmd(k) - parseYmd(center)) / 86400000);
+      if (diff > 3) delete dayCache.current[k];
+    });
+    [-1, 1].forEach((delta) => {
+      const d = new Date(centerDate);
+      d.setDate(d.getDate() + delta);
+      const key = ymd(d);
+      if (dayCache.current[key] || neighborInflight.current[key]) return;
+      neighborInflight.current[key] = true;
+      buildDay(key)
+        .then(({ fx }) => { if (fx && fx.length) dayCache.current[key] = fx; })
+        .catch(() => {})
+        .then(() => { delete neighborInflight.current[key]; });
+    });
+  }, [buildDay]);
+
+  // ---- Load fixtures (current day) ----
+  const loadFixtures = useCallback((silent) => {
+    const day = ymd(dateRef.current);
+    if (!silent && !dayCache.current[day]) setSkeleton(true);
+    loadToken.current += 1;
+    const token = loadToken.current;
+    return buildDay(day).then(({ fx, feedReachable, refreshing }) => {
+      if (token !== loadToken.current) return;
+      if (fx.length) dayCache.current[day] = fx;
 
       // When the store is being rebuilt in the background, show a banner and
       // re-fetch once shortly after so the freshly merged channels appear without
       // a manual reload. The server's per-window lock makes the follow-up return
       // refreshing=false, so this fires at most once (no loop).
-      if (rich.refreshing) {
+      if (refreshing) {
         setRefreshingTv(true);
         if (!tvFollowup.current) {
           tvFollowup.current = true;
@@ -862,39 +933,10 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
         setRefreshingTv(false);
       }
 
-      fx.forEach((f) => {
-        if (loadedTv[f.id]) { f.tv = mergeTv(f.tv, loadedTv[f.id]); f._tvLoaded = true; }
-        if (f.fmid && Object.prototype.hasOwnProperty.call(detailsCache, f.fmid)) {
-          f._details = detailsCache[f.fmid];
-          f._detailsLoaded = true;
-        }
-      });
-
-      setSkeleton(false);
-
-      if (!fx.length) {
-        if (silent) return;
-        setFixtures([]);
-        setStatus({ kind: "error", badge: "NONE", text: feedReachable ? t("noFixtures") : t("feedDown") });
-        return;
-      }
-
-      const comps = {};
-      fx.forEach((f) => { comps[f.competition] = true; });
-      const live = fx.filter((f) => statusOf(f, t).state === "live").length;
-      const withTv = fx.filter((f) => f.tv && f.tv.length).length;
-      const nGames = fx.length, nComps = Object.keys(comps).length;
-      const base = nGames + " " + t(nGames === 1 ? "game" : "games") + " · " +
-        nComps + " " + t(nComps === 1 ? "competition" : "competitions") +
-        (live ? " · " + live + " " + t("liveNow") : "");
-      setFixtures(fx);
-      setStatus({
-        kind: "ok", badge: live ? t("live") : "OK", text: base,
-        tvCount: withTv, updated: formatClock(new Date(), locale),
-      });
-      prefetchListings(token, fx, day);
+      applyDay(fx, day, { silent, feedReachable, token });
+      prefetchNeighbors(dateRef.current);
     });
-  }, [t, locale, prefetchListings]);
+  }, [buildDay, applyDay, prefetchNeighbors]);
 
   // Stable handle to the latest loader, so the post-build follow-up timer can
   // re-fetch without being a dependency of the callback that schedules it.
@@ -1012,18 +1054,29 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
   useEffect(() => { setShowAll(false); }, [date]);
 
   // ---- Date controls ----
+  // Switch to a day: if its fixtures are already cached (prefetched neighbour),
+  // show them instantly so the page transition lands on real content, then
+  // refresh in the background. Otherwise fall back to skeleton + fetch.
+  const showDay = (d, dir) => {
+    setNavDir(dir);
+    setDate(d); dateRef.current = d;
+    const cached = dayCache.current[ymd(d)];
+    if (cached) {
+      applyDay(cached, ymd(d), {}); // token omitted → the background refresh fills per-event listings
+      loadFixtures(true);
+      prefetchNeighbors(d);
+    } else {
+      loadFixtures();
+    }
+  };
   const shiftDay = (delta) => {
     const d = new Date(dateRef.current);
     d.setDate(d.getDate() + delta);
-    setNavDir(delta > 0 ? 1 : -1);
-    setDate(d); dateRef.current = d;
-    loadFixtures();
+    showDay(d, delta > 0 ? 1 : -1);
   };
   const goToday = () => {
     const d = new Date();
-    setNavDir(ymd(d) > ymd(dateRef.current) ? 1 : ymd(d) < ymd(dateRef.current) ? -1 : 0);
-    setDate(d); dateRef.current = d;
-    loadFixtures();
+    showDay(d, ymd(d) > ymd(dateRef.current) ? 1 : ymd(d) < ymd(dateRef.current) ? -1 : 0);
   };
 
   // Swipe the fixtures list left/right to page through days (matches the ‹ ›

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { isPaidChannel } from "@/lib/broadcasters";
 import { langFor, makeT, localeFor } from "@/lib/i18n";
 import { DEFAULT_BRAND, brandForHost } from "@/lib/brand";
@@ -607,57 +607,118 @@ function DetailModal({ fx, checking, t, locale, primaryCountry, onClose, onShare
   );
 }
 
-// Day-change "book page" transition. Keeps the outgoing day mounted while the
-// incoming one slides in, so the two tile edge-to-edge into a single filmstrip
-// (old day exits one side as the new day enters from the other). `pageKey`
-// changes per day; `dir` (-1/0/1) is the travel direction. Same-key updates
-// (live score refreshes) just swap content in place with no transition.
-function PageSlide({ pageKey, dir, children }) {
-  const [cur, setCur] = useState({ key: pageKey, node: children });
-  const [leaving, setLeaving] = useState(null); // { key, node, dir } of the page sliding out
-  const keyRef = useRef(pageKey);
-  const dirRef = useRef(dir);
-  const curRef = useRef(cur);
-  dirRef.current = dir;
-  curRef.current = cur;
+// useLayoutEffect on the client, useEffect during SSR (this is a client island,
+// but Next still server-renders it for the initial HTML).
+const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
-  useEffect(() => {
-    if (pageKey === keyRef.current) {
-      setCur({ key: pageKey, node: children }); // same day — refresh content only
-      return;
+// Group + rank a day's fixtures for rendering. Pure, so it can be run for the
+// current day and the prefetched neighbours alike. Returns the same shape the
+// card list expects, plus `hadFixtures`/`hiddenSome` for the empty-state copy.
+function groupFixtures(fixtures, isHidden, search, primaryCountry) {
+  const shown = fixtures.filter((fx) => !isHidden(fx.competition));
+  const hiddenSome = shown.length !== fixtures.length;
+  const q = search.trim().toLowerCase();
+  const list = q
+    ? shown.filter((fx) => (fx.home + " " + fx.away + " " + fx.competition).toLowerCase().indexOf(q) > -1)
+    : shown;
+  if (!list.length) return { empty: true, hiddenSome, hadFixtures: fixtures.length > 0 };
+
+  const groups = {}, meta = {}, order = [];
+  list.forEach((fx) => {
+    const key = fx.competition || "Football";
+    if (!groups[key]) {
+      groups[key] = [];
+      meta[key] = { name: key, leagueId: fx.leagueId, ccode: fx.ccode };
+      order.push(key);
     }
-    const old = curRef.current;
-    keyRef.current = pageKey;
-    setLeaving({ key: old.key, node: old.node, dir: dirRef.current });
-    setCur({ key: pageKey, node: children });
-  }, [pageKey, children]);
+    groups[key].push(fx);
+  });
+  order.sort((a, b) => {
+    const ra = compRank(meta[a], primaryCountry), rb = compRank(meta[b], primaryCountry);
+    return ra[0] - rb[0] || ra[1] - rb[1] || ra[2].localeCompare(rb[2]);
+  });
 
-  // Retire the outgoing page once its slide finishes. Keyed on `leaving` (not the
-  // main effect) so a same-day content refresh can't cancel this timer and leave
-  // the old page stranded on top.
-  useEffect(() => {
-    if (!leaving) return undefined;
-    const id = setTimeout(() => setLeaving(null), 420);
-    return () => clearTimeout(id);
-  }, [leaving]);
+  // Split into "major" competitions (the big tournaments + the user's own
+  // country, compRank tiers 0–1) and the long tail (tier 2), which is hidden
+  // behind a "Show all games" link. A search shows everything, ungrouped by
+  // priority, so the tail is never hidden mid-search.
+  let major = order, rest = [];
+  if (!q) {
+    major = []; rest = [];
+    order.forEach((key) => {
+      (compRank(meta[key], primaryCountry)[0] < 2 ? major : rest).push(key);
+    });
+    if (!major.length) { major = order; rest = []; }
+  }
+  const restGames = rest.reduce((n, k) => n + groups[k].length, 0);
+  return { empty: false, groups, order, major, rest, restGames };
+}
 
-  const dirClass = (d, kind) =>
-    d > 0 ? (kind === "in" ? "from-right" : "to-left")
-      : d < 0 ? (kind === "in" ? "from-left" : "to-right")
-      : (kind === "in" ? "fade-in" : "fade-out");
+// One day's fixtures column — the unit the carousel lays out side by side. Its
+// own `showAll` state resets naturally because each panel is keyed by its day.
+function DayPanel({ data, skeleton, search, t, locale, primaryCountry, highlightsById, feedAds, openDetails, onShare }) {
+  const [showAll, setShowAll] = useState(false);
+
+  if (skeleton || !data) {
+    return Array.from({ length: 5 }).map((_, i) => <div className="skeleton" key={i} />);
+  }
+  if (data.empty) {
+    return (
+      <div className="empty">
+        <div className="big"><SoccerBall /></div>
+        <p dangerouslySetInnerHTML={{
+          __html: data.hadFixtures && data.hiddenSome && !search ? t("allFiltered") : t("noSearch"),
+        }} />
+      </div>
+    );
+  }
+
+  const visibleOrder = showAll ? data.order : data.major;
+  const hasMore = !showAll && data.rest.length > 0;
+  const everyN = feedAds.length ? (feedAds[0].everyN || 5) : 0;
+  let cardCount = 0, adIdx = 0;
 
   return (
-    <div className="page-viewport">
-      {leaving ? (
-        <div className={"page-layer leaving " + dirClass(leaving.dir, "out")}
-          key={leaving.key} aria-hidden="true">
-          {leaving.node}
-        </div>
+    <>
+      {visibleOrder.map((comp) => {
+        const games = data.groups[comp].slice().sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff));
+        const badged = games.filter((g) => g.leagueBadgeUrl)[0];
+        const badgeUrl = badged ? badged.leagueBadgeUrl : "";
+        const items = [];
+        games.forEach((g) => {
+          items.push(
+            <GameCard key={g.id} fx={g} t={t} locale={locale} primaryCountry={primaryCountry}
+              highlightsById={highlightsById} onOpen={openDetails} onShare={onShare} />
+          );
+          cardCount += 1;
+          if (everyN && cardCount % everyN === 0) {
+            const unit = feedAds[adIdx % feedAds.length];
+            adIdx += 1;
+            items.push(<AdCard key={"feedad-" + g.id} unit={unit} slot="fixtures-feed" />);
+          }
+        });
+        return (
+          <section className="competition" key={comp}>
+            <h2 className="competition-head">
+              <LeagueLogo url={badgeUrl} name={comp} />
+              <span className="competition-name">{comp}</span>
+              <span className="count">{games.length}</span>
+            </h2>
+            {items}
+          </section>
+        );
+      })}
+      {hasMore ? (
+        <button type="button" className="show-all-btn" onClick={() => setShowAll(true)}>
+          {t("showAllGames")} <span className="n">+{data.restGames}</span>
+        </button>
       ) : null}
-      <div className={"page-layer" + (leaving ? " " + dirClass(leaving.dir, "in") : "")} key={cur.key}>
-        {cur.node}
-      </div>
-    </div>
+      {showAll && data.rest.length ? (
+        <button type="button" className="show-all-btn" onClick={() => setShowAll(false)}>
+          {t("showFewer")}
+        </button>
+      ) : null}
+    </>
   );
 }
 
@@ -665,7 +726,6 @@ function PageSlide({ pageKey, dir, children }) {
 
 export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBottomAds = [] }) {
   const [date, setDate] = useState(() => new Date());
-  const [navDir, setNavDir] = useState(0); // -1/0/1: direction of the last day change, for the slide animation
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [fixtures, setFixtures] = useState([]);
@@ -678,8 +738,8 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
   const tvFollowup = useRef(false); // guards the one-shot re-fetch after a build
   const [detailId, setDetailId] = useState(null);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [showAll, setShowAll] = useState(false);
   const [skeleton, setSkeleton] = useState(true);
+  const [cacheVer, setCacheVer] = useState(0); // bumped when dayCache changes, so neighbour panels re-derive
   const [, setTick] = useState(0);
   const bump = useCallback(() => setTick((x) => x + 1), []);
 
@@ -689,6 +749,10 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
   const detailIdRef = useRef(null);
   const dayCache = useRef({});        // ymd -> processed fixtures, so adjacent days render instantly
   const neighborInflight = useRef({}); // ymd -> true while a neighbour prefetch is running
+  const viewportRef = useRef(null);   // carousel clip box (owns the touch listeners)
+  const trackRef = useRef(null);      // the prev|current|next strip we translate
+  const drag = useRef({});            // live drag state (start coords, locked axis, delta)
+  const animating = useRef(false);    // true during a snap so nav input is ignored mid-animation
   fixturesRef.current = fixtures;
   dateRef.current = date;
   detailIdRef.current = detailId;
@@ -903,7 +967,7 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
       if (dayCache.current[key] || neighborInflight.current[key]) return;
       neighborInflight.current[key] = true;
       buildDay(key)
-        .then(({ fx }) => { if (fx && fx.length) dayCache.current[key] = fx; })
+        .then(({ fx }) => { if (fx && fx.length) { dayCache.current[key] = fx; setCacheVer((v) => v + 1); } })
         .catch(() => {})
         .then(() => { delete neighborInflight.current[key]; });
     });
@@ -917,7 +981,7 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
     const token = loadToken.current;
     return buildDay(day).then(({ fx, feedReachable, refreshing }) => {
       if (token !== loadToken.current) return;
-      if (fx.length) dayCache.current[day] = fx;
+      if (fx.length) { dayCache.current[day] = fx; setCacheVer((v) => v + 1); }
 
       // When the store is being rebuilt in the background, show a banner and
       // re-fetch once shortly after so the freshly merged channels appear without
@@ -1050,15 +1114,11 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
     return () => clearTimeout(id);
   }, [searchInput]);
 
-  // Re-collapse the minor competitions whenever the day changes.
-  useEffect(() => { setShowAll(false); }, [date]);
-
   // ---- Date controls ----
   // Switch to a day: if its fixtures are already cached (prefetched neighbour),
-  // show them instantly so the page transition lands on real content, then
-  // refresh in the background. Otherwise fall back to skeleton + fetch.
-  const showDay = (d, dir) => {
-    setNavDir(dir);
+  // show them instantly so the transition lands on real content, then refresh in
+  // the background. Otherwise fall back to skeleton + fetch.
+  const showDay = useCallback((d) => {
     setDate(d); dateRef.current = d;
     const cached = dayCache.current[ymd(d)];
     if (cached) {
@@ -1068,20 +1128,100 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
     } else {
       loadFixtures();
     }
-  };
-  const shiftDay = (delta) => {
-    const d = new Date(dateRef.current);
-    d.setDate(d.getDate() + delta);
-    showDay(d, delta > 0 ? 1 : -1);
-  };
-  const goToday = () => {
-    const d = new Date();
-    showDay(d, ymd(d) > ymd(dateRef.current) ? 1 : ymd(d) < ymd(dateRef.current) ? -1 : 0);
-  };
+  }, [applyDay, loadFixtures, prefetchNeighbors]);
 
-  // Swipe the fixtures list left/right to page through days (matches the ‹ ›
-  // buttons): swipe left → next day, swipe right → previous day.
-  const daySwipe = useSwipe({ onLeft: () => shiftDay(1), onRight: () => shiftDay(-1) });
+  // Carousel re-center: after the day commits, drop the strip back to the middle
+  // panel instantly (no transition) — the just-revealed neighbour and the new
+  // current panel hold identical content, so there's no flash.
+  const CAROUSEL_MS = 320;
+  const recenter = useCallback(() => {
+    const tr = trackRef.current;
+    if (!tr) return;
+    tr.style.transition = "none";
+    tr.style.transform = "translateX(0)";
+  }, []);
+  useIsoLayoutEffect(() => { recenter(); }, [date, recenter]);
+
+  // Animate the strip one panel over, then commit the day. Shared by the ‹ ›
+  // buttons and the swipe release.
+  const commitNav = useCallback((delta) => {
+    if (animating.current) return;
+    animating.current = true;
+    const tr = trackRef.current;
+    if (tr) {
+      tr.style.transition = `transform ${CAROUSEL_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`;
+      requestAnimationFrame(() => {
+        if (trackRef.current) trackRef.current.style.transform = `translateX(${delta > 0 ? "-100%" : "100%"})`;
+      });
+    }
+    setTimeout(() => {
+      const target = new Date(dateRef.current);
+      target.setDate(target.getDate() + delta);
+      showDay(target);          // setDate → the layout effect recenters the strip with new content
+      animating.current = false;
+    }, CAROUSEL_MS + 20);
+  }, [showDay]);
+
+  // Spring the strip back to center when a drag didn't pass the threshold.
+  const snapBack = useCallback(() => {
+    const tr = trackRef.current;
+    if (!tr) return;
+    tr.style.transition = "transform 220ms cubic-bezier(0.4, 0, 0.2, 1)";
+    requestAnimationFrame(() => {
+      if (trackRef.current) trackRef.current.style.transform = "translateX(0)";
+    });
+  }, []);
+
+  const shiftDay = (delta) => commitNav(delta);
+  const goToday = () => { if (!isSameDay(dateRef.current, new Date())) showDay(new Date()); };
+
+  // Finger-following drag. Native (non-passive) listeners so we can preventDefault
+  // the page scroll once the gesture locks horizontal; vertical gestures are left
+  // to the browser. The strip is translated imperatively for a smooth follow.
+  useEffect(() => {
+    const vp = viewportRef.current;
+    if (!vp) return undefined;
+    const d = drag.current;
+    const onStart = (e) => {
+      if (animating.current || e.touches.length !== 1) return;
+      const tch = e.touches[0];
+      d.x0 = tch.clientX; d.y0 = tch.clientY; d.axis = null; d.active = true; d.dx = 0;
+      d.w = vp.clientWidth || 1;
+      if (trackRef.current) trackRef.current.style.transition = "none";
+    };
+    const onMove = (e) => {
+      if (!d.active) return;
+      const tch = e.touches[0];
+      const dx = tch.clientX - d.x0, dy = tch.clientY - d.y0;
+      if (d.axis === null) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        d.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+      }
+      if (d.axis !== "x") return; // vertical intent → let the page scroll
+      e.preventDefault();
+      d.dx = dx;
+      if (trackRef.current) trackRef.current.style.transform = `translateX(${dx}px)`;
+    };
+    const onEnd = () => {
+      if (!d.active) return;
+      d.active = false;
+      if (d.axis !== "x") return;
+      const threshold = Math.min(90, d.w * 0.22);
+      if (d.dx <= -threshold) commitNav(1);        // dragged left → next day
+      else if (d.dx >= threshold) commitNav(-1);   // dragged right → previous day
+      else snapBack();
+    };
+    vp.addEventListener("touchstart", onStart, { passive: true });
+    vp.addEventListener("touchmove", onMove, { passive: false });
+    vp.addEventListener("touchend", onEnd, { passive: true });
+    vp.addEventListener("touchcancel", onEnd, { passive: true });
+    return () => {
+      vp.removeEventListener("touchstart", onStart);
+      vp.removeEventListener("touchmove", onMove);
+      vp.removeEventListener("touchend", onEnd);
+      vp.removeEventListener("touchcancel", onEnd);
+    };
+  }, [commitNav, snapBack]);
 
   const dateLabel = isSameDay(date, new Date())
     ? t("today")
@@ -1126,51 +1266,33 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
     return Object.keys(set).sort((a, b) => a.localeCompare(b));
   }, [fixtures, primaryCountry]);
 
-  // ---- Grouped, filtered fixtures for render ----
-  const grouped = useMemo(() => {
-    const shown = fixtures.filter((fx) => !isHidden(fx.competition));
-    const hiddenSome = shown.length !== fixtures.length;
-    const q = search.trim().toLowerCase();
-    const list = q
-      ? shown.filter((fx) => (fx.home + " " + fx.away + " " + fx.competition).toLowerCase().indexOf(q) > -1)
-      : shown;
-    if (!list.length) return { empty: true, hiddenSome };
+  // ---- Grouped, filtered fixtures for the carousel's three panels ----
+  // The current day comes from the live `fixtures` state; the neighbours come
+  // from the prefetch cache (re-derived when the cache or filters change) so the
+  // strip shows real content the instant a drag begins.
+  const dShift = (base, n) => { const x = new Date(base); x.setDate(x.getDate() + n); return x; };
+  const prevKey = ymd(dShift(date, -1));
+  const nextKey = ymd(dShift(date, 1));
 
-    const groups = {}, meta = {}, order = [];
-    list.forEach((fx) => {
-      const key = fx.competition || "Football";
-      if (!groups[key]) {
-        groups[key] = [];
-        meta[key] = { name: key, leagueId: fx.leagueId, ccode: fx.ccode };
-        order.push(key);
-      }
-      groups[key].push(fx);
-    });
-    order.sort((a, b) => {
-      const ra = compRank(meta[a], primaryCountry), rb = compRank(meta[b], primaryCountry);
-      return ra[0] - rb[0] || ra[1] - rb[1] || ra[2].localeCompare(rb[2]);
-    });
-
-    // Split into "major" competitions (the big tournaments + the user's own
-    // country, compRank tiers 0–1) and the long tail (tier 2), which is hidden
-    // behind a "Show all games" link. A search shows everything, ungrouped by
-    // priority, so the tail is never hidden mid-search.
-    let major = order, rest = [];
-    if (!q) {
-      major = []; rest = [];
-      order.forEach((key) => {
-        (compRank(meta[key], primaryCountry)[0] < 2 ? major : rest).push(key);
-      });
-      // If nothing qualifies as major, don't collapse everything away.
-      if (!major.length) { major = order; rest = []; }
-    }
-    const restGames = rest.reduce((n, k) => n + groups[k].length, 0);
-    return { empty: false, groups, order, major, rest, restGames };
-  }, [fixtures, isHidden, search, primaryCountry]);
+  const curData = useMemo(
+    () => groupFixtures(fixtures, isHidden, search, primaryCountry),
+    [fixtures, isHidden, search, primaryCountry]
+  );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const prevFx = useMemo(() => dayCache.current[prevKey] || null, [prevKey, cacheVer]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const nextFx = useMemo(() => dayCache.current[nextKey] || null, [nextKey, cacheVer]);
+  const prevData = useMemo(
+    () => (prevFx ? groupFixtures(prevFx, isHidden, search, primaryCountry) : null),
+    [prevFx, isHidden, search, primaryCountry]
+  );
+  const nextData = useMemo(
+    () => (nextFx ? groupFixtures(nextFx, isHidden, search, primaryCountry) : null),
+    [nextFx, isHidden, search, primaryCountry]
+  );
 
   const detailFx = detailId ? fixtureById(detailId) : null;
-  const visibleOrder = grouped.empty ? [] : (showAll ? grouped.order : grouped.major);
-  const hasMore = !grouped.empty && !showAll && grouped.rest.length > 0;
+  const panelCtx = { search, t, locale, primaryCountry, highlightsById, feedAds, openDetails, onShare };
 
   return (
     <>
@@ -1252,69 +1374,20 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
         </div>
       ) : null}
 
-      <section className="games" aria-live="polite" {...daySwipe}>
-        <PageSlide pageKey={ymd(date)} dir={navDir}>
-        {skeleton ? (
-          Array.from({ length: 5 }).map((_, i) => <div className="skeleton" key={i} />)
-        ) : grouped.empty ? (
-          <div className="empty">
-            <div className="big"><SoccerBall /></div>
-            <p dangerouslySetInnerHTML={{
-              __html: fixtures.length && grouped.hiddenSome && !search ? t("allFiltered") : t("noSearch"),
-            }} />
+      <section className="games" aria-live="polite">
+        <div className="page-viewport" ref={viewportRef}>
+          <div className="page-track" ref={trackRef}>
+            <div className="page-side prev" key={"p" + prevKey} aria-hidden="true">
+              <DayPanel data={prevData} skeleton={!prevData} {...panelCtx} />
+            </div>
+            <div className="page-cur" key={"c" + ymd(date)}>
+              <DayPanel data={curData} skeleton={skeleton} {...panelCtx} />
+            </div>
+            <div className="page-side next" key={"n" + nextKey} aria-hidden="true">
+              <DayPanel data={nextData} skeleton={!nextData} {...panelCtx} />
+            </div>
           </div>
-        ) : (
-          <>
-          {(() => {
-            // Inject an in-feed ad after every N game cards, counting across all
-            // competitions. N comes from the unit (admin-set); multiple units
-            // rotate round-robin at each insertion point.
-            const everyN = feedAds.length ? (feedAds[0].everyN || 5) : 0;
-            let cardCount = 0;
-            let adIdx = 0;
-            return visibleOrder.map((comp) => {
-              const games = grouped.groups[comp].slice().sort((a, b) =>
-                new Date(a.kickoff) - new Date(b.kickoff));
-              const badged = games.filter((g) => g.leagueBadgeUrl)[0];
-              const badgeUrl = badged ? badged.leagueBadgeUrl : "";
-              const items = [];
-              games.forEach((g) => {
-                items.push(
-                  <GameCard key={g.id} fx={g} t={t} locale={locale} primaryCountry={primaryCountry}
-                    highlightsById={highlightsById} onOpen={openDetails} onShare={onShare} />
-                );
-                cardCount += 1;
-                if (everyN && cardCount % everyN === 0) {
-                  const unit = feedAds[adIdx % feedAds.length];
-                  adIdx += 1;
-                  items.push(<AdCard key={"feedad-" + g.id} unit={unit} slot="fixtures-feed" />);
-                }
-              });
-              return (
-                <section className="competition" key={comp}>
-                  <h2 className="competition-head">
-                    <LeagueLogo url={badgeUrl} name={comp} />
-                    <span className="competition-name">{comp}</span>
-                    <span className="count">{games.length}</span>
-                  </h2>
-                  {items}
-                </section>
-              );
-            });
-          })()}
-          {hasMore ? (
-            <button type="button" className="show-all-btn" onClick={() => setShowAll(true)}>
-              {t("showAllGames")} <span className="n">+{grouped.restGames}</span>
-            </button>
-          ) : null}
-          {showAll && grouped.rest.length ? (
-            <button type="button" className="show-all-btn" onClick={() => setShowAll(false)}>
-              {t("showFewer")}
-            </button>
-          ) : null}
-          </>
-        )}
-        </PageSlide>
+        </div>
       </section>
 
       {detailFx ? (

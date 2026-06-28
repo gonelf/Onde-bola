@@ -278,31 +278,26 @@ body {
   }
 }
 
-/* Day-change "book page" transition. The viewport clips horizontally (it grows
-   to the height of the current page, so tall lists are never cut) while the two
-   day pages slide across it as one filmstrip: the leaving page is taken out of
-   flow and animates off one edge while the entering page slides in from the
-   other. With equal width and duration they tile edge-to-edge — no overlap, no
-   gap — like turning pages in an endless book. */
-.page-viewport { position: relative; overflow: hidden; }
-.page-layer { width: 100%; }
-.page-layer.leaving {
+/* Day carousel. The viewport clips its three day panels to one column width; the
+   track holds yesterday | today | tomorrow as a contiguous strip and is
+   translated (with the finger while dragging, then snapped on release) so the
+   neighbouring day is visible the moment you start moving. The current panel is
+   in flow and sets the height; the neighbours sit one column to each side.
+   touch-action: pan-y lets the page scroll vertically while we own horizontal. */
+.page-viewport { position: relative; overflow: hidden; touch-action: pan-y; }
+.page-track { position: relative; will-change: transform; }
+.page-cur { width: 100%; }
+.page-side {
   position: absolute;
-  top: 0; left: 0; right: 0;
-  z-index: 1;
+  top: 0;
+  width: 100%;
 }
-.page-layer.from-right { animation: page-from-right 380ms cubic-bezier(0.4, 0, 0.2, 1) both; }
-.page-layer.from-left { animation: page-from-left 380ms cubic-bezier(0.4, 0, 0.2, 1) both; }
-.page-layer.to-left { animation: page-to-left 380ms cubic-bezier(0.4, 0, 0.2, 1) both; }
-.page-layer.to-right { animation: page-to-right 380ms cubic-bezier(0.4, 0, 0.2, 1) both; }
-.page-layer.fade-in { animation: games-fade 240ms ease-out both; }
-.page-layer.fade-out { animation: page-fade-out 240ms ease-out both; }
-@keyframes page-from-right { from { transform: translateX(100%); } to { transform: none; } }
-@keyframes page-from-left { from { transform: translateX(-100%); } to { transform: none; } }
-@keyframes page-to-left { from { transform: none; } to { transform: translateX(-100%); } }
-@keyframes page-to-right { from { transform: none; } to { transform: translateX(100%); } }
-@keyframes games-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes page-fade-out { from { opacity: 1; } to { opacity: 0; } }
+.page-side.prev { left: 0; transform: translateX(-100%); }
+.page-side.next { left: 0; transform: translateX(100%); }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-track { transition: none !important; }
+}
 
 /* Detail modal entrance: backdrop fades, the card rises and settles. */
 .detail-overlay { animation: overlay-in 180ms ease-out both; }
@@ -314,8 +309,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .page-layer, .detail-overlay, .detail-modal { animation: none !important; }
-  .page-layer.leaving { display: none; }
+  .detail-overlay, .detail-modal { animation: none !important; }
 }
 
 /* Status */

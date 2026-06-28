@@ -611,6 +611,7 @@ function DetailModal({ fx, checking, t, locale, primaryCountry, onClose, onShare
 
 export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBottomAds = [] }) {
   const [date, setDate] = useState(() => new Date());
+  const [navDir, setNavDir] = useState(0); // -1/0/1: direction of the last day change, for the slide animation
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [fixtures, setFixtures] = useState([]);
@@ -960,10 +961,16 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
   const shiftDay = (delta) => {
     const d = new Date(dateRef.current);
     d.setDate(d.getDate() + delta);
+    setNavDir(delta > 0 ? 1 : -1);
     setDate(d); dateRef.current = d;
     loadFixtures();
   };
-  const goToday = () => { const d = new Date(); setDate(d); dateRef.current = d; loadFixtures(); };
+  const goToday = () => {
+    const d = new Date();
+    setNavDir(ymd(d) > ymd(dateRef.current) ? 1 : ymd(d) < ymd(dateRef.current) ? -1 : 0);
+    setDate(d); dateRef.current = d;
+    loadFixtures();
+  };
 
   // Swipe the fixtures list left/right to page through days (matches the ‹ ›
   // buttons): swipe left → next day, swipe right → previous day.
@@ -1139,6 +1146,8 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
       ) : null}
 
       <section className="games" aria-live="polite" {...daySwipe}>
+        <div key={ymd(date)}
+          className={"games-anim " + (navDir > 0 ? "from-right" : navDir < 0 ? "from-left" : "fade")}>
         {skeleton ? (
           Array.from({ length: 5 }).map((_, i) => <div className="skeleton" key={i} />)
         ) : grouped.empty ? (
@@ -1199,6 +1208,7 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
           ) : null}
           </>
         )}
+        </div>
       </section>
 
       {detailFx ? (

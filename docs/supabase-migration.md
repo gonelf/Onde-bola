@@ -1,9 +1,13 @@
 # Supabase migration plan
 
-Status: **in progress.** Phase 1 *code* (the Postgres driver swap) is done and
-build-verified; the remaining Phase 1 work is infra you do in Supabase + Vercel
-(create the project, set `DATABASE_URL`, run migrations). Phase 2 (durable config
-KV → tables) is not started.
+Status: **in progress.**
+- **Phase 1** *code* (Postgres driver swap) — **done**, build-verified. Remaining
+  Phase 1 work is infra you do in Supabase + Vercel (create the project, set
+  `DATABASE_URL`, run migrations).
+- **Phase 2** *schema* (config tables + migration `0002_*`) — **done**,
+  build-verified, additive-only. The per-store **code switches** (reads/writes
+  KV → Postgres) are intentionally deferred until Supabase is live in every
+  environment, so nothing changes for the public site before cutover.
 
 This documents what would move to Supabase, what should stay where it is, and the
 exact steps + code changes. It came out of a full sweep of the app's data-store
@@ -84,27 +88,30 @@ so the current Neon URL keeps working until you cut over.
 
 ## Phase 2 — durable config: KV → Supabase tables
 
-Add tables and switch each store's read/write from `kv()` to Drizzle. Keep each
-store's public function signatures identical so callers (the API routes + the
-app) don't change. Suggested tables (single-row or key/value where it's just a
-blob):
+**Schema landed** in `lib/db/schema.js` + migration `0002_*` (additive only).
+Tables created:
 
-| Store | New table | Shape |
+| Store | Table | Status |
 |---|---|---|
-| `lib/ads-store.js` | `ad_units` | one row per unit: `id, script, banner(jsonb), label, enabled, slot, every_n` |
-| `lib/flags.js` | `feature_flags` | `id, state` |
-| `lib/overrides.js` | `tv_overrides` | per override row (keyed by match/date) |
-| `lib/replay-config.js` | `replay_config` | single row / `jsonb` blob |
-| `lib/sitemap-sweep.js` | `seo_urls` | `url, lastmod` (replaces the `seo:urls` registry; gains real pruning queries) |
-| `lib/buffer-post.js` | `buffer_channels`, `buffer_log` | channels: `channel_id`; log: a real append-only table (no 50-row cap, queryable, no JSON-blob write race) |
+| `lib/flags.js` | `feature_flags` (`id, state`) | schema ✅, code switch pending |
+| `lib/ads-store.js` | `ad_units` (`id, position, script, banner jsonb, label, enabled, slot, every_n`) | schema ✅, code switch pending |
+| `lib/overrides.js` | `tv_overrides` (`fmid, date, home, away, rows jsonb`) | schema ✅, code switch pending |
+| `lib/replay-config.js` | `replay_config` (single row id=1: `cfg/display/event_sounds/audio` jsonb) | schema ✅, code switch pending |
+| `lib/buffer-post.js` | `buffer_channels` (`channel_id`), `buffer_log` (append-only) | schema ✅, code switch pending |
+| `lib/sitemap-sweep.js` | `seo_urls` (`url, lastmod`) | **deferred** — modelled with its code switch (registry shape verified then) |
 
-Notes:
-- Keep the fall-soft posture: every store should degrade gracefully when the DB
-  is unset, exactly as it does for KV today.
-- `ads:active-units` is a derived cache (`unstable_cache`) — keep it; it just
-  reads from the new table instead of KV.
-- The `buffer_log` table is the clearest win: it removes the JSON read-modify-
-  write race and the 50-row cap, and makes history queryable.
+The **code switches** (point each store's read/write at Drizzle instead of
+`kv()`) are deferred to after Supabase is live in every environment — flipping
+them before the DB is reachable everywhere would knock out ads/flags on the
+public site (which currently runs with no DB). When switched:
+- Keep each store's public function signatures identical so callers (API routes +
+  app) don't change.
+- Keep the fail-soft posture: degrade gracefully when the DB is unset.
+- `ads:active-units` stays a derived cache (`unstable_cache`) — it just reads the
+  new table instead of KV.
+- `buffer_log` is the clearest win: no JSON read-modify-write race, no 50-row
+  cap, queryable history.
+- Backfill: a tiny one-off per store copies current KV values into the new table.
 
 ## What does NOT move
 

@@ -19,6 +19,7 @@ import { prepEvents, maxMinute, addShotEvents, addPhaseEvents, DEFAULT_CONFIG } 
 import MatchPitch from "@/components/MatchPitch";
 import AdUnits from "@/components/AdUnits";
 import SoccerBall from "@/components/SoccerBall";
+import HandGestures from "@/components/HandGestures";
 import useReplayClock from "@/components/useReplayClock";
 import { useReplaySound } from "@/components/replaySounds";
 
@@ -1059,6 +1060,9 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
           <span className="current-date">{dateLabel}</span>
         </div>
         <div className="toolbar-right">
+          <HandGestures t={t}
+            onPrev={() => shiftDay(-1)} onNext={() => shiftDay(1)} onToday={goToday}
+            onBack={() => { if (detailIdRef.current) closeDetails(); }} />
           <div className="country-pick">
             <label htmlFor="country-select" className="country-label">{t("yourCountry")}</label>
             <select id="country-select" aria-label={t("countryAria")}

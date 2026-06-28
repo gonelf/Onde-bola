@@ -1,7 +1,9 @@
 # Supabase migration plan
 
-Status: **proposed** — awaiting a Supabase project + scope sign-off. Nothing in
-the running app has been switched yet.
+Status: **in progress.** Phase 1 *code* (the Postgres driver swap) is done and
+build-verified; the remaining Phase 1 work is infra you do in Supabase + Vercel
+(create the project, set `DATABASE_URL`, run migrations). Phase 2 (durable config
+KV → tables) is not started.
 
 This documents what would move to Supabase, what should stay where it is, and the
 exact steps + code changes. It came out of a full sweep of the app's data-store
@@ -56,33 +58,29 @@ hit the "branch limit reached" wall. Supabase doesn't auto-branch per preview.
 
 ## Phase 1 — Postgres host: Neon → Supabase
 
-1. **Create the Supabase project** (you) and grab two connection strings from
+**✅ Done in code** — `lib/db/client.js` now uses `postgres-js`
+(`drizzle-orm/postgres-js` + the `postgres` package), `prepare: false` for the
+transaction-mode pooler; `@neondatabase/serverless` dropped from
+`package.json`. Build-verified. Works with any standard Postgres `DATABASE_URL`,
+so the current Neon URL keeps working until you cut over.
+
+**Remaining (infra — you):**
+
+1. **Create the Supabase project** and grab two connection strings from
    *Project Settings → Database*:
-   - **Pooled / Transaction** (Supavisor, port `6543`) — for the serverless app.
+   - **Pooled / Transaction** (Supavisor, port `6543`) — for the serverless app
+     (`DATABASE_URL`).
    - **Direct** (port `5432`) — for migrations (`drizzle-kit`).
-2. **Swap the driver** in `lib/db/client.js` from `neon-http` to `postgres-js`
-   (Supabase has no neon-http equivalent):
-   ```js
-   import { drizzle } from "drizzle-orm/postgres-js";
-   import postgres from "postgres";
-   const url = process.env.DATABASE_URL;
-   // Supavisor transaction mode doesn't support prepared statements.
-   const client = url ? postgres(url, { prepare: false }) : null;
-   export const db = client ? drizzle(client, { schema }) : null;
-   ```
-   Add the `postgres` dependency; drop `@neondatabase/serverless` once nothing
-   else imports it.
-3. **Env**: point `DATABASE_URL` at the Supabase **pooled** string in Vercel
-   (Production + Preview + Dev). Use the **direct** string only for
-   `drizzle-kit` (migrations).
-4. **Apply the schema**: `npm run db:push` (or `db:generate` + migrate) against
-   the Supabase DB. The schema and existing migrations port unchanged — it's
-   Postgres-to-Postgres.
-5. **Data**: if there is live data in Neon, `pg_dump` the Neon DB and restore into
-   Supabase (include the Auth `sessions`/`verificationTokens` if you don't want to
-   sign everyone out). If pre-launch, skip — the tables come up empty.
-6. **Verify** Auth sign-in and a game route end-to-end on a preview, then remove
-   the Neon integration.
+2. **Apply the schema** against Supabase: set `DATABASE_URL` to the **direct**
+   string locally and run `npm run db:push` (the schema + existing migrations
+   port unchanged — it's Postgres-to-Postgres).
+3. **Env**: set `DATABASE_URL` to the Supabase **pooled** string in Vercel
+   (Production + Preview + Dev).
+4. **Data**: if there is live data in Neon, `pg_dump` it and restore into Supabase
+   (include the Auth `sessions`/`verificationTokens` if you don't want everyone
+   signed out). If pre-launch, skip — the tables come up empty.
+5. **Verify** Auth sign-in and a game route on a preview, then remove the Neon
+   integration (this also ends the per-preview branch-limit failures).
 
 ## Phase 2 — durable config: KV → Supabase tables
 

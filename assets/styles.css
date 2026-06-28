@@ -408,6 +408,21 @@ body {
 .next-game .ng-away { text-align: left; font-weight: 600; }
 .next-game .ng-time { color: var(--text-dim); font-variant-numeric: tabular-nums; min-width: 48px; text-align: center; }
 .next-game .ng-score { color: var(--accent); font-weight: 800; font-variant-numeric: tabular-nums; min-width: 48px; text-align: center; }
+.champ-link-row { margin: 2px 0 4px; }
+.champ-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+.champ-link:hover { border-color: var(--accent); color: var(--accent); }
 
 /* Show all / fewer games */
 .show-all-btn {

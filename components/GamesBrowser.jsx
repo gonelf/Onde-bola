@@ -5,7 +5,7 @@ import { isPaidChannel } from "@/lib/broadcasters";
 import { langFor, makeT, localeFor } from "@/lib/i18n";
 import { DEFAULT_BRAND, brandForHost } from "@/lib/brand";
 import {
-  ymd, isSameDay, parseYmd, formatClock, statusOf, hasScore, shareLink,
+  ymd, isSameDay, parseYmd, formatClock, statusOf, hasScore, shareLink, leagueSlugFor,
 } from "@/lib/format";
 import {
   CODE_TO_COUNTRY, countryFlag, initials, orderCountries, orderChannels,
@@ -250,6 +250,13 @@ function CompetitionExtras({ fx, t, locale }) {
         <>
           <h3 className="detail-h">{t("tableShow")}</h3>
           <StandingsTable loading={loading} data={tableData} t={t} highlightIds={highlightIds} />
+          {hasTable ? (
+            <div className="champ-link-row">
+              <a className="champ-link" href={"/g/" + leagueSlugFor(fx.competition, fx.kickoff)}>
+                {t("championshipPage")}
+              </a>
+            </div>
+          ) : null}
         </>
       ) : null}
       {next.length ? (

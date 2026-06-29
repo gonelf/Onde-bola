@@ -32,6 +32,7 @@ export default function BufferPage() {
   const [channels, setChannels] = useState(null);
   const [channelHint, setChannelHint] = useState("");
   const [selected, setSelected] = useState({}); // channelId -> true
+  const [schemaInfo, setSchemaInfo] = useState("");
 
   const load = async () => {
     setHint("loading…");
@@ -130,14 +131,25 @@ export default function BufferPage() {
     if (busy) return;
     setBusy(true);
     setChannelHint("inspecting createPost schema…");
+    setSchemaInfo("");
     try {
       const j = await asJson(await fetch("/api/buffer", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "introspect" }),
       }));
-      setChannelHint(j.ok
-        ? `createPost fields → ${(j.fields || []).join(" · ")}`
-        : `introspect failed: ${j.error || "?"}${j.raw ? " · " + j.raw : ""}`);
+      if (j.ok) {
+        const lines = [
+          "createPost(input: CreatePostInput):",
+          ...(j.fields || []).map((f) => "  " + f),
+        ];
+        if (j.assetTypeName) {
+          lines.push("", `${j.assetTypeName}:`, ...(j.assetFields || []).map((f) => "  " + f));
+        }
+        setSchemaInfo(lines.join("\n"));
+        setChannelHint("schema loaded ↓");
+      } else {
+        setChannelHint(`introspect failed: ${j.error || "?"}${j.raw ? " · " + j.raw : ""}`);
+      }
     } catch (e) { setChannelHint(String(e.message || e)); }
     setBusy(false);
   };
@@ -209,6 +221,9 @@ export default function BufferPage() {
             ))}
           </div>
         ) : (channels && !channels.length ? <div className="loader-empty" style={{ marginTop: 10 }}>No channels found.</div> : null)}
+        {schemaInfo ? (
+          <pre style={{ marginTop: 10, padding: 12, background: "var(--panel2)", border: "1px solid var(--line)", borderRadius: 8, overflow: "auto", fontSize: 12, whiteSpace: "pre-wrap" }}>{schemaInfo}</pre>
+        ) : null}
       </div>
 
       <div className="card">

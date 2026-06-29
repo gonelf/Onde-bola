@@ -5,10 +5,11 @@ Status: **in progress.**
   Phase 1 work is infra you do in Supabase + Vercel (create the project, set
   `DATABASE_URL`, run migrations).
 - **Phase 2** *schema* (config tables + migration `0002_*`) — **done**.
-- **Phase 2** *code switches* — **buffer, flags, tv-overrides, replay, and ads
-  done** (now read/write Postgres, fail-soft to KV, one-time KV→Postgres
-  migration). Only **`seo:urls`** remains (it needs its own table; low-priority,
-  internal sitemap registry — still on KV).
+- **Phase 2** *code switches* — **done for all stores**: buffer, flags,
+  tv-overrides, replay, ads, and `seo:urls` now read/write Postgres (fail-soft to
+  KV, one-time KV→Postgres migration). `seo_urls` lands in migration `0003`; run
+  it on Supabase (SQL Editor / `db:push`). KV now only backs the hot upstream
+  caches + the tiny migration markers.
 
 This documents what would move to Supabase, what should stay where it is, and the
 exact steps + code changes. It came out of a full sweep of the app's data-store

@@ -22,7 +22,7 @@ function isDefaultService(service) {
 
 export default function BufferPage() {
   const [config, setConfig] = useState(null);
-  const [kvConfigured, setKvConfigured] = useState(true);
+  const [dbReady, setDbReady] = useState(true);
   const [log, setLog] = useState([]);
   const [date, setDate] = useState("");
   const [text, setText] = useState("");
@@ -38,10 +38,10 @@ export default function BufferPage() {
     try {
       const j = await asJson(await fetch("/api/buffer"));
       setConfig(j.config || null);
-      setKvConfigured(j.kvConfigured !== false);
+      setDbReady(j.dbConfigured !== false);
       setLog(Array.isArray(j.log) ? j.log : []);
       if (!date && j.nextDate) setDate(j.nextDate);
-      const note = j.kvConfigured ? "" : " · ⚠️ KV not configured — log won’t persist";
+      const note = j.dbConfigured ? "" : " · ⚠️ database not configured — channels & log won’t persist";
       const cfg = j.config && j.config.configured ? "Buffer configured" : "⚠️ Buffer not configured";
       setHint(cfg + note);
     } catch (e) { setHint(String(e.message || e)); }
@@ -164,7 +164,7 @@ export default function BufferPage() {
               : (config.envChannelIds && config.envChannelIds.length
                 ? <>from <code>BUFFER_CHANNEL_IDS</code> — <code>{config.envChannelIds.join(", ")}</code></>
                 : <>none saved — defaults to your <strong>Facebook, Instagram &amp; Twitter/X</strong> channels</>)}
-            {kvConfigured ? null : <> · <span style={{ color: "var(--warn)" }}>KV not configured — selection &amp; log won&apos;t persist.</span></>}
+            {dbReady ? null : <> · <span style={{ color: "var(--warn)" }}>Database not configured — selection &amp; log won&apos;t persist.</span></>}
           </div>
         ) : <div className="sub" style={{ marginBottom: 0 }}>—</div>}
         <div className="sub" style={{ margin: "10px 0 0" }}>
@@ -173,7 +173,7 @@ export default function BufferPage() {
         </div>
         <div className="toolbar">
           <button className="secondary" onClick={discoverChannels} disabled={busy || !(config && config.tokenSet)}>Discover channels</button>
-          {channels && channels.length ? <button onClick={saveChannels} disabled={busy || !kvConfigured}>Save channels</button> : null}
+          {channels && channels.length ? <button onClick={saveChannels} disabled={busy || !dbReady}>Save channels</button> : null}
           {channelHint ? <span className="pill">{channelHint}</span> : null}
         </div>
         {channels && channels.length ? (

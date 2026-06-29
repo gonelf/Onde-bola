@@ -4,7 +4,7 @@
  * Gated by HTTP Basic Auth (ADMIN_USER / ADMIN_PASSWORD), both at the edge
  * (middleware.js) and here (defence in depth, fail-closed when creds are unset).
  *
- *   GET   -> { config, kvConfigured, nextDate, log }
+ *   GET   -> { config, dbConfigured, nextDate, log }
  *            config: { configured, tokenSet, storedChannelIds, envChannelIds, … }
  *            log: newest-first list of schedule attempts (see lib/buffer-post)
  *   POST  { action: "schedule", date? }      -> build + schedule the day's post on
@@ -20,7 +20,7 @@
  */
 
 import { isAdmin, adminCredsConfigured } from "@/lib/admin-auth";
-import { kvConfigured } from "@/lib/kv";
+import { dbConfigured } from "@/lib/db/client";
 import {
   bufferConfig,
   bufferConfigured,
@@ -54,7 +54,7 @@ export async function GET(request) {
   if (!isAdmin(request)) return deny();
   const [config, log] = await Promise.all([bufferConfig(), readBufferLog()]);
   return Response.json(
-    { config, kvConfigured, nextDate: tomorrowYmd(), log },
+    { config, dbConfigured, nextDate: tomorrowYmd(), log },
     { headers: noStore }
   );
 }
@@ -67,8 +67,8 @@ export async function POST(request) {
   const action = String((body && body.action) || "schedule");
 
   if (action === "clear") {
-    if (!kvConfigured) {
-      return Response.json({ ok: false, error: "KV not configured — nothing to clear" }, { status: 503, headers: noStore });
+    if (!dbConfigured) {
+      return Response.json({ ok: false, error: "database not configured — nothing to clear" }, { status: 503, headers: noStore });
     }
     await clearBufferLog();
     return Response.json({ ok: true, log: [] }, { headers: noStore });
@@ -83,8 +83,8 @@ export async function POST(request) {
   }
 
   if (action === "saveChannels") {
-    if (!kvConfigured) {
-      return Response.json({ ok: false, error: "KV not configured — selection can't be saved" }, { status: 503, headers: noStore });
+    if (!dbConfigured) {
+      return Response.json({ ok: false, error: "database not configured — selection can't be saved" }, { status: 503, headers: noStore });
     }
     const ids = Array.isArray(body && body.channelIds) ? body.channelIds : [];
     const saved = await saveStoredChannelIds(ids);

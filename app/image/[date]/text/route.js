@@ -18,6 +18,7 @@
 import { headers } from "next/headers";
 import { buildTextPost } from "@/lib/digest-text";
 import { brandForHost } from "@/lib/brand";
+import { forwardAuthHeaders } from "@/lib/forward-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,9 @@ export async function GET(req, ctx) {
     ? langParam
     : (brandForHost(host).lang || "pt");
 
-  const { text } = await buildTextPost({ origin, date, n, lang });
+  // Forward the request's protection headers so the internal feed calls survive
+  // Deployment Protection on preview deployments (matches /image/<date>/square).
+  const { text } = await buildTextPost({ origin, date, n, lang, auth: forwardAuthHeaders(h) });
 
   return new Response(text, {
     headers: {

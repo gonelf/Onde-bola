@@ -15,6 +15,7 @@
 import { headers } from "next/headers";
 import { buildTextPost } from "@/lib/digest-text";
 import { brandForHost } from "@/lib/brand";
+import { forwardAuthHeaders } from "@/lib/forward-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export async function GET(req) {
     ? langParam
     : (brandForHost(host).lang || "pt");
 
-  const { text } = await buildTextPost({ origin, date, n, lang });
+  const { text } = await buildTextPost({ origin, date, n, lang, auth: forwardAuthHeaders(h) });
 
   return new Response(text, {
     headers: {

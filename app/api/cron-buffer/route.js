@@ -14,6 +14,7 @@
  */
 
 import { bufferConfigured, scheduleDayPost, tomorrowYmd } from "@/lib/buffer-post";
+import { forwardAuthHeaders } from "@/lib/forward-auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -49,6 +50,6 @@ export async function GET(request) {
   const qDate = url.searchParams.get("date") || "";
   const day = /^\d{4}-\d{2}-\d{2}$/.test(qDate) ? qDate : tomorrowYmd();
 
-  const result = await scheduleDayPost({ origin, date: day, trigger: "cron" });
+  const result = await scheduleDayPost({ origin, date: day, trigger: "cron", auth: forwardAuthHeaders(h) });
   return Response.json(result, { status: result.ok ? 200 : 502, headers: noStore });
 }

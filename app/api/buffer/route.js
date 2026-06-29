@@ -21,6 +21,7 @@
 
 import { isAdmin, adminCredsConfigured } from "@/lib/admin-auth";
 import { dbConfigured } from "@/lib/db/client";
+import { forwardAuthHeaders } from "@/lib/forward-auth";
 import {
   bufferConfig,
   bufferConfigured,
@@ -120,7 +121,7 @@ export async function POST(request) {
     }
     const qDate = String((body && body.date) || "");
     const date = /^\d{4}-\d{2}-\d{2}$/.test(qDate) ? qDate : tomorrowYmd();
-    const result = await scheduleDayPost({ origin: originOf(request), date, trigger: "manual" });
+    const result = await scheduleDayPost({ origin: originOf(request), date, trigger: "manual", auth: forwardAuthHeaders(request.headers) });
     const log = await readBufferLog();
     // 200 with ok:false on a failed schedule (the page reads result.ok/message).
     return Response.json({ ok: result.ok, result, log }, { headers: noStore });

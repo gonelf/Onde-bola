@@ -1,7 +1,9 @@
 /*
  * Drizzle Kit config — drives `npm run db:generate` (SQL migrations from the
- * schema), `db:push` (apply directly to a Neon branch) and `db:studio`.
- * Reads the same DATABASE_URL the app uses. Migrations land in lib/db/migrations.
+ * schema), `db:push` (apply directly to the database) and `db:studio`.
+ * Reads the same DATABASE_URL the app uses (for migrations, point it at the
+ * Supabase **direct** connection — port 5432 — not the pooler). Migrations land
+ * in lib/db/migrations.
  *
  * drizzle-kit doesn't load .env files itself, so we do a tiny dependency-free
  * load of .env.local then .env here (only filling vars that aren't already set).

@@ -3,7 +3,7 @@
  *
  * Protects the /admin debug/console page (served from public/admin.html, and
  * its legacy /admin.html path) and the admin write APIs (/api/overrides,
- * /api/ads, /api/seo, /api/flags) with ADMIN_USER / ADMIN_PASSWORD. Once the owner authenticates to
+ * /api/ads, /api/seo, /api/flags, /api/buffer) with ADMIN_USER / ADMIN_PASSWORD. Once the owner authenticates to
  * load the page, the browser reuses the credentials for the same-origin fetches
  * the page makes to those endpoints.
  *
@@ -15,7 +15,7 @@
 import { NextResponse } from "next/server";
 
 export const config = {
-  matcher: ["/admin", "/admin/:path*", "/admin.html", "/api/overrides", "/api/ads", "/api/seo", "/api/flags", "/api/replay-config"],
+  matcher: ["/admin", "/admin/:path*", "/admin.html", "/api/overrides", "/api/ads", "/api/seo", "/api/flags", "/api/buffer", "/api/replay-config"],
 };
 
 export function middleware(request) {

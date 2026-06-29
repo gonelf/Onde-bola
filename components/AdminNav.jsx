@@ -16,6 +16,7 @@ const PAGES = [
   { href: "/admin/ads", label: "Manage ads" },
   { href: "/admin/ad-test", label: "Ad script tester" },
   { href: "/admin/flags", label: "Feature flags" },
+  { href: "/admin/buffer", label: "Buffer automation" },
   { href: "/admin/replay", label: "Match animation" },
   { href: "/admin/game", label: "Game: console" },
   { href: "/admin/game-seed", label: "Game: seed squads" },

@@ -1,13 +1,16 @@
 /*
- * /text — public, ready-to-post plain-text digest of the day's selected games.
+ * /image/<date>/text — the post text the /image tool shows beneath the card:
+ * the day's selected games as a ready-to-post plain-text caption, for a specific
+ * date. <date> is YYYY-MM-DD; an invalid value (incl. the literal "today")
+ * falls back to today (Europe/Lisbon).
  *
- * The text sibling of the /image/* PNG endpoints: an automated client (or a
- * person) can GET this and paste the body straight into a WhatsApp / X /
- * Instagram post. Served as text/plain; UTF-8 so the flag emoji survive.
+ * It's the text sibling of /image/<date>/square — same ranked selection from the
+ * cached fixtures feed, rendered as lines instead of a PNG — so an automated
+ * client (e.g. Buffer) can pull the caption straight from the URL alongside the
+ * square image. Shares its builder with the query-param form at /text.
  *
- *   ?date=YYYY-MM-DD  the day (defaults to today, Europe/Lisbon)
- *   ?n=1..20          how many games to list (default 6)
- *   ?lang=pt|en       copy language (default Portuguese)
+ *   ?n=1..20      how many games to list (default 6)
+ *   ?lang=pt|en   copy language (defaults to the host brand's language, else pt)
  *
  * See lib/digest-text for the ranking, flags and per-game Portuguese channel.
  */
@@ -19,14 +22,18 @@ import { forwardAuthHeaders } from "@/lib/forward-auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req) {
+export async function GET(req, ctx) {
   const url = new URL(req.url);
   const h = await headers();
   const proto = (h.get("x-forwarded-proto") || url.protocol.replace(":", "") || "https").split(",")[0];
   const host = h.get("x-forwarded-host") || h.get("host") || url.host || "hojehabola.com";
   const origin = `${proto}://${host}`;
 
-  const date = url.searchParams.get("date") || "";
+  // A YYYY-MM-DD path segment wins over ?date=; "today" (and anything else)
+  // falls back to today inside buildTextPost.
+  const params = (ctx && ctx.params) ? await ctx.params : {};
+  const pathDate = /^\d{4}-\d{2}-\d{2}$/.test(params.date || "") ? params.date : "";
+  const date = pathDate || url.searchParams.get("date") || "";
   const n = url.searchParams.get("n") || "";
   // An explicit ?lang wins; otherwise an English-only domain defaults to English
   // and everything else keeps the Portuguese default.
@@ -35,6 +42,8 @@ export async function GET(req) {
     ? langParam
     : (brandForHost(host).lang || "pt");
 
+  // Forward the request's protection headers so the internal feed calls survive
+  // Deployment Protection on preview deployments (matches /image/<date>/square).
   const { text } = await buildTextPost({ origin, date, n, lang, auth: forwardAuthHeaders(h) });
 
   return new Response(text, {

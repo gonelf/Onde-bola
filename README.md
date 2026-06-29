@@ -70,12 +70,31 @@ and the data sources are Next.js route handlers under `app/api/`.
   `lib/country-flags`; club sides render with none) and **one Portuguese TV
   channel** — free-to-air if available, otherwise the cheapest cable option,
   resolved from the same TV feeds the site uses. `?date=YYYY-MM-DD`, `?n=1..20`
-  and `?lang=pt|en` (default Portuguese) are honoured. The **`/image`** tool page
+  and `?lang=pt|en` (default Portuguese) are honoured. The same caption is also
+  served per-day at **`/image/<date>/text`** (the text sibling of
+  `/image/<date>/square`), so an automated client can pull the card and its
+  caption from matching URLs. The **`/image`** tool page
   also shows this text below the preview with a **Copy** button — built in the
   browser from the same fixtures the canvas drew, so it always matches the image
   and fills in as games load. Every digest surface (page, image, social card and
   text) shares one selection rule (`lib/digest-select`): **only well-known
   leagues and competitions**, ranked by prominence, live-ness and kickoff.
+- **Scheduled social posts (Buffer)** — **`/api/cron-buffer`** is a daily Vercel
+  cron that schedules tomorrow's post on [Buffer](https://buffer.com): it pairs
+  the square card (`/image/<tomorrow>/square`, which Buffer fetches itself via
+  `imageUrl`) with the caption (`/image/<tomorrow>/text`) and queues the post for
+  **09:00 UTC** the next day. Uses Buffer's **GraphQL API**
+  (`https://api.buffer.com`): a `createPost` per channel with
+  `mode: customScheduled` + a `dueAt` timestamp. Set `BUFFER_ACCESS_TOKEN` (a
+  Buffer personal API key), plus `CRON_SECRET` if used; pass `?date=YYYY-MM-DD`
+  to target another day. **Which channels** to post to is managed from
+  **`/admin/buffer`** (saved in KV) — resolution is saved selection →
+  `BUFFER_CHANNEL_IDS` env (legacy `BUFFER_PROFILE_IDS` still read) → otherwise
+  **auto-default to your Facebook, Instagram and Twitter/X channels**. Every run
+  is recorded in a KV log. The admin page shows the config and that log,
+  discovers/selects channels, previews a day's card + caption, and schedules a
+  post on demand (gated by Basic Auth, like the other admin pages). See
+  `lib/buffer-post`.
 - **Date navigation** — jump to previous/next day or back to today.
 - **Live scores & status** — in-play matches show the current score, the
   minute (e.g. `67'`) or `HT`, and a pulsing live badge; finished games show
@@ -119,6 +138,7 @@ app/
   (seo)/image/page.js            Download tool for the digest image (date picker + buttons)
   og/[[...seg]]/route.js         Preview images: /og, /og/<id>, /og/today (1200×630 PNG, next/og, edge)
   image/{landscape,square,portrait}/route.js  Ready-to-post PNGs of the day's games (delegate to /og/today)
+  image/[date]/text/route.js     Ready-to-post caption for a date (text sibling of /image/<date>/square)
   text/route.js                  Ready-to-post plain-text digest of the day's games (/text)
   sitemap.xml/route.js           Sitemap from the KV URL registry (live-sweep fallback)
   api/fixtures/route.js          Cached FotMob fixtures-by-date proxy (long-term/DB-backed)
@@ -129,11 +149,13 @@ app/
   api/overrides/route.js         Admin CRUD for manual TV overrides (Basic Auth: ADMIN_USER / ADMIN_PASSWORD)
   api/ads/route.js               Admin CRUD for the ad units list (lib/ads-store.js), consumed by <AdSlot> (Basic Auth)
   api/flags/route.js             Admin CRUD for feature flags (lib/flags.js), consumed via isEnabled() (Basic Auth)
+  api/buffer/route.js            Admin Buffer management + schedule log; schedule a post on demand (Basic Auth)
   api/matchdetails/route.js      Per-match FotMob detail (venue, timeline, lineups, h2h, stats)
   api/highlights/route.js        Reads the collected highlights back as a feed
   api/cron-listings/route.js     Daily pre-warm of the upcoming window (shares lib/listings-build.js with on-visit refresh)
   api/cron-highlights/route.js   Background sweep: collects highlights for finished games into KV (external cron)
   api/cron-sitemap/route.js      Daily sweep: records canonical SEO URLs into the KV registry (Vercel cron)
+  api/cron-buffer/route.js       Daily: schedules tomorrow's games post (square + caption) on Buffer for 09:00 UTC (Vercel cron)
   api/seo/route.js               Admin endpoint to inspect/sweep/prune the pSEO sitemap registry (Basic Auth)
   api/geo/route.js               Visitor country (Vercel edge header) for the default listings country
   api/health/route.js            Read-only config/KV diagnostics for the admin page
@@ -155,15 +177,16 @@ lib/digest-render.js             Renders the /today and /image pages
 lib/digest-select.js             Shared "day's top games" selection (well-known competitions + ranking) for every digest surface
 lib/digest-image-endpoint.js     Factory for the /image/{landscape,square,portrait} ready-to-post PNGs
 lib/digest-text.js               Builds the /text plain-text digest (ranking, flags, one PT channel per game)
+lib/buffer-post.js               Buffer GraphQL client: schedule a post per channel (createPost) + channel discovery + a KV schedule log; used by /api/cron-buffer and /api/buffer
 lib/country-flags.js             National-team name → flag emoji (EN + PT names) for the text digest
 lib/sitemap-sweep.js             Builds the canonical SEO URL map + KV registry helpers, shared by the sitemap, its cron and /api/seo
 assets/styles.css                Styling (imported by the app layout)
-public/admin/                    Admin console (noindex): /admin connections debugger, /admin/overrides, /admin/seo, /admin/ads, /admin/ad-test, /admin/flags
+public/admin/                    Admin console (noindex): /admin connections debugger, /admin/overrides, /admin/seo, /admin/ads, /admin/ad-test, /admin/flags, /admin/buffer
 public/assets/og-image.svg       Default social share / Open Graph card
 public/robots.txt                Crawl rules (allows the site, disallows /admin + /api)
 public/llms.txt                  Site summary for LLM/AI crawlers
-middleware.js                    Edge HTTP Basic Auth gating /admin + /api/overrides + /api/ads + /api/seo + /api/flags (ADMIN_USER / ADMIN_PASSWORD)
-vercel.json                      Crons → /api/cron-sitemap + /api/cron-listings (both daily; listings also revalidates on visit)
+middleware.js                    Edge HTTP Basic Auth gating /admin + /api/overrides + /api/ads + /api/seo + /api/flags + /api/buffer (ADMIN_USER / ADMIN_PASSWORD)
+vercel.json                      Crons → /api/cron-sitemap + /api/cron-listings + /api/cron-tick + /api/cron-buffer (all daily; listings also revalidates on visit)
 next.config.js                   Next.js config
 package.json                     next, react, @vercel/og, @vercel/analytics
 .github/workflows/highlights-cron.yml  Free external cron that pings /api/cron-highlights every ~30 min

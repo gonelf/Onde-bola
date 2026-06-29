@@ -108,8 +108,18 @@ export async function POST(request) {
       return Response.json({ ok: false, error: "database not configured — selection can't be saved" }, { status: 503, headers: noStore });
     }
     const ids = Array.isArray(body && body.channelIds) ? body.channelIds : [];
-    const saved = await saveStoredChannelIds(ids);
-    return Response.json({ ok: true, storedChannelIds: saved }, { headers: noStore });
+    try {
+      const saved = await saveStoredChannelIds(ids);
+      return Response.json({ ok: true, storedChannelIds: saved }, { headers: noStore });
+    } catch (e) {
+      // The DB write failed — report it rather than a false "saved ✓"; the
+      // selection only persists in Postgres, so a swallowed error here would
+      // vanish on the next reload.
+      return Response.json(
+        { ok: false, error: "couldn't save channels", detail: String((e && e.message) || e) },
+        { status: 500, headers: noStore }
+      );
+    }
   }
 
   if (action === "schedule") {

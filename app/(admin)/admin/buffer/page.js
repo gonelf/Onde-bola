@@ -138,13 +138,11 @@ export default function BufferPage() {
         body: JSON.stringify({ action: "introspect" }),
       }));
       if (j.ok) {
-        const lines = [
-          "createPost(input: CreatePostInput):",
-          ...(j.fields || []).map((f) => "  " + f),
-        ];
-        if (j.assetTypeName) {
-          lines.push("", `${j.assetTypeName}:`, ...(j.assetFields || []).map((f) => "  " + f));
-        }
+        const lines = [];
+        (j.types || []).forEach((t, i) => {
+          if (i) lines.push("");
+          lines.push(`${t.name}:`, ...(t.fields || []).map((f) => "  " + f));
+        });
         setSchemaInfo(lines.join("\n"));
         setChannelHint("schema loaded ↓");
       } else {

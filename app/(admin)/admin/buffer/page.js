@@ -126,6 +126,22 @@ export default function BufferPage() {
     setBusy(false);
   };
 
+  const inspectSchema = async () => {
+    if (busy) return;
+    setBusy(true);
+    setChannelHint("inspecting createPost schema…");
+    try {
+      const j = await asJson(await fetch("/api/buffer", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "introspect" }),
+      }));
+      setChannelHint(j.ok
+        ? `createPost fields → ${(j.fields || []).join(" · ")}`
+        : `introspect failed: ${j.error || "?"}${j.raw ? " · " + j.raw : ""}`);
+    } catch (e) { setChannelHint(String(e.message || e)); }
+    setBusy(false);
+  };
+
   const clearLog = async () => {
     if (busy) return;
     if (!window.confirm("Clear the Buffer schedule log?")) return;
@@ -176,6 +192,7 @@ export default function BufferPage() {
         <div className="toolbar">
           <button className="secondary" onClick={discoverChannels} disabled={busy || !(config && config.tokenSet)}>Discover channels</button>
           {channels && channels.length ? <button onClick={saveChannels} disabled={busy || !dbReady}>Save channels</button> : null}
+          <button className="secondary" onClick={inspectSchema} disabled={busy || !(config && config.tokenSet)}>Inspect schema</button>
           {channelHint ? <span className="pill">{channelHint}</span> : null}
         </div>
         {channels && channels.length ? (

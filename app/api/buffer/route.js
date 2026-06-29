@@ -28,6 +28,7 @@ import {
   clearBufferLog,
   scheduleDayPost,
   listBufferChannels,
+  introspectCreatePost,
   saveStoredChannelIds,
   tomorrowYmd,
 } from "@/lib/buffer-post";
@@ -90,6 +91,14 @@ export async function POST(request) {
     const r = await listBufferChannels();
     // 200 even on failure (carry r.ok/r.error) so a Buffer-API hiccup doesn't
     // surface to the browser as a scary gateway error.
+    return Response.json(r, { headers: noStore });
+  }
+
+  if (action === "introspect") {
+    if (!bufferConfigured()) {
+      return Response.json({ ok: false, error: "set BUFFER_ACCESS_TOKEN first" }, { headers: noStore });
+    }
+    const r = await introspectCreatePost();
     return Response.json(r, { headers: noStore });
   }
 

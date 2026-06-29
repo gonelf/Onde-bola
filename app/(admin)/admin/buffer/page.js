@@ -100,7 +100,9 @@ export default function BufferPage() {
       if (stored.length) stored.forEach((id) => { sel[id] = true; });
       else list.forEach((c) => { if (isDefaultService(c.service)) sel[c.id] = true; });
       setSelected(sel);
-      setChannelHint(`${list.length} channel(s) — tick the ones to post to, then Save`);
+      setChannelHint(j.ok === false
+        ? (j.error || "couldn’t reach Buffer")
+        : `${list.length} channel(s) — tick the ones to post to, then Save`);
     } catch (e) { setChannels([]); setChannelHint(String(e.message || e)); }
     setBusy(false);
   };

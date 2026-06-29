@@ -52,11 +52,19 @@ function originOf(request) {
 
 export async function GET(request) {
   if (!isAdmin(request)) return deny();
-  const [config, log] = await Promise.all([bufferConfig(), readBufferLog()]);
-  return Response.json(
-    { config, dbConfigured, nextDate: tomorrowYmd(), log },
-    { headers: noStore }
-  );
+  try {
+    const [config, log] = await Promise.all([bufferConfig(), readBufferLog()]);
+    return Response.json(
+      { config, dbConfigured, nextDate: tomorrowYmd(), log },
+      { headers: noStore }
+    );
+  } catch (e) {
+    // Never let an unexpected error (e.g. a DB hiccup) crash the route to a 502.
+    return Response.json(
+      { error: "buffer admin read failed", detail: String((e && e.message) || e) },
+      { status: 500, headers: noStore }
+    );
+  }
 }
 
 export async function POST(request) {
@@ -66,6 +74,7 @@ export async function POST(request) {
   try { body = await request.json(); } catch (e) { body = {}; }
   const action = String((body && body.action) || "schedule");
 
+  try {
   if (action === "clear") {
     if (!dbConfigured) {
       return Response.json({ ok: false, error: "database not configured — nothing to clear" }, { status: 503, headers: noStore });
@@ -79,7 +88,9 @@ export async function POST(request) {
       return Response.json({ ok: false, error: "set BUFFER_ACCESS_TOKEN first" }, { status: 400, headers: noStore });
     }
     const r = await listBufferChannels();
-    return Response.json(r, { status: r.ok ? 200 : 502, headers: noStore });
+    // 200 even on failure (carry r.ok/r.error) so a Buffer-API hiccup doesn't
+    // surface to the browser as a scary gateway error.
+    return Response.json(r, { headers: noStore });
   }
 
   if (action === "saveChannels") {
@@ -102,8 +113,15 @@ export async function POST(request) {
     const date = /^\d{4}-\d{2}-\d{2}$/.test(qDate) ? qDate : tomorrowYmd();
     const result = await scheduleDayPost({ origin: originOf(request), date, trigger: "manual" });
     const log = await readBufferLog();
-    return Response.json({ ok: result.ok, result, log }, { status: result.ok ? 200 : 502, headers: noStore });
+    // 200 with ok:false on a failed schedule (the page reads result.ok/message).
+    return Response.json({ ok: result.ok, result, log }, { headers: noStore });
   }
 
   return Response.json({ error: `unknown action: ${action}` }, { status: 400, headers: noStore });
+  } catch (e) {
+    return Response.json(
+      { ok: false, error: "buffer action failed", detail: String((e && e.message) || e) },
+      { status: 500, headers: noStore }
+    );
+  }
 }

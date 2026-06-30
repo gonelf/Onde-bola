@@ -3,7 +3,9 @@
  * of the day" post on Buffer. It pairs the square card
  * (/image/<tomorrow>/square, which Buffer fetches itself from the URL) with the
  * matching caption (/image/<tomorrow>/text) and schedules the update for the
- * next day at 09:00 UTC. Runs as a native Vercel cron (see vercel.json).
+ * next day at 09:00 UTC. Poked daily by a GitHub Actions cron (07:00 UTC, see
+ * .github/workflows/buffer-cron.yml) — Vercel Hobby crons run only daily and in
+ * a loose window, so an external scheduler gives a reliable, independent trigger.
  *
  * If CRON_SECRET is set, gate it with `Authorization: Bearer <secret>` or `?key=`.
  * Configure Buffer via BUFFER_ACCESS_TOKEN and BUFFER_PROFILE_IDS (see

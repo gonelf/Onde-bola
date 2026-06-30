@@ -79,8 +79,9 @@ and the data sources are Next.js route handlers under `app/api/`.
   and fills in as games load. Every digest surface (page, image, social card and
   text) shares one selection rule (`lib/digest-select`): **only well-known
   leagues and competitions**, ranked by prominence, live-ness and kickoff.
-- **Scheduled social posts (Buffer)** — **`/api/cron-buffer`** is a daily Vercel
-  cron that schedules tomorrow's post on [Buffer](https://buffer.com): it pairs
+- **Scheduled social posts (Buffer)** — **`/api/cron-buffer`** is poked daily by
+  a GitHub Actions cron (`.github/workflows/buffer-cron.yml`, 07:00 UTC) that
+  schedules tomorrow's post on [Buffer](https://buffer.com): it pairs
   the square card (`/image/<tomorrow>/square`, which Buffer fetches itself via
   `imageUrl`) with the caption (`/image/<tomorrow>/text`) and queues the post for
   **09:00 UTC** the next day. Uses Buffer's **GraphQL API**
@@ -155,7 +156,7 @@ app/
   api/cron-listings/route.js     Daily pre-warm of the upcoming window (shares lib/listings-build.js with on-visit refresh)
   api/cron-highlights/route.js   Background sweep: collects highlights for finished games into KV (external cron)
   api/cron-sitemap/route.js      Daily sweep: records canonical SEO URLs into the KV registry (Vercel cron)
-  api/cron-buffer/route.js       Daily: schedules tomorrow's games post (square + caption) on Buffer for 09:00 UTC (Vercel cron)
+  api/cron-buffer/route.js       Daily: schedules tomorrow's games post (square + caption) on Buffer for 09:00 UTC (external GitHub Actions cron)
   api/seo/route.js               Admin endpoint to inspect/sweep/prune the pSEO sitemap registry (Basic Auth)
   api/geo/route.js               Visitor country (Vercel edge header) for the default listings country
   api/health/route.js            Read-only config/KV diagnostics for the admin page
@@ -186,10 +187,11 @@ public/assets/og-image.svg       Default social share / Open Graph card
 public/robots.txt                Crawl rules (allows the site, disallows /admin + /api)
 public/llms.txt                  Site summary for LLM/AI crawlers
 middleware.js                    Edge HTTP Basic Auth gating /admin + /api/overrides + /api/ads + /api/seo + /api/flags + /api/buffer (ADMIN_USER / ADMIN_PASSWORD)
-vercel.json                      Crons → /api/cron-sitemap + /api/cron-listings + /api/cron-tick + /api/cron-buffer (all daily; listings also revalidates on visit)
+vercel.json                      Crons → /api/cron-sitemap + /api/cron-listings + /api/cron-tick (all daily; listings also revalidates on visit)
 next.config.js                   Next.js config
 package.json                     next, react, @vercel/og, @vercel/analytics
 .github/workflows/highlights-cron.yml  Free external cron that pings /api/cron-highlights every ~30 min
+.github/workflows/buffer-cron.yml      Free external cron that pings /api/cron-buffer daily at 07:00 UTC
 ```
 
 > **Routing is file-based.** Each public path maps to a file under `app/` (no

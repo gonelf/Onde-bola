@@ -190,6 +190,9 @@ export default function BufferPage() {
   };
 
   const imageUrl = date ? `/image/${date}/square` : "";
+  // Saving the selection works against Postgres OR the legacy KV store, so enable
+  // Save whenever either is configured (not just the DB).
+  const storeReady = dbReady || !!(config && config.kvConfigured);
 
   return (
     <>
@@ -223,7 +226,7 @@ export default function BufferPage() {
         </div>
         <div className="toolbar">
           <button className="secondary" onClick={discoverChannels} disabled={busy || !(config && config.tokenSet)}>Discover channels</button>
-          {channels && channels.length ? <button onClick={saveChannels} disabled={busy || !dbReady}>Save channels</button> : null}
+          {channels && channels.length ? <button onClick={saveChannels} disabled={busy || !storeReady}>Save channels</button> : null}
           <button className="secondary" onClick={inspectSchema} disabled={busy || !(config && config.tokenSet)}>Inspect schema</button>
           {channelHint ? <span className="pill">{channelHint}</span> : null}
         </div>
@@ -238,7 +241,7 @@ export default function BufferPage() {
             <input id="manual-ids" type="text" value={manualIds} onChange={(e) => setManualIds(e.target.value)}
               placeholder="e.g. 5f3b…, 60a1…, 61c2…" disabled={busy} />
           </div>
-          <button onClick={saveManualIds} disabled={busy || !dbReady || !manualIds.trim()}>Save ids</button>
+          <button onClick={saveManualIds} disabled={busy || !storeReady || !manualIds.trim()}>Save ids</button>
         </div>
         {channels && channels.length ? (
           <div style={{ display: "grid", gap: 6, marginTop: 10 }}>

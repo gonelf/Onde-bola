@@ -33,6 +33,7 @@ export default function BufferPage() {
   const [channelHint, setChannelHint] = useState("");
   const [selected, setSelected] = useState({}); // channelId -> true
   const [schemaInfo, setSchemaInfo] = useState("");
+  const [manualIds, setManualIds] = useState(""); // paste ids when discovery is unavailable
 
   const load = async () => {
     setHint("loading…");
@@ -127,6 +128,27 @@ export default function BufferPage() {
     setBusy(false);
   };
 
+  // Save channel ids typed/pasted by hand — the escape hatch when Buffer's
+  // discovery API is rate-limited (you can read ids off the Buffer web app). Ids
+  // may be separated by commas, spaces or newlines.
+  const saveManualIds = async () => {
+    if (busy) return;
+    const channelIds = manualIds.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+    if (!channelIds.length) { setChannelHint("enter one or more channel ids first"); return; }
+    setBusy(true);
+    setChannelHint("saving…");
+    try {
+      const j = await asJson(await fetch("/api/buffer", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "saveChannels", channelIds }),
+      }));
+      setConfig((c) => (c ? Object.assign({}, c, { storedChannelIds: j.storedChannelIds || [] }) : c));
+      setManualIds("");
+      setChannelHint(`saved ✓ — ${(j.storedChannelIds || []).length} channel(s)`);
+    } catch (e) { setChannelHint(String(e.message || e)); }
+    setBusy(false);
+  };
+
   const inspectSchema = async () => {
     if (busy) return;
     setBusy(true);
@@ -204,6 +226,19 @@ export default function BufferPage() {
           {channels && channels.length ? <button onClick={saveChannels} disabled={busy || !dbReady}>Save channels</button> : null}
           <button className="secondary" onClick={inspectSchema} disabled={busy || !(config && config.tokenSet)}>Inspect schema</button>
           {channelHint ? <span className="pill">{channelHint}</span> : null}
+        </div>
+
+        <div className="sub" style={{ margin: "10px 0 0" }}>
+          Discovery rate-limited? Paste the channel ids by hand instead — open the channel in the Buffer web app and
+          copy the id from the URL (or the GraphQL response in DevTools), then Save. Separate ids with commas or spaces.
+        </div>
+        <div className="row" style={{ marginTop: 8, alignItems: "flex-end" }}>
+          <div style={{ flex: "1 1 320px" }}>
+            <label htmlFor="manual-ids">Channel ids</label>
+            <input id="manual-ids" type="text" value={manualIds} onChange={(e) => setManualIds(e.target.value)}
+              placeholder="e.g. 5f3b…, 60a1…, 61c2…" disabled={busy} />
+          </div>
+          <button onClick={saveManualIds} disabled={busy || !dbReady || !manualIds.trim()}>Save ids</button>
         </div>
         {channels && channels.length ? (
           <div style={{ display: "grid", gap: 6, marginTop: 10 }}>

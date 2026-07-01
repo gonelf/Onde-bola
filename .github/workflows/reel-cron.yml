@@ -1,0 +1,81 @@
+# Daily video reel for Facebook + Instagram.
+#
+# The image post renders on-demand at the edge, but a video takes minutes — far
+# beyond a serverless budget — so this runner IS the render backend:
+# scripts/reel-cron.mjs fetches the day's feeds from the live site, renders
+# remotion/DailyReel to an mp4 (+ cover still), uploads both to Vercel Blob and
+# calls /api/cron-buffer-reel, which schedules the reel on the account's
+# Facebook + Instagram Buffer channels for 09:00 UTC (same publish time as the
+# image post, logged to the same /admin/buffer log).
+#
+# Runs at 07:15 UTC, a fifteen-minute offset from buffer-cron.yml so the two
+# posts never race each other and the Actions logs stay easy to tell apart.
+#
+# Setup (repo Settings -> Secrets and variables -> Actions):
+#   SITE_URL              = https://your-deployment.vercel.app  (no trailing /)
+#   CRON_SECRET           = the same value set as CRON_SECRET in Vercel env vars
+#   BLOB_READ_WRITE_TOKEN = a Vercel Blob read-write token (Storage -> Blob)
+#
+# You can also run it by hand from the Actions tab (workflow_dispatch), with an
+# optional date override.
+
+name: reel-cron
+
+on:
+  schedule:
+    - cron: "15 7 * * *" # daily at 07:15 UTC (schedules tomorrow's reel for 09:00 UTC)
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Day the reel is about (YYYY-MM-DD, default tomorrow UTC)"
+        required: false
+        default: ""
+
+# Don't pile up overlapping renders if one is slow.
+concurrency:
+  group: reel-cron
+  cancel-in-progress: false
+
+jobs:
+  reel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Render, upload and schedule the reel
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+        run: |
+          if [ -z "$SITE_URL" ]; then
+            echo "SITE_URL secret is not set — add it in repo settings."; exit 1
+          fi
+          if [ -z "$BLOB_READ_WRITE_TOKEN" ]; then
+            echo "BLOB_READ_WRITE_TOKEN secret is not set — add it in repo settings."; exit 1
+          fi
+          DATE_FLAG=""
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            DATE_FLAG="--date=${{ github.event.inputs.date }}"
+          fi
+          npx tsx scripts/reel-cron.mjs $DATE_FLAG
+
+      # The mp4 + cover as a run artifact, so a bad-looking reel can be
+      # inspected without digging the Blob URL out of the logs.
+      - name: Upload render artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reel
+          path: out/reel/
+          if-no-files-found: ignore
+          retention-days: 7

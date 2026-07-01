@@ -232,15 +232,26 @@ async function upload(mp4, jpg) {
   const { put } = await import("@vercel/blob");
   const token = process.env.BLOB_READ_WRITE_TOKEN;
   if (!token) throw new Error("BLOB_READ_WRITE_TOKEN is not set");
-  const video = await put(`reels/${DATE}.mp4`, await readFile(mp4), {
-    access: "public", contentType: "video/mp4", token,
+  const opts = (contentType) => ({
+    access: "public", contentType, token,
     addRandomSuffix: false, allowOverwrite: true,
   });
-  const cover = await put(`reels/${DATE}-cover.jpg`, await readFile(jpg), {
-    access: "public", contentType: "image/jpeg", token,
-    addRandomSuffix: false, allowOverwrite: true,
-  });
-  return { videoUrl: video.url, thumbUrl: cover.url };
+  try {
+    const video = await put(`reels/${DATE}.mp4`, await readFile(mp4), opts("video/mp4"));
+    const cover = await put(`reels/${DATE}-cover.jpg`, await readFile(jpg), opts("image/jpeg"));
+    return { videoUrl: video.url, thumbUrl: cover.url };
+  } catch (e) {
+    // The uploads MUST be public — Buffer fetches the video itself, from a
+    // plain URL, so a private store can never work here.
+    if (/private store|private access/i.test(String((e && e.message) || e))) {
+      throw new Error(
+        "The Vercel Blob store is PRIVATE, but Buffer needs a public URL to fetch the video. " +
+        "Create a Blob store with public access (Vercel -> Storage -> Create -> Blob -> access: public) " +
+        "and set BLOB_READ_WRITE_TOKEN to THAT store's token."
+      );
+    }
+    throw e;
+  }
 }
 
 async function schedule(videoUrl, thumbUrl) {

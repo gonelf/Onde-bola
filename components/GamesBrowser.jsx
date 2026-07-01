@@ -980,11 +980,15 @@ export default function GamesBrowser({ feedAds = [], detailTopAds = [], detailBo
     } catch (e) {}
   }, []);
 
-  // ---- Country (IP default unless stored) ----
+  // ---- Country (stored choice → brand default → IP default) ----
   useEffect(() => {
     let stored = null;
     try { stored = localStorage.getItem(STORAGE_COUNTRY); } catch (e) {}
     if (stored) { setPrimaryCountry(stored); return; }
+    // A brand can pin its home market (footietoday → UK, footytoday → US); like
+    // the pinned language it wins over IP geo so the lead TV country stays put.
+    const brandCountry = brandForHost(window.location.host).country;
+    if (brandCountry) { setPrimaryCountry(brandCountry); return; }
     fetch("/api/geo", { headers: { Accept: "application/json" } })
       .then((r) => r.json())
       .then((d) => {

@@ -7,7 +7,7 @@
  * /api/matchdetails. This replaces the old static public/admin/replay.html.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import MatchPitch from "@/components/MatchPitch";
 import useReplayClock from "@/components/useReplayClock";
 import { useReplaySound, SFX_PRESETS, SOUND_EVENTS, DEFAULT_EVENT_SOUNDS } from "@/components/replaySounds";
@@ -157,14 +157,15 @@ export default function ReplayLabPage() {
     } catch (e) { setHint("error: " + (e && e.message || e)); }
   };
 
-  const loadGame = async () => {
-    const g = games[parseInt(gameIdx, 10)];
-    if (!g) { setHint("pick a game"); return; }
+  // Load one finished game's timeline/stats/kits into the lab. Shared by the
+  // "Load selected" button and the headless auto-record mode. Returns true when
+  // the game loaded with a usable timeline.
+  const loadRealGame = async (g) => {
     setHint("loading " + g.home + " vs " + g.away + "…");
     try {
       const r = await fetch("/api/matchdetails?id=" + encodeURIComponent(g.fmid));
       const j = await r.json();
-      if (!j || !j.ok || !j.details) { setHint("no details for this game"); return; }
+      if (!j || !j.ok || !j.details) { setHint("no details for this game"); return false; }
       const d = j.details, lu = d.lineups || {};
       const ps = (d.stats || []).find((s) => s.key === "possession");
       const ss = (d.stats || []).find((s) => s.key === "shots");
@@ -181,23 +182,34 @@ export default function ReplayLabPage() {
       setSeed(undefined);
       const n = (d.events || []).length;
       setHint("loaded ✓ " + n + " event" + (n === 1 ? "" : "s") + (n ? "" : " (no timeline — try another)"));
-    } catch (e) { setHint("error: " + (e && e.message || e)); }
+      return n > 0;
+    } catch (e) { setHint("error: " + (e && e.message || e)); return false; }
+  };
+
+  const loadGame = () => {
+    const g = games[parseInt(gameIdx, 10)];
+    if (!g) { setHint("pick a game"); return; }
+    loadRealGame(g);
   };
 
   // ---- saved app-wide defaults ----
   const [saveHint, setSaveHint] = useState("");
+  const [cfgLoaded, setCfgLoaded] = useState(false); // auto-record waits for this
 
   // Start from the saved app default (if any), so the lab opens on the live values.
   useEffect(() => {
     let on = true;
     fetch("/api/replay-config").then((r) => (r.ok ? r.json() : null)).then((j) => {
-      if (!on || !j || !j.config) return;
-      if (j.config.cfg) setCfg((c) => Object.assign({}, c, j.config.cfg));
-      if (j.config.display) setDisp((dd) => Object.assign({}, dd, j.config.display));
-      if (j.config.eventSounds) setEventSounds((s) => Object.assign({}, s, j.config.eventSounds));
-      if (j.config.audio) { setSoundOn(!!j.config.audio.sound); setMusicOn(!!j.config.audio.music); }
-      setSaveHint("loaded saved default" + (j.config.updatedAt ? " · " + new Date(j.config.updatedAt).toLocaleString() : ""));
-    }).catch(() => {});
+      if (!on) return;
+      if (j && j.config) {
+        if (j.config.cfg) setCfg((c) => Object.assign({}, c, j.config.cfg));
+        if (j.config.display) setDisp((dd) => Object.assign({}, dd, j.config.display));
+        if (j.config.eventSounds) setEventSounds((s) => Object.assign({}, s, j.config.eventSounds));
+        if (j.config.audio) { setSoundOn(!!j.config.audio.sound); setMusicOn(!!j.config.audio.music); }
+        setSaveHint("loaded saved default" + (j.config.updatedAt ? " · " + new Date(j.config.updatedAt).toLocaleString() : ""));
+      }
+      setCfgLoaded(true);
+    }).catch(() => { if (on) setCfgLoaded(true); });
     return () => { on = false; };
   }, []);
 
@@ -238,9 +250,67 @@ export default function ReplayLabPage() {
         onProgress: (p) => setRecHint("recording… " + Math.round(p * 100) + "%"),
       });
       setRecHint("saved " + name + " ✓");
-    } catch (e) { setRecHint(String((e && e.message) || e)); }
-    finally { setRecording(false); }
+    } catch (e) {
+      setRecHint(String((e && e.message) || e));
+      throw e; // let auto-record surface the failure; the button click ignores it
+    } finally { setRecording(false); }
   };
+  // ---- headless auto-record (replay-cron) ----
+  // With ?autorecord=story (or =landscape), the page loads a game and records the
+  // video with no clicks, for the daily replay post: scripts/replay-cron.mjs
+  // drives this page in headless Chromium and captures the download. The game
+  // comes from ?date=YYYY-MM-DD&fmid=<id>; ?scenario=<key> instead uses a
+  // built-in scenario (offline testing). Progress is mirrored on
+  // window.__autoRecord = { status: loading|recording|done|error, ... }.
+  const [autoReq, setAutoReq] = useState(null);
+  const autoStartedRef = useRef(false);
+
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const mode = sp.get("autorecord");
+    if (!mode) return;
+    window.__autoRecord = { status: "loading" };
+    setIgStory(mode !== "landscape");
+    const fail = (error) => { window.__autoRecord = { status: "error", error }; };
+
+    const scenario = sp.get("scenario") || "";
+    if (scenario) {
+      if (!SCENARIOS[scenario]) return fail("unknown scenario: " + scenario);
+      pickScenario(scenario);
+      setAutoReq({ mode: "scenario" });
+      return;
+    }
+
+    const qDate = sp.get("date") || "", fmid = sp.get("fmid") || "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(qDate) || !fmid) return fail("autorecord needs ?date=YYYY-MM-DD&fmid=<id> (or ?scenario=)");
+    (async () => {
+      try {
+        const r = await fetch("/api/fixtures?date=" + encodeURIComponent(qDate) + "&all=1");
+        const j = await r.json();
+        const f = (j.fixtures || []).find((x) => String(x.fmid) === String(fmid));
+        if (!f) return fail("game " + fmid + " not found on " + qDate);
+        if (await loadRealGame({ fmid: f.fmid, home: f.home, away: f.away })) setAutoReq({ mode: "real" });
+        else fail("no usable timeline for game " + fmid);
+      } catch (e) { fail(String((e && e.message) || e)); }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!autoReq || !cfgLoaded || autoStartedRef.current) return;
+    if (autoReq.mode === "real" && !real) return; // state not settled yet
+    autoStartedRef.current = true;
+    // One tick for the loaded config/game to render through the memos.
+    const t = setTimeout(() => {
+      window.__autoRecord = { status: "recording" };
+      exportVideo()
+        .then(() => { window.__autoRecord = { status: "done" }; })
+        .catch((e) => { window.__autoRecord = { status: "error", error: String((e && e.message) || e) }; });
+    }, 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoReq, cfgLoaded, real]);
+
   const doExport = () => {
     const out = {
       REPLAY_DURATION_MS: Math.round(BASE_DURATION_MS / (cfg.gameSpeed || 1)), PASS_MIN: cfg.passMin,
@@ -403,7 +473,7 @@ export default function ReplayLabPage() {
         </div>
         <div className="toolbar">
           <button onClick={doExport}>Export settings</button>
-          <button className="secondary" onClick={exportVideo} disabled={recording}>{recording ? "Recording…" : (igStory ? "🎥 Export story (9:16)" : "🎥 Export video")}</button>
+          <button className="secondary" onClick={() => exportVideo().catch(() => {})} disabled={recording}>{recording ? "Recording…" : (igStory ? "🎥 Export story (9:16)" : "🎥 Export video")}</button>
           <span className="pill">{recHint || "JSON for DEFAULT_CONFIG"}</span>
         </div>
         {exportTxt ? <pre style={{ marginTop: 10 }}>{exportTxt}</pre> : null}

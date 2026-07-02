@@ -41,11 +41,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -61,7 +61,10 @@ jobs:
             echo "SITE_URL secret is not set — add it in repo settings."; exit 1
           fi
           if [ -z "$BLOB_READ_WRITE_TOKEN" ]; then
-            echo "BLOB_READ_WRITE_TOKEN secret is not set — add it in repo settings."; exit 1
+            echo "BLOB_READ_WRITE_TOKEN is empty. It must be a *repository secret*:"
+            echo "Settings -> Secrets and variables -> Actions -> Secrets tab -> New repository secret."
+            echo "(A GitHub *Variable*, an *environment* secret, or a Vercel env var won't reach this job.)"
+            exit 1
           fi
           DATE_FLAG=""
           if [ -n "${{ github.event.inputs.date }}" ]; then
@@ -73,7 +76,7 @@ jobs:
       # inspected without digging the Blob URL out of the logs.
       - name: Upload render artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: reel
           path: out/reel/
